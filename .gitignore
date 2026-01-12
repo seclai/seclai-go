@@ -1,0 +1,9 @@
+# Go build/test
+*.test
+*.out
+
+# Editors
+.DS_Store
+
+# Docs/build output
+build/
