@@ -16,7 +16,8 @@ jobs:
     permissions:
       contents: write
     outputs:
-      version: ${{ steps.next-tag.outputs.new_tag }}
+      version: ${{ steps.tag.outputs.version }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout files
         uses: actions/checkout@v5
@@ -30,6 +31,20 @@ jobs:
           DEFAULT_BUMP: patch
           DRY_RUN: "true"
 
+      - name: Compute Go module tag (v-prefixed)
+        id: tag
+        run: |
+          set -euo pipefail
+          version='${{ steps.next-tag.outputs.new_tag }}'
+          if [[ "$version" == v* ]]; then
+            tag="$version"
+            version="${version#v}"
+          else
+            tag="v$version"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -40,15 +55,15 @@ jobs:
 
       - name: Push tag
         run: |
-          git tag ${{ steps.next-tag.outputs.new_tag }}
-          git push origin ${{ steps.next-tag.outputs.new_tag }}
+          git tag ${{ steps.tag.outputs.tag }}
+          git push origin ${{ steps.tag.outputs.tag }}
 
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ steps.next-tag.outputs.new_tag }} \
-            --title "Release ${{ steps.next-tag.outputs.new_tag }}" \
+          gh release create ${{ steps.tag.outputs.tag }} \
+            --title "Release ${{ steps.tag.outputs.tag }}" \
             --generate-notes
 
   pages:
@@ -66,7 +81,7 @@ jobs:
       - name: Checkout files
         uses: actions/checkout@v5
         with:
-          ref: ${{ needs.release.outputs.version }}
+          ref: ${{ needs.release.outputs.tag }}
           fetch-depth: "0"
 
       - name: Set up Go
