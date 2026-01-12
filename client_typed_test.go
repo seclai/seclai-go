@@ -157,7 +157,7 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 			w.WriteHeader(405)
 			return
 		}
-		if !strings.HasPrefix(r.URL.Path, "/api/sources/") || !(strings.HasSuffix(r.URL.Path, "/upload") || strings.HasSuffix(r.URL.Path, "/upload/")) {
+		if !strings.HasPrefix(r.URL.Path, "/api/sources/") || !strings.HasSuffix(r.URL.Path, "/upload") {
 			w.WriteHeader(404)
 			return
 		}
@@ -227,5 +227,41 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 	}
 	if resp.Filename != "a.txt" {
 		t.Fatalf("expected filename a.txt, got %q", resp.Filename)
+	}
+}
+
+func TestClient_ListSources_PathMatchesSpec(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/sources/" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"data": [{
+				"account_id": "00000000-0000-0000-0000-000000000000",
+				"content_filter": "",
+				"created_at": "2026-01-11T00:00:00Z",
+				"id": "src_1",
+				"name": "Source",
+				"source_type": "custom",
+				"updated_at": "2026-01-11T00:00:00Z"
+			}],
+			"pagination": {"has_next": false, "has_prev": false, "limit": 20, "page": 1, "pages": 1, "total": 1}
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	resp, err := c.ListSources(context.Background(), 1, 20, "", "", "")
+	if err != nil {
+		t.Fatalf("ListSources: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected response")
 	}
 }
