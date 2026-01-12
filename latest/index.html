@@ -1,0 +1,987 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seclai Go SDK Docs (v0.0.2)</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { max-width: 960px; margin: 0 auto; padding: 24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    h1 { margin: 0 0 12px; }
+    pre { padding: 12px; overflow: auto; border: 1px solid rgba(127,127,127,0.35); border-radius: 8px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .meta { opacity: 0.8; margin: 0 0 18px; }
+  </style>
+</head>
+<body>
+  <h1>Seclai Go SDK</h1>
+  <p class="meta">Version: <code>0.0.2</code></p>
+  <p class="meta">Generated from <code>go doc</code>.</p>
+  <pre><code>
+=== github.com/seclai/seclai-go ===
+
+package seclai // import &#34;github.com/seclai/seclai-go&#34;
+
+Package seclai is the official Seclai Go SDK.
+
+The SDK uses API key authentication via the x-api-key header.
+
+By default, the client reads configuration from environment variables:
+
+  - SECLAI_API_KEY (required)
+  - SECLAI_API_URL (optional; defaults to https://seclai.com)
+
+For most operations, prefer the typed convenience methods on Client. Use
+Client.Do for low-level/escape-hatch requests.
+
+CONSTANTS
+
+const DefaultBaseURL = &#34;https://seclai.com&#34;
+    DefaultBaseURL is the default API base URL.
+
+    Convenience methods use paths like &#34;/api/sources/&#34; under this base.
+
+
+TYPES
+
+type APIStatusError struct {
+	StatusCode   int
+	Method       string
+	URL          string
+	ResponseText string
+}
+    APIStatusError is returned for non-2xx HTTP responses.
+
+func (e *APIStatusError) Error() string
+
+type APIValidationError struct {
+	APIStatusError
+	ValidationError *HTTPValidationError
+}
+    APIValidationError is returned for HTTP 422 responses.
+
+    When the API returns a structured validation payload, it is captured in
+    ValidationError.
+
+func (e *APIValidationError) Error() string
+
+type AgentRunAttemptResponse = generated.AgentRunAttemptResponse
+
+type AgentRunListResponse = generated.RoutersApiAgentsAgentRunListResponse
+
+type AgentRunRequest = generated.AgentRunRequest
+
+type AgentRunResponse = generated.AgentRunResponse
+
+type Client struct {
+	// Has unexported fields.
+}
+    Client is the Seclai Go SDK client.
+
+func NewClient(opts Options) (*Client, error)
+    NewClient constructs a new Client.
+
+    Returns ConfigurationError if the API key is missing or if the base URL is
+    invalid.
+
+func (c *Client) DeleteAgentRun(ctx context.Context, agentID, runID string) error
+    DeleteAgentRun cancels/deletes a specific run.
+
+func (c *Client) DeleteContent(ctx context.Context, contentVersionID string) error
+    DeleteContent deletes a content version.
+
+func (c *Client) Do(ctx context.Context, method, apiPath string, query map[string]string, body any, headers map[string]string, out any) error
+    Do makes a low-level request to the Seclai API.
+
+    For JSON responses, out is decoded from JSON when non-nil. For non-2xx
+    responses, an *APIStatusError or *APIValidationError is returned.
+
+func (c *Client) Generated() *generated.ClientWithResponses
+    Generated returns the underlying OpenAPI-generated client.
+
+    It is fully typed and exposes all endpoints directly.
+
+func (c *Client) GetAgentRun(ctx context.Context, agentID, runID string) (*AgentRunResponse, error)
+    GetAgentRun fetches a specific run.
+
+func (c *Client) GetContentDetail(ctx context.Context, contentVersionID string, start, end int) (*ContentDetailResponse, error)
+    GetContentDetail fetches content detail.
+
+func (c *Client) ListAgentRuns(ctx context.Context, agentID string, page, limit int) (*AgentRunListResponse, error)
+    ListAgentRuns lists runs for an agent.
+
+func (c *Client) ListContentEmbeddings(ctx context.Context, contentVersionID string, page, limit int) (*ContentEmbeddingsListResponse, error)
+    ListContentEmbeddings lists embeddings for a content version.
+
+func (c *Client) ListSources(ctx context.Context, page, limit int, sort, order, accountID string) (*SourceListResponse, error)
+    ListSources lists sources.
+
+func (c *Client) RunAgent(ctx context.Context, agentID string, body AgentRunRequest) (*AgentRunResponse, error)
+    RunAgent runs an agent.
+
+    body is marshaled as JSON.
+
+func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID string, req UploadFileRequest) (*FileUploadResponse, error)
+    UploadFileToSource uploads a file to a source connection.
+
+type ConfigurationError struct {
+	Message string
+}
+    ConfigurationError indicates invalid or missing client configuration.
+
+func (e *ConfigurationError) Error() string
+
+type ContentDetailResponse = generated.RoutersApiContentsContentDetailResponse
+
+type ContentEmbeddingsListResponse = generated.RoutersApiContentsContentEmbeddingsListResponse
+
+type File = openapi_types.File
+    File is the upload file type used by the generated client.
+
+type FileUploadResponse = generated.FileUploadResponse
+
+type HTTPValidationError = generated.HTTPValidationError
+
+type JsonValue = generated.JsonValue
+    JsonValue is an arbitrary JSON value.
+
+type Options struct {
+	// APIKey is used for authentication. Defaults to the SECLAI_API_KEY environment variable.
+	APIKey string
+
+	// BaseURL is the API base URL. Defaults to SECLAI_API_URL if set, else DefaultBaseURL.
+	BaseURL string
+
+	// APIKeyHeader is the HTTP header name used for the API key. Defaults to &#34;x-api-key&#34;.
+	APIKeyHeader string
+
+	// HTTPClient is used for requests. Defaults to a client with a 30s timeout.
+	HTTPClient *http.Client
+}
+    Options configure a Client.
+
+type PaginationResponse = generated.PaginationResponse
+
+type SourceListResponse = generated.RoutersApiSourcesSourceListResponse
+
+type UploadFileRequest struct {
+	File     []byte
+	FileName string
+	Title    string
+}
+    UploadFileRequest describes an upload.
+
+type ValidationError = generated.ValidationError
+
+
+=== github.com/seclai/seclai-go/cmd/docsgen ===
+
+
+
+=== github.com/seclai/seclai-go/cmd/specfix ===
+
+
+
+=== github.com/seclai/seclai-go/generated ===
+
+package generated // import &#34;github.com/seclai/seclai-go/generated&#34;
+
+Package generated provides primitives to interact with the openapi HTTP API.
+
+Code generated by github.com/oapi-codegen/oapi-codegen/v2 version v2.4.1 DO NOT
+EDIT.
+
+FUNCTIONS
+
+func NewDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteRequest(server string, agentId string, runId string) (*http.Request, error)
+    NewDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteRequest generates requests
+    for DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete
+
+func NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(server string, sourceConnectionContentVersion string) (*http.Request, error)
+    NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest
+    generates requests for
+    DeleteContentApiContentsSourceConnectionContentVersionDelete
+
+func NewGetAgentRunApiAgentsAgentIdRunsRunIdGetRequest(server string, agentId string, runId string) (*http.Request, error)
+    NewGetAgentRunApiAgentsAgentIdRunsRunIdGetRequest generates requests for
+    GetAgentRunApiAgentsAgentIdRunsRunIdGet
+
+func NewGetContentDetailApiContentsSourceConnectionContentVersionGetRequest(server string, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams) (*http.Request, error)
+    NewGetContentDetailApiContentsSourceConnectionContentVersionGetRequest
+    generates requests for
+    GetContentDetailApiContentsSourceConnectionContentVersionGet
+
+func NewListAgentRunsApiAgentsAgentIdRunsGetRequest(server string, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams) (*http.Request, error)
+    NewListAgentRunsApiAgentsAgentIdRunsGetRequest generates requests for
+    ListAgentRunsApiAgentsAgentIdRunsGet
+
+func NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetRequest(server string, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams) (*http.Request, error)
+    NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetRequest
+    generates requests for
+    ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet
+
+func NewListSourcesApiSourcesGetRequest(server string, params *ListSourcesApiSourcesGetParams) (*http.Request, error)
+    NewListSourcesApiSourcesGetRequest generates requests for
+    ListSourcesApiSourcesGet
+
+func NewRunAgentApiAgentsAgentIdRunsPostRequest(server string, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody) (*http.Request, error)
+    NewRunAgentApiAgentsAgentIdRunsPostRequest calls the generic
+    RunAgentApiAgentsAgentIdRunsPost builder with application/json body
+
+func NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error)
+    NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody generates requests for
+    RunAgentApiAgentsAgentIdRunsPost with any type of body
+
+func NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(server string, sourceConnectionId string, contentType string, body io.Reader) (*http.Request, error)
+    NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody
+    generates requests for
+    UploadFileToSourceApiSourcesSourceConnectionIdUploadPost with any type of
+    body
+
+
+TYPES
+
+type AgentRunAttemptResponse struct {
+	// Duration Duration of the attempt in seconds.
+	Duration *float32 `json:&#34;duration&#34;`
+
+	// EndedAt Timestamp when the attempt ended.
+	EndedAt *string `json:&#34;ended_at&#34;`
+
+	// Error Error message if the attempt failed.
+	Error *string `json:&#34;error&#34;`
+
+	// StartedAt Timestamp when the attempt started.
+	StartedAt *string                                `json:&#34;started_at&#34;`
+	Status    PendingProcessingCompletedFailedStatus `json:&#34;status&#34;`
+}
+    AgentRunAttemptResponse defines model for AgentRunAttemptResponse.
+
+type AgentRunRequest struct {
+	// Input Input to provide to the agent upon running for agents with dynamic triggers.
+	Input *string `json:&#34;input&#34;`
+
+	// Metadata Metadata to make available for string substitution expressions in agent tasks.
+	Metadata *map[string]JsonValue `json:&#34;metadata&#34;`
+
+	// Priority If true, the agent run will be treated as priority execution.
+	Priority *bool `json:&#34;priority,omitempty&#34;`
+}
+    AgentRunRequest defines model for AgentRunRequest.
+
+type AgentRunResponse struct {
+	// Attempts List of attempts made for this agent run.
+	Attempts []AgentRunAttemptResponse `json:&#34;attempts&#34;`
+
+	// Credits Credits consumed by the agent run, if applicable.
+	Credits *float32 `json:&#34;credits&#34;`
+
+	// ErrorCount Number of errors encountered during the run.
+	ErrorCount int `json:&#34;error_count&#34;`
+
+	// Input Input provided to the agent for this run.
+	Input *string `json:&#34;input&#34;`
+
+	// Output Output produced by the agent run.
+	Output *string `json:&#34;output&#34;`
+
+	// Priority Indicates if the run was treated as a priority execution.
+	Priority bool `json:&#34;priority&#34;`
+
+	// RunId Unique identifier for the agent run.
+	RunId  string                                 `json:&#34;run_id&#34;`
+	Status PendingProcessingCompletedFailedStatus `json:&#34;status&#34;`
+}
+    AgentRunResponse defines model for AgentRunResponse.
+
+type BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost struct {
+	// File File to upload
+	File openapi_types.File `json:&#34;file&#34;`
+
+	// Title Optional title for the content
+	Title *string `json:&#34;title,omitempty&#34;`
+}
+    BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost
+    defines model for
+    Body_upload_file_to_source_api_sources__source_connection_id__upload_post.
+
+type Client struct {
+	// The endpoint of the server conforming to this interface, with scheme,
+	// https://api.deepmap.com for example. This can contain a path relative
+	// to the server, such as https://api.deepmap.com/dev-test, and all the
+	// paths in the swagger spec will be appended to the server.
+	Server string
+
+	// Doer for performing requests, typically a *http.Client with any
+	// customized settings, such as certificate chains.
+	Client HttpRequestDoer
+
+	// A list of callbacks for modifying requests which are generated before sending over
+	// the network.
+	RequestEditors []RequestEditorFn
+}
+    Client which conforms to the OpenAPI3 specification for this service.
+
+func NewClient(server string, opts ...ClientOption) (*Client, error)
+    Creates a new Client, with reasonable defaults
+
+func (c *Client) DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) GetAgentRunApiAgentsAgentIdRunsRunIdGet(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) GetContentDetailApiContentsSourceConnectionContentVersionGet(ctx context.Context, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) ListAgentRunsApiAgentsAgentIdRunsGet(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) ListSourcesApiSourcesGet(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) RunAgentApiAgentsAgentIdRunsPost(ctx context.Context, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) RunAgentApiAgentsAgentIdRunsPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+type ClientInterface interface {
+	// ListAgentRunsApiAgentsAgentIdRunsGet request
+	ListAgentRunsApiAgentsAgentIdRunsGet(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RunAgentApiAgentsAgentIdRunsPostWithBody request with any body
+	RunAgentApiAgentsAgentIdRunsPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RunAgentApiAgentsAgentIdRunsPost(ctx context.Context, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete request
+	DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentRunApiAgentsAgentIdRunsRunIdGet request
+	GetAgentRunApiAgentsAgentIdRunsRunIdGet(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteContentApiContentsSourceConnectionContentVersionDelete request
+	DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetContentDetailApiContentsSourceConnectionContentVersionGet request
+	GetContentDetailApiContentsSourceConnectionContentVersionGet(ctx context.Context, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet request
+	ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSourcesApiSourcesGet request
+	ListSourcesApiSourcesGet(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody request with any body
+	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+    The interface specification for the client above.
+
+type ClientOption func(*Client) error
+    ClientOption allows setting custom parameters during construction
+
+func WithBaseURL(baseURL string) ClientOption
+    WithBaseURL overrides the baseURL.
+
+func WithHTTPClient(doer HttpRequestDoer) ClientOption
+    WithHTTPClient allows overriding the default Doer, which is automatically
+    created using http.Client. This is useful for tests.
+
+func WithRequestEditorFn(fn RequestEditorFn) ClientOption
+    WithRequestEditorFn allows setting up a callback function, which will be
+    called right before sending the request. This can be used to mutate the
+    request.
+
+type ClientWithResponses struct {
+	ClientInterface
+}
+    ClientWithResponses builds on ClientInterface to offer response payloads
+
+func NewClientWithResponses(server string, opts ...ClientOption) (*ClientWithResponses, error)
+    NewClientWithResponses creates a new ClientWithResponses, which wraps Client
+    with return type handling
+
+func (c *ClientWithResponses) DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse, error)
+    DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse request returning
+    *DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse
+
+func (c *ClientWithResponses) DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error)
+    DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse
+    request returning
+    *DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse
+
+func (c *ClientWithResponses) GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse, error)
+    GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse request returning
+    *GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse
+
+func (c *ClientWithResponses) GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams, reqEditors ...RequestEditorFn) (*GetContentDetailApiContentsSourceConnectionContentVersionGetResponse, error)
+    GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse
+    request returning
+    *GetContentDetailApiContentsSourceConnectionContentVersionGetResponse
+
+func (c *ClientWithResponses) ListAgentRunsApiAgentsAgentIdRunsGetWithResponse(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*ListAgentRunsApiAgentsAgentIdRunsGetResponse, error)
+    ListAgentRunsApiAgentsAgentIdRunsGetWithResponse request returning
+    *ListAgentRunsApiAgentsAgentIdRunsGetResponse
+
+func (c *ClientWithResponses) ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse, error)
+    ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse
+    request returning
+    *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse
+
+func (c *ClientWithResponses) ListSourcesApiSourcesGetWithResponse(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*ListSourcesApiSourcesGetResponse, error)
+    ListSourcesApiSourcesGetWithResponse request returning
+    *ListSourcesApiSourcesGetResponse
+
+func (c *ClientWithResponses) RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
+    RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse request with arbitrary
+    body returning *RunAgentApiAgentsAgentIdRunsPostResponse
+
+func (c *ClientWithResponses) RunAgentApiAgentsAgentIdRunsPostWithResponse(ctx context.Context, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
+
+func (c *ClientWithResponses) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error)
+    UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse
+    request with arbitrary body returning
+    *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse
+
+type ClientWithResponsesInterface interface {
+	// ListAgentRunsApiAgentsAgentIdRunsGetWithResponse request
+	ListAgentRunsApiAgentsAgentIdRunsGetWithResponse(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*ListAgentRunsApiAgentsAgentIdRunsGetResponse, error)
+
+	// RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse request with any body
+	RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
+
+	RunAgentApiAgentsAgentIdRunsPostWithResponse(ctx context.Context, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
+
+	// DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse request
+	DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse, error)
+
+	// GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse request
+	GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse, error)
+
+	// DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request
+	DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error)
+
+	// GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse request
+	GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams, reqEditors ...RequestEditorFn) (*GetContentDetailApiContentsSourceConnectionContentVersionGetResponse, error)
+
+	// ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse request
+	ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse, error)
+
+	// ListSourcesApiSourcesGetWithResponse request
+	ListSourcesApiSourcesGetWithResponse(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*ListSourcesApiSourcesGetResponse, error)
+
+	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse request with any body
+	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error)
+}
+    ClientWithResponsesInterface is the interface specification for the client
+    with responses above.
+
+type ContentEmbeddingResponse struct {
+	BatchDuration float32   `json:&#34;batch_duration&#34;`
+	BatchSize     int       `json:&#34;batch_size&#34;`
+	Id            string    `json:&#34;id&#34;`
+	Text          string    `json:&#34;text&#34;`
+	TextEnd       int       `json:&#34;text_end&#34;`
+	TextStart     int       `json:&#34;text_start&#34;`
+	Vector        []float32 `json:&#34;vector&#34;`
+}
+    ContentEmbeddingResponse Response model for content embedding.
+
+type DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentRunResponse
+	JSON422      *HTTPValidationError
+}
+
+func ParseDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse(rsp *http.Response) (*DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse, error)
+    ParseDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse parses an HTTP
+    response from a DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse
+    call
+
+func (r DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+func ParseDeleteContentApiContentsSourceConnectionContentVersionDeleteResponse(rsp *http.Response) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error)
+    ParseDeleteContentApiContentsSourceConnectionContentVersionDeleteResponse
+    parses an HTTP response from a
+    DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse
+    call
+
+func (r DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type FileUploadResponse struct {
+	// ContentVersionId ID of the created content version
+	ContentVersionId *string `json:&#34;content_version_id&#34;`
+
+	// Filename Original filename
+	Filename string `json:&#34;filename&#34;`
+
+	// SourceConnectionContentVersionId ID of the duplicate source connection content version
+	SourceConnectionContentVersionId *string `json:&#34;source_connection_content_version_id&#34;`
+
+	// Status Processing status
+	Status string `json:&#34;status&#34;`
+}
+    FileUploadResponse Response model for file upload
+
+type GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentRunResponse
+	JSON422      *HTTPValidationError
+}
+
+func ParseGetAgentRunApiAgentsAgentIdRunsRunIdGetResponse(rsp *http.Response) (*GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse, error)
+    ParseGetAgentRunApiAgentsAgentIdRunsRunIdGetResponse parses an HTTP response
+    from a GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse call
+
+func (r GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type GetContentDetailApiContentsSourceConnectionContentVersionGetParams struct {
+	Start *int `form:&#34;start,omitempty&#34; json:&#34;start,omitempty&#34;`
+	End   *int `form:&#34;end,omitempty&#34; json:&#34;end,omitempty&#34;`
+}
+    GetContentDetailApiContentsSourceConnectionContentVersionGetParams defines
+    parameters for GetContentDetailApiContentsSourceConnectionContentVersionGet.
+
+type GetContentDetailApiContentsSourceConnectionContentVersionGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiContentsContentDetailResponse
+	JSON422      *HTTPValidationError
+}
+
+func ParseGetContentDetailApiContentsSourceConnectionContentVersionGetResponse(rsp *http.Response) (*GetContentDetailApiContentsSourceConnectionContentVersionGetResponse, error)
+    ParseGetContentDetailApiContentsSourceConnectionContentVersionGetResponse
+    parses an HTTP response from a
+    GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse
+    call
+
+func (r GetContentDetailApiContentsSourceConnectionContentVersionGetResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r GetContentDetailApiContentsSourceConnectionContentVersionGetResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type HTTPValidationError struct {
+	Detail *[]ValidationError `json:&#34;detail,omitempty&#34;`
+}
+    HTTPValidationError defines model for HTTPValidationError.
+
+type HttpRequestDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+    Doer performs HTTP requests.
+
+    The standard http.Client implements this interface.
+
+type JsonValue = interface{}
+    JsonValue defines model for JsonValue.
+
+type ListAgentRunsApiAgentsAgentIdRunsGetParams struct {
+	// Page Page number
+	Page *int `form:&#34;page,omitempty&#34; json:&#34;page,omitempty&#34;`
+
+	// Limit Items per page
+	Limit *int `form:&#34;limit,omitempty&#34; json:&#34;limit,omitempty&#34;`
+}
+    ListAgentRunsApiAgentsAgentIdRunsGetParams defines parameters for
+    ListAgentRunsApiAgentsAgentIdRunsGet.
+
+type ListAgentRunsApiAgentsAgentIdRunsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiAgentsAgentRunListResponse
+	JSON422      *HTTPValidationError
+}
+
+func ParseListAgentRunsApiAgentsAgentIdRunsGetResponse(rsp *http.Response) (*ListAgentRunsApiAgentsAgentIdRunsGetResponse, error)
+    ParseListAgentRunsApiAgentsAgentIdRunsGetResponse parses an HTTP response
+    from a ListAgentRunsApiAgentsAgentIdRunsGetWithResponse call
+
+func (r ListAgentRunsApiAgentsAgentIdRunsGetResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r ListAgentRunsApiAgentsAgentIdRunsGetResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams struct {
+	Page  *int `form:&#34;page,omitempty&#34; json:&#34;page,omitempty&#34;`
+	Limit *int `form:&#34;limit,omitempty&#34; json:&#34;limit,omitempty&#34;`
+}
+    ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams
+    defines parameters for
+    ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet.
+
+type ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiContentsContentEmbeddingsListResponse
+	JSON422      *HTTPValidationError
+}
+
+func ParseListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse(rsp *http.Response) (*ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse, error)
+    ParseListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse
+    parses an HTTP response from a
+    ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse
+    call
+
+func (r ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type ListSourcesApiSourcesGetParams struct {
+	// Page Page number
+	Page *int `form:&#34;page,omitempty&#34; json:&#34;page,omitempty&#34;`
+
+	// Limit Items per page
+	Limit *int `form:&#34;limit,omitempty&#34; json:&#34;limit,omitempty&#34;`
+
+	// Sort Sort field
+	Sort *string `form:&#34;sort,omitempty&#34; json:&#34;sort,omitempty&#34;`
+
+	// Order Sort order
+	Order *string `form:&#34;order,omitempty&#34; json:&#34;order,omitempty&#34;`
+
+	// AccountId List sources for the given account. Defaults to the api key&#39;s account.
+	AccountId *string `form:&#34;account_id,omitempty&#34; json:&#34;account_id,omitempty&#34;`
+}
+    ListSourcesApiSourcesGetParams defines parameters for
+    ListSourcesApiSourcesGet.
+
+type ListSourcesApiSourcesGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSourcesSourceListResponse
+	JSON422      *HTTPValidationError
+}
+
+func ParseListSourcesApiSourcesGetResponse(rsp *http.Response) (*ListSourcesApiSourcesGetResponse, error)
+    ParseListSourcesApiSourcesGetResponse parses an HTTP response from a
+    ListSourcesApiSourcesGetWithResponse call
+
+func (r ListSourcesApiSourcesGetResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r ListSourcesApiSourcesGetResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type PaginationResponse struct {
+	HasNext bool `json:&#34;has_next&#34;`
+	HasPrev bool `json:&#34;has_prev&#34;`
+	Limit   int  `json:&#34;limit&#34;`
+	Page    int  `json:&#34;page&#34;`
+	Pages   int  `json:&#34;pages&#34;`
+	Total   int  `json:&#34;total&#34;`
+}
+    PaginationResponse Pagination information.
+
+type PendingProcessingCompletedFailedStatus string
+    PendingProcessingCompletedFailedStatus defines model for
+    PendingProcessingCompletedFailedStatus.
+
+const (
+	Completed  PendingProcessingCompletedFailedStatus = &#34;completed&#34;
+	Failed     PendingProcessingCompletedFailedStatus = &#34;failed&#34;
+	Pending    PendingProcessingCompletedFailedStatus = &#34;pending&#34;
+	Processing PendingProcessingCompletedFailedStatus = &#34;processing&#34;
+)
+    Defines values for PendingProcessingCompletedFailedStatus.
+
+type RequestEditorFn func(ctx context.Context, req *http.Request) error
+    RequestEditorFn is the function signature for the RequestEditor callback
+    function
+
+type RoutersApiAgentsAgentRunListResponse struct {
+	// Data List of agent runs.
+	Data []AgentRunResponse `json:&#34;data&#34;`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:&#34;pagination&#34;`
+}
+    RoutersApiAgentsAgentRunListResponse defines model for
+    routers__api__agents__AgentRunListResponse.
+
+type RoutersApiContentsContentDetailResponse struct {
+	// ContentDuration Duration of the content in seconds.
+	ContentDuration *int `json:&#34;content_duration&#34;`
+
+	// ContentDurationDisplay Display string for content duration.
+	ContentDurationDisplay *string `json:&#34;content_duration_display&#34;`
+
+	// ContentStatus Status of the content.
+	ContentStatus string `json:&#34;content_status&#34;`
+
+	// ContentType Type of the content.
+	ContentType string `json:&#34;content_type&#34;`
+
+	// ContentTypeDisplay Display name of the content type.
+	ContentTypeDisplay string `json:&#34;content_type_display&#34;`
+
+	// ContentUrl URL of the content.
+	ContentUrl string `json:&#34;content_url&#34;`
+
+	// ContentWordCount Word count of the content.
+	ContentWordCount *int `json:&#34;content_word_count&#34;`
+
+	// Description Description of the content.
+	Description *string `json:&#34;description&#34;`
+
+	// Error Error message, if any.
+	Error *string `json:&#34;error&#34;`
+
+	// Id Unique identifier for the content version.
+	Id string `json:&#34;id&#34;`
+
+	// Metadata Metadata associated with the content.
+	Metadata *[]map[string]string `json:&#34;metadata&#34;`
+
+	// PublishedAt Timestamp when the content was published.
+	PublishedAt *string `json:&#34;published_at&#34;`
+
+	// PulledAt Timestamp when the content was pulled.
+	PulledAt string `json:&#34;pulled_at&#34;`
+
+	// SourceConnectionContentVersionId ID of the source connection content version.
+	SourceConnectionContentVersionId string `json:&#34;source_connection_content_version_id&#34;`
+
+	// SourceConnectionId ID of the source connection.
+	SourceConnectionId string `json:&#34;source_connection_id&#34;`
+
+	// SourceName Name of the source.
+	SourceName string `json:&#34;source_name&#34;`
+
+	// SourceType Type of the source.
+	SourceType string `json:&#34;source_type&#34;`
+
+	// TextContent Text content.
+	TextContent *string `json:&#34;text_content&#34;`
+
+	// TextContentEnd End position of the text content.
+	TextContentEnd int `json:&#34;text_content_end&#34;`
+
+	// TextContentStart Start position of the text content.
+	TextContentStart int `json:&#34;text_content_start&#34;`
+
+	// TextContentTotalLength Total length of the text content.
+	TextContentTotalLength int `json:&#34;text_content_total_length&#34;`
+
+	// Title Title of the content.
+	Title *string `json:&#34;title&#34;`
+}
+    RoutersApiContentsContentDetailResponse Response model for content detail.
+
+type RoutersApiContentsContentEmbeddingsListResponse struct {
+	Data []ContentEmbeddingResponse `json:&#34;data&#34;`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:&#34;pagination&#34;`
+}
+    RoutersApiContentsContentEmbeddingsListResponse Response model for paginated
+    content embeddings.
+
+type RoutersApiSourcesSourceListResponse struct {
+	Data []SourceResponse `json:&#34;data&#34;`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:&#34;pagination&#34;`
+}
+    RoutersApiSourcesSourceListResponse Response model for paginated source list
+
+type RunAgentApiAgentsAgentIdRunsPostJSONRequestBody = AgentRunRequest
+    RunAgentApiAgentsAgentIdRunsPostJSONRequestBody defines body for
+    RunAgentApiAgentsAgentIdRunsPost for application/json ContentType.
+
+type RunAgentApiAgentsAgentIdRunsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentRunResponse
+	JSON422      *HTTPValidationError
+}
+
+func ParseRunAgentApiAgentsAgentIdRunsPostResponse(rsp *http.Response) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
+    ParseRunAgentApiAgentsAgentIdRunsPostResponse parses an HTTP response from a
+    RunAgentApiAgentsAgentIdRunsPostWithResponse call
+
+func (r RunAgentApiAgentsAgentIdRunsPostResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r RunAgentApiAgentsAgentIdRunsPostResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type SourceResponse struct {
+	// AccountId Account ID associated with the source.
+	AccountId openapi_types.UUID `json:&#34;account_id&#34;`
+
+	// AvgEpisodesPerMonth Average number of episodes per month.
+	AvgEpisodesPerMonth *float32 `json:&#34;avg_episodes_per_month&#34;`
+
+	// AvgWordsPerEpisode Average number of words per episode.
+	AvgWordsPerEpisode *int `json:&#34;avg_words_per_episode&#34;`
+
+	// ChunkLanguage Language used for chunking content.
+	ChunkLanguage *string `json:&#34;chunk_language&#34;`
+
+	// ChunkOverlap Chunk overlap for content processing.
+	ChunkOverlap *int `json:&#34;chunk_overlap&#34;`
+
+	// ChunkRegexSeparators Indicates if chunk separators are regex patterns.
+	ChunkRegexSeparators *bool `json:&#34;chunk_regex_separators&#34;`
+
+	// ChunkSeparators Chunk separators used for content processing.
+	ChunkSeparators *string `json:&#34;chunk_separators&#34;`
+
+	// ChunkSize Chunk size for content processing.
+	ChunkSize *int `json:&#34;chunk_size&#34;`
+
+	// ContentCount Number of content items associated with the source connection.
+	ContentCount *int `json:&#34;content_count,omitempty&#34;`
+
+	// ContentFilter Content filter for the source connection.
+	ContentFilter string `json:&#34;content_filter&#34;`
+
+	// CreatedAt Timestamp when the source connection was created.
+	CreatedAt string `json:&#34;created_at&#34;`
+
+	// Dimensions Dimensions of the embedding model.
+	Dimensions *int `json:&#34;dimensions&#34;`
+
+	// EmbeddingModel Embedding model used for the source connection.
+	EmbeddingModel *string `json:&#34;embedding_model&#34;`
+
+	// EmbeddingModelType Type of the embedding model.
+	EmbeddingModelType *string `json:&#34;embedding_model_type&#34;`
+
+	// HasHistoricalData Indicates if the source connection has historical data.
+	HasHistoricalData *bool `json:&#34;has_historical_data,omitempty&#34;`
+
+	// Id Unique identifier for the source connection.
+	Id string `json:&#34;id&#34;`
+
+	// Name Name of the source connection.
+	Name string `json:&#34;name&#34;`
+
+	// NextPollAt Timestamp for the next scheduled poll.
+	NextPollAt *string `json:&#34;next_poll_at&#34;`
+
+	// Polling Polling configuration for the source connection.
+	Polling *string `json:&#34;polling&#34;`
+
+	// PollingAction Polling action for the source connection.
+	PollingAction *string `json:&#34;polling_action&#34;`
+
+	// PollingMaxItems Maximum items to poll for the source connection.
+	PollingMaxItems *int `json:&#34;polling_max_items&#34;`
+
+	// PulledAt Timestamp when content was last pulled.
+	PulledAt *string `json:&#34;pulled_at&#34;`
+
+	// Readonly Indicates if the source connection is read-only.
+	Readonly *bool `json:&#34;readonly,omitempty&#34;`
+
+	// Retention Retention period for the source connection.
+	Retention *int `json:&#34;retention&#34;`
+
+	// SourceType Type of the source connection.
+	SourceType string `json:&#34;source_type&#34;`
+
+	// UpdatedAt Timestamp when the source connection was last updated.
+	UpdatedAt string `json:&#34;updated_at&#34;`
+
+	// Url URL of the source connection.
+	Url *string `json:&#34;url&#34;`
+}
+    SourceResponse Response model for source data.
+
+type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostMultipartRequestBody = BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost
+    UploadFileToSourceApiSourcesSourceConnectionIdUploadPostMultipartRequestBody
+    defines body for UploadFileToSourceApiSourcesSourceConnectionIdUploadPost
+    for multipart/form-data ContentType.
+
+type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *FileUploadResponse
+	JSON422      *HTTPValidationError
+}
+
+func ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse(rsp *http.Response) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error)
+    ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse
+    parses an HTTP response from a
+    UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithResponse call
+
+func (r UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type ValidationError struct {
+	Loc  []ValidationError_Loc_Item `json:&#34;loc&#34;`
+	Msg  string                     `json:&#34;msg&#34;`
+	Type string                     `json:&#34;type&#34;`
+}
+    ValidationError defines model for ValidationError.
+
+type ValidationErrorLoc0 = string
+    ValidationErrorLoc0 defines model for .
+
+type ValidationErrorLoc1 = int
+    ValidationErrorLoc1 defines model for .
+
+type ValidationError_Loc_Item struct {
+	// Has unexported fields.
+}
+    ValidationError_Loc_Item defines model for ValidationError.loc.Item.
+
+func (t ValidationError_Loc_Item) AsValidationErrorLoc0() (ValidationErrorLoc0, error)
+    AsValidationErrorLoc0 returns the union data inside the
+    ValidationError_Loc_Item as a ValidationErrorLoc0
+
+func (t ValidationError_Loc_Item) AsValidationErrorLoc1() (ValidationErrorLoc1, error)
+    AsValidationErrorLoc1 returns the union data inside the
+    ValidationError_Loc_Item as a ValidationErrorLoc1
+
+func (t *ValidationError_Loc_Item) FromValidationErrorLoc0(v ValidationErrorLoc0) error
+    FromValidationErrorLoc0 overwrites any union data inside the
+    ValidationError_Loc_Item as the provided ValidationErrorLoc0
+
+func (t *ValidationError_Loc_Item) FromValidationErrorLoc1(v ValidationErrorLoc1) error
+    FromValidationErrorLoc1 overwrites any union data inside the
+    ValidationError_Loc_Item as the provided ValidationErrorLoc1
+
+func (t ValidationError_Loc_Item) MarshalJSON() ([]byte, error)
+
+func (t *ValidationError_Loc_Item) MergeValidationErrorLoc0(v ValidationErrorLoc0) error
+    MergeValidationErrorLoc0 performs a merge with any union data inside the
+    ValidationError_Loc_Item, using the provided ValidationErrorLoc0
+
+func (t *ValidationError_Loc_Item) MergeValidationErrorLoc1(v ValidationErrorLoc1) error
+    MergeValidationErrorLoc1 performs a merge with any union data inside the
+    ValidationError_Loc_Item, using the provided ValidationErrorLoc1
+
+func (t *ValidationError_Loc_Item) UnmarshalJSON(b []byte) error
+
+</code></pre>
+</body>
+</html>
