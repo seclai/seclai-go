@@ -1,0 +1,1505 @@
+{
+  "components": {
+    "schemas": {
+      "AgentRunAttemptResponse": {
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Duration of the attempt in seconds.",
+            "title": "Duration"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp when the attempt ended.",
+            "title": "Ended At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error message if the attempt failed.",
+            "title": "Error"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp when the attempt started.",
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PendingProcessingCompletedFailedStatus",
+            "description": "Status of the agent run attempt."
+          }
+        },
+        "required": [
+          "status",
+          "started_at",
+          "ended_at",
+          "duration",
+          "error"
+        ],
+        "title": "AgentRunAttemptResponse",
+        "type": "object"
+      },
+      "AgentRunRequest": {
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Input to provide to the agent upon running for agents with dynamic triggers.",
+            "title": "Input"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Metadata to make available for string substitution expressions in agent tasks.",
+            "title": "Metadata"
+          },
+          "priority": {
+            "default": false,
+            "description": "If true, the agent run will be treated as priority execution.",
+            "title": "Priority",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "input",
+          "metadata"
+        ],
+        "title": "AgentRunRequest",
+        "type": "object"
+      },
+      "AgentRunResponse": {
+        "properties": {
+          "attempts": {
+            "description": "List of attempts made for this agent run.",
+            "items": {
+              "$ref": "#/components/schemas/AgentRunAttemptResponse"
+            },
+            "title": "Attempts",
+            "type": "array"
+          },
+          "credits": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Credits consumed by the agent run, if applicable.",
+            "title": "Credits"
+          },
+          "error_count": {
+            "description": "Number of errors encountered during the run.",
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Input provided to the agent for this run.",
+            "title": "Input"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Output produced by the agent run.",
+            "title": "Output"
+          },
+          "priority": {
+            "description": "Indicates if the run was treated as a priority execution.",
+            "title": "Priority",
+            "type": "boolean"
+          },
+          "run_id": {
+            "description": "Unique identifier for the agent run.",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PendingProcessingCompletedFailedStatus",
+            "description": "Current status of the agent run."
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "error_count",
+          "credits",
+          "priority",
+          "input",
+          "output",
+          "attempts"
+        ],
+        "title": "AgentRunResponse",
+        "type": "object"
+      },
+      "Body_upload_file_to_source_api_sources__source_connection_id__upload_post": {
+        "properties": {
+          "file": {
+            "description": "File to upload",
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          },
+          "title": {
+            "description": "Optional title for the content",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_file_to_source_api_sources__source_connection_id__upload_post",
+        "type": "object"
+      },
+      "ContentEmbeddingResponse": {
+        "description": "Response model for content embedding.",
+        "properties": {
+          "batch_duration": {
+            "title": "Batch Duration",
+            "type": "number"
+          },
+          "batch_size": {
+            "title": "Batch Size",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "text_end": {
+            "title": "Text End",
+            "type": "integer"
+          },
+          "text_start": {
+            "title": "Text Start",
+            "type": "integer"
+          },
+          "vector": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Vector",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "text_start",
+          "text_end",
+          "text",
+          "vector",
+          "batch_size",
+          "batch_duration"
+        ],
+        "title": "ContentEmbeddingResponse",
+        "type": "object"
+      },
+      "FileUploadResponse": {
+        "description": "Response model for file upload",
+        "properties": {
+          "content_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ID of the created content version",
+            "title": "Content Version Id"
+          },
+          "filename": {
+            "description": "Original filename",
+            "title": "Filename",
+            "type": "string"
+          },
+          "source_connection_content_version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ID of the duplicate source connection content version",
+            "title": "Source Connection Content Version Id"
+          },
+          "status": {
+            "description": "Processing status",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_version_id",
+          "source_connection_content_version_id",
+          "filename",
+          "status"
+        ],
+        "title": "FileUploadResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JsonValue": {},
+      "PaginationResponse": {
+        "description": "Pagination information.",
+        "properties": {
+          "has_next": {
+            "title": "Has Next",
+            "type": "boolean"
+          },
+          "has_prev": {
+            "title": "Has Prev",
+            "type": "boolean"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "total",
+          "pages",
+          "has_next",
+          "has_prev"
+        ],
+        "title": "PaginationResponse",
+        "type": "object"
+      },
+      "PendingProcessingCompletedFailedStatus": {
+        "enum": [
+          "pending",
+          "processing",
+          "completed",
+          "failed"
+        ],
+        "title": "PendingProcessingCompletedFailedStatus",
+        "type": "string"
+      },
+      "SourceResponse": {
+        "description": "Response model for source data.",
+        "properties": {
+          "account_id": {
+            "description": "Account ID associated with the source.",
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "avg_episodes_per_month": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average number of episodes per month.",
+            "title": "Avg Episodes Per Month"
+          },
+          "avg_words_per_episode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average number of words per episode.",
+            "title": "Avg Words Per Episode"
+          },
+          "chunk_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Language used for chunking content.",
+            "title": "Chunk Language"
+          },
+          "chunk_overlap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Chunk overlap for content processing.",
+            "title": "Chunk Overlap"
+          },
+          "chunk_regex_separators": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Indicates if chunk separators are regex patterns.",
+            "title": "Chunk Regex Separators"
+          },
+          "chunk_separators": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Chunk separators used for content processing.",
+            "title": "Chunk Separators"
+          },
+          "chunk_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Chunk size for content processing.",
+            "title": "Chunk Size"
+          },
+          "content_count": {
+            "default": 0,
+            "description": "Number of content items associated with the source connection.",
+            "title": "Content Count",
+            "type": "integer"
+          },
+          "content_filter": {
+            "description": "Content filter for the source connection.",
+            "title": "Content Filter",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "Timestamp when the source connection was created.",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dimensions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dimensions of the embedding model.",
+            "title": "Dimensions"
+          },
+          "embedding_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Embedding model used for the source connection.",
+            "title": "Embedding Model"
+          },
+          "embedding_model_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Type of the embedding model.",
+            "title": "Embedding Model Type"
+          },
+          "has_historical_data": {
+            "default": false,
+            "description": "Indicates if the source connection has historical data.",
+            "title": "Has Historical Data",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "Unique identifier for the source connection.",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the source connection.",
+            "title": "Name",
+            "type": "string"
+          },
+          "next_poll_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp for the next scheduled poll.",
+            "title": "Next Poll At"
+          },
+          "polling": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Polling configuration for the source connection.",
+            "title": "Polling"
+          },
+          "polling_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Polling action for the source connection.",
+            "title": "Polling Action"
+          },
+          "polling_max_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Maximum items to poll for the source connection.",
+            "title": "Polling Max Items"
+          },
+          "pulled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp when content was last pulled.",
+            "title": "Pulled At"
+          },
+          "readonly": {
+            "default": false,
+            "description": "Indicates if the source connection is read-only.",
+            "title": "Readonly",
+            "type": "boolean"
+          },
+          "retention": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Retention period for the source connection.",
+            "title": "Retention"
+          },
+          "source_type": {
+            "description": "Type of the source connection.",
+            "title": "Source Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "Timestamp when the source connection was last updated.",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL of the source connection.",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "name",
+          "url",
+          "source_type",
+          "polling",
+          "polling_action",
+          "polling_max_items",
+          "content_filter",
+          "retention",
+          "pulled_at",
+          "next_poll_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SourceResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "routers__api__agents__AgentRunListResponse": {
+        "properties": {
+          "data": {
+            "description": "List of agent runs.",
+            "items": {
+              "$ref": "#/components/schemas/AgentRunResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationResponse"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "AgentRunListResponse",
+        "type": "object"
+      },
+      "routers__api__contents__ContentDetailResponse": {
+        "description": "Response model for content detail.",
+        "properties": {
+          "content_duration": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Duration of the content in seconds.",
+            "title": "Content Duration"
+          },
+          "content_duration_display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Display string for content duration.",
+            "title": "Content Duration Display"
+          },
+          "content_status": {
+            "description": "Status of the content.",
+            "title": "Content Status",
+            "type": "string"
+          },
+          "content_type": {
+            "description": "Type of the content.",
+            "title": "Content Type",
+            "type": "string"
+          },
+          "content_type_display": {
+            "description": "Display name of the content type.",
+            "title": "Content Type Display",
+            "type": "string"
+          },
+          "content_url": {
+            "description": "URL of the content.",
+            "title": "Content Url",
+            "type": "string"
+          },
+          "content_word_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Word count of the content.",
+            "title": "Content Word Count"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Description of the content.",
+            "title": "Description"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error message, if any.",
+            "title": "Error"
+          },
+          "id": {
+            "description": "Unique identifier for the content version.",
+            "title": "Id",
+            "type": "string"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Metadata associated with the content.",
+            "title": "Metadata"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp when the content was published.",
+            "title": "Published At"
+          },
+          "pulled_at": {
+            "description": "Timestamp when the content was pulled.",
+            "title": "Pulled At",
+            "type": "string"
+          },
+          "source_connection_content_version_id": {
+            "description": "ID of the source connection content version.",
+            "title": "Source Connection Content Version Id",
+            "type": "string"
+          },
+          "source_connection_id": {
+            "description": "ID of the source connection.",
+            "title": "Source Connection Id",
+            "type": "string"
+          },
+          "source_name": {
+            "description": "Name of the source.",
+            "title": "Source Name",
+            "type": "string"
+          },
+          "source_type": {
+            "description": "Type of the source.",
+            "title": "Source Type",
+            "type": "string"
+          },
+          "text_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text content.",
+            "title": "Text Content"
+          },
+          "text_content_end": {
+            "description": "End position of the text content.",
+            "title": "Text Content End",
+            "type": "integer"
+          },
+          "text_content_start": {
+            "description": "Start position of the text content.",
+            "title": "Text Content Start",
+            "type": "integer"
+          },
+          "text_content_total_length": {
+            "description": "Total length of the text content.",
+            "title": "Text Content Total Length",
+            "type": "integer"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Title of the content.",
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "source_connection_content_version_id",
+          "source_connection_id",
+          "source_name",
+          "source_type",
+          "title",
+          "content_url",
+          "content_type",
+          "content_type_display",
+          "content_status",
+          "content_word_count",
+          "content_duration",
+          "content_duration_display",
+          "pulled_at",
+          "published_at",
+          "description",
+          "text_content",
+          "text_content_start",
+          "text_content_end",
+          "text_content_total_length",
+          "metadata",
+          "error"
+        ],
+        "title": "ContentDetailResponse",
+        "type": "object"
+      },
+      "routers__api__contents__ContentEmbeddingsListResponse": {
+        "description": "Response model for paginated content embeddings.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ContentEmbeddingResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationResponse"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "ContentEmbeddingsListResponse",
+        "type": "object"
+      },
+      "routers__api__sources__SourceListResponse": {
+        "description": "Response model for paginated source list",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SourceResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationResponse"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "SourceListResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Main API service for Seclai",
+    "title": "Seclai API",
+    "version": "local"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/agents/{agent_id}/runs": {
+      "get": {
+        "description": "List agent runs for an agent with pagination.",
+        "operationId": "list_agent_runs_api_agents__agent_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/routers__api__agents__AgentRunListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Agent Runs",
+        "tags": [
+          "agents"
+        ]
+      },
+      "post": {
+        "description": "Run an agent.",
+        "operationId": "run_agent_api_agents__agent_id__runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/agents/{agent_id}/runs/{run_id}": {
+      "delete": {
+        "description": "Cancel agent run.",
+        "operationId": "delete_agent_run_api_agents__agent_id__runs__run_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Agent Run",
+        "tags": [
+          "agents"
+        ]
+      },
+      "get": {
+        "description": "Get agent run details.",
+        "operationId": "get_agent_run_api_agents__agent_id__runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Agent Run",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/contents/{source_connection_content_version}": {
+      "delete": {
+        "description": "Delete a specific content version.",
+        "operationId": "delete_content_api_contents__source_connection_content_version__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_content_version",
+            "required": true,
+            "schema": {
+              "title": "Source Connection Content Version",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Content",
+        "tags": [
+          "contents"
+        ]
+      },
+      "get": {
+        "description": "Get detailed information about a specific content version.",
+        "operationId": "get_content_detail_api_contents__source_connection_content_version__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_content_version",
+            "required": true,
+            "schema": {
+              "title": "Source Connection Content Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Start",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "default": 5000,
+              "title": "End",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/routers__api__contents__ContentDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Content Detail",
+        "tags": [
+          "contents"
+        ]
+      }
+    },
+    "/api/contents/{source_connection_content_version}/embeddings": {
+      "get": {
+        "description": "List embeddings for a specific content version.",
+        "operationId": "list_content_embeddings_api_contents__source_connection_content_version__embeddings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_content_version",
+            "required": true,
+            "schema": {
+              "title": "Source Connection Content Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/routers__api__contents__ContentEmbeddingsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Content Embeddings",
+        "tags": [
+          "contents"
+        ]
+      }
+    },
+    "/api/sources/": {
+      "get": {
+        "description": "List content sources with pagination.",
+        "operationId": "list_sources_api_sources__get",
+        "parameters": [
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Sort field",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "created_at",
+              "description": "Sort field",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sort order",
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "description": "Sort order",
+              "pattern": "^(asc|desc)$",
+              "title": "Order",
+              "type": "string"
+            }
+          },
+          {
+            "description": "List sources for the given account. Defaults to the api key's account.",
+            "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "List sources for the given account. Defaults to the api key's account.",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/routers__api__sources__SourceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sources",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/api/sources/{source_connection_id}/upload": {
+      "post": {
+        "description": "Upload a file to a content source.",
+        "operationId": "upload_file_to_source_api_sources__source_connection_id__upload_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_id",
+            "required": true,
+            "schema": {
+              "title": "Source Connection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_file_to_source_api_sources__source_connection_id__upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload File To Source",
+        "tags": [
+          "sources"
+        ]
+      }
+    }
+  }
+}
