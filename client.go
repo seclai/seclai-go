@@ -20,7 +20,7 @@ import (
 
 // DefaultBaseURL is the default API base URL.
 //
-// Convenience methods use paths like "/api/sources/" under this base.
+// Convenience methods use paths like "/sources/" under this base.
 const DefaultBaseURL = "https://seclai.com"
 
 // Options configure a Client.
@@ -200,7 +200,7 @@ func (c *Client) ListSources(ctx context.Context, page, limit int, sort, order, 
 	}
 
 	var out SourceListResponse
-	if err := c.Do(ctx, http.MethodGet, "/api/sources/", q, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/sources/", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -211,7 +211,7 @@ func (c *Client) ListSources(ctx context.Context, page, limit int, sort, order, 
 // body is marshaled as JSON.
 func (c *Client) RunAgent(ctx context.Context, agentID string, body AgentRunRequest) (*AgentRunResponse, error) {
 	var out AgentRunResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/api/agents/%s/runs", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/runs", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -219,7 +219,7 @@ func (c *Client) RunAgent(ctx context.Context, agentID string, body AgentRunRequ
 
 // RunStreamingAgentAndWait runs an agent in priority mode and waits for completion.
 //
-// This method calls POST /api/agents/{agent_id}/runs/stream and consumes Server-Sent Events (SSE).
+// This method calls POST /agents/{agent_id}/runs/stream and consumes Server-Sent Events (SSE).
 // It returns when the stream emits an `event: done` message whose `data:` field contains the final run payload.
 //
 // Timeout behavior is controlled by ctx (for example, use context.WithTimeout). If ctx has no deadline,
@@ -234,7 +234,7 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 		defer cancel()
 	}
 
-	reqURL := c.buildURL(fmt.Sprintf("/api/agents/%s/runs/stream", url.PathEscape(agentID)), nil)
+	reqURL := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", url.PathEscape(agentID)), nil)
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -356,7 +356,7 @@ func (c *Client) ListAgentRuns(ctx context.Context, agentID string, page, limit 
 	}
 
 	var out AgentRunListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/api/agents/%s/runs", url.PathEscape(agentID)), q, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs", url.PathEscape(agentID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -365,7 +365,7 @@ func (c *Client) ListAgentRuns(ctx context.Context, agentID string, page, limit 
 // GetAgentRun fetches a specific run.
 func (c *Client) GetAgentRun(ctx context.Context, agentID, runID string) (*AgentRunResponse, error) {
 	var out AgentRunResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/api/agents/%s/runs/%s", url.PathEscape(agentID), url.PathEscape(runID)), nil, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s", url.PathEscape(agentID), url.PathEscape(runID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -373,7 +373,7 @@ func (c *Client) GetAgentRun(ctx context.Context, agentID, runID string) (*Agent
 
 // DeleteAgentRun cancels/deletes a specific run.
 func (c *Client) DeleteAgentRun(ctx context.Context, agentID, runID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/agents/%s/runs/%s", url.PathEscape(agentID), url.PathEscape(runID)), nil, nil, nil, nil)
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/%s/runs/%s", url.PathEscape(agentID), url.PathEscape(runID)), nil, nil, nil, nil)
 }
 
 // GetContentDetail fetches content detail.
@@ -387,7 +387,7 @@ func (c *Client) GetContentDetail(ctx context.Context, contentVersionID string, 
 	}
 
 	var out ContentDetailResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/api/contents/%s", url.PathEscape(contentVersionID)), q, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s", url.PathEscape(contentVersionID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -395,7 +395,7 @@ func (c *Client) GetContentDetail(ctx context.Context, contentVersionID string, 
 
 // DeleteContent deletes a content version.
 func (c *Client) DeleteContent(ctx context.Context, contentVersionID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/api/contents/%s", url.PathEscape(contentVersionID)), nil, nil, nil, nil)
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/contents/%s", url.PathEscape(contentVersionID)), nil, nil, nil, nil)
 }
 
 // ListContentEmbeddings lists embeddings for a content version.
@@ -409,7 +409,7 @@ func (c *Client) ListContentEmbeddings(ctx context.Context, contentVersionID str
 	}
 
 	var out ContentEmbeddingsListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/api/contents/%s/embeddings", url.PathEscape(contentVersionID)), q, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/embeddings", url.PathEscape(contentVersionID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -434,7 +434,7 @@ func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID stri
 		return nil, &ConfigurationError{Message: "upload requires FileName"}
 	}
 
-	reqURL := c.buildURL(fmt.Sprintf("/api/sources/%s/upload", url.PathEscape(sourceConnectionID)), nil)
+	reqURL := c.buildURL(fmt.Sprintf("/sources/%s/upload", url.PathEscape(sourceConnectionID)), nil)
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)

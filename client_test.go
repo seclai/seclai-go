@@ -35,7 +35,7 @@ func TestDo_SetsAuthHeader(t *testing.T) {
 	}
 
 	var out map[string]any
-	if err := c.Do(context.Background(), http.MethodGet, "/api/sources/", nil, nil, nil, &out); err != nil {
+	if err := c.Do(context.Background(), http.MethodGet, "/sources/", nil, nil, nil, &out); err != nil {
 		t.Fatalf("Do: %v", err)
 	}
 }
@@ -53,7 +53,7 @@ func TestDo_ValidationError422(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	err = c.Do(context.Background(), http.MethodGet, "/api/sources/", nil, nil, nil, nil)
+	err = c.Do(context.Background(), http.MethodGet, "/sources/", nil, nil, nil, nil)
 	if err == nil {
 		t.Fatalf("expected error")
 	}

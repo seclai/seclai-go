@@ -717,7 +717,7 @@ func NewListAgentRunsApiAgentsAgentIdRunsGetRequest(server string, agentId strin
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/agents/%s/runs", pathParam0)
+	operationPath := fmt.Sprintf("/agents/%s/runs", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -800,7 +800,7 @@ func NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(server string, agentId s
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/agents/%s/runs", pathParam0)
+	operationPath := fmt.Sprintf("/agents/%s/runs", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -847,7 +847,7 @@ func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server st
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/agents/%s/runs/stream", pathParam0)
+	operationPath := fmt.Sprintf("/agents/%s/runs/stream", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -890,7 +890,7 @@ func NewDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteRequest(server string, agen
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/agents/%s/runs/%s", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/agents/%s/runs/%s", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -931,7 +931,7 @@ func NewGetAgentRunApiAgentsAgentIdRunsRunIdGetRequest(server string, agentId st
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/agents/%s/runs/%s", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/agents/%s/runs/%s", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -965,7 +965,7 @@ func NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(serv
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/contents/%s", pathParam0)
+	operationPath := fmt.Sprintf("/contents/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -999,7 +999,7 @@ func NewGetContentDetailApiContentsSourceConnectionContentVersionGetRequest(serv
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/contents/%s", pathParam0)
+	operationPath := fmt.Sprintf("/contents/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1071,7 +1071,7 @@ func NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddings
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/contents/%s/embeddings", pathParam0)
+	operationPath := fmt.Sprintf("/contents/%s/embeddings", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1136,7 +1136,7 @@ func NewListSourcesApiSourcesGetRequest(server string, params *ListSourcesApiSou
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/sources/")
+	operationPath := fmt.Sprintf("/sources/")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1256,7 +1256,7 @@ func NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/sources/%s/upload", pathParam0)
+	operationPath := fmt.Sprintf("/sources/%s/upload", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}

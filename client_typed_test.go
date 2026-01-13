@@ -22,7 +22,7 @@ func TestClient_RunStreamingAgentAndWait_Done(t *testing.T) {
 			w.WriteHeader(405)
 			return
 		}
-		if r.URL.Path != "/api/agents/agent_1/runs/stream" {
+		if r.URL.Path != "/agents/agent_1/runs/stream" {
 			w.WriteHeader(404)
 			return
 		}
@@ -77,7 +77,7 @@ func TestClient_RunStreamingAgentAndWait_Done(t *testing.T) {
 
 func TestClient_RunStreamingAgentAndWait_Timeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/agents/agent_1/runs/stream" {
+		if r.URL.Path != "/agents/agent_1/runs/stream" {
 			w.WriteHeader(404)
 			return
 		}
@@ -112,7 +112,7 @@ func TestClient_RunStreamingAgentAndWait_Timeout(t *testing.T) {
 
 func TestGeneratedClient_ListSources_SetsAuthAndDecodes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/sources/" {
+		if r.URL.Path != "/sources/" {
 			w.WriteHeader(404)
 			return
 		}
@@ -203,7 +203,7 @@ func TestClient_RunAgent_Typed(t *testing.T) {
 			w.WriteHeader(405)
 			return
 		}
-		if !strings.HasPrefix(r.URL.Path, "/api/agents/") {
+		if !strings.HasPrefix(r.URL.Path, "/agents/") {
 			w.WriteHeader(404)
 			return
 		}
@@ -253,7 +253,7 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 			w.WriteHeader(405)
 			return
 		}
-		if !strings.HasPrefix(r.URL.Path, "/api/sources/") || !strings.HasSuffix(r.URL.Path, "/upload") {
+		if !strings.HasPrefix(r.URL.Path, "/sources/") || !strings.HasSuffix(r.URL.Path, "/upload") {
 			w.WriteHeader(404)
 			return
 		}
@@ -328,7 +328,7 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 
 func TestClient_ListSources_PathMatchesSpec(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/sources/" {
+		if r.URL.Path != "/sources/" {
 			w.WriteHeader(404)
 			return
 		}

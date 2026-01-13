@@ -998,7 +998,7 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/api/agents/{agent_id}/runs": {
+    "/agents/{agent_id}/runs": {
       "get": {
         "description": "List agent runs for an agent with pagination.",
         "operationId": "list_agent_runs_api_agents__agent_id__runs_get",
@@ -1119,7 +1119,7 @@
         ]
       }
     },
-    "/api/agents/{agent_id}/runs/stream": {
+    "/agents/{agent_id}/runs/stream": {
       "post": {
         "description": "Run an agent in priority mode and stream events via Server-Sent Events (SSE).",
         "operationId": "run_streaming_agent_api_agents__agent_id__runs_stream_post",
@@ -1157,7 +1157,7 @@
                 }
               }
             },
-            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /api/agents/{agent_id}/runs/{run_id}`."
+            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /agents/{agent_id}/runs/{run_id}`."
           },
           "422": {
             "content": {
@@ -1176,7 +1176,7 @@
         ]
       }
     },
-    "/api/agents/{agent_id}/runs/{run_id}": {
+    "/agents/{agent_id}/runs/{run_id}": {
       "delete": {
         "description": "Cancel agent run.",
         "operationId": "delete_agent_run_api_agents__agent_id__runs__run_id__delete",
@@ -1278,7 +1278,7 @@
         ]
       }
     },
-    "/api/contents/{source_connection_content_version}": {
+    "/contents/{source_connection_content_version}": {
       "delete": {
         "description": "Delete a specific content version.",
         "operationId": "delete_content_api_contents__source_connection_content_version__delete",
@@ -1375,7 +1375,7 @@
         ]
       }
     },
-    "/api/contents/{source_connection_content_version}/embeddings": {
+    "/contents/{source_connection_content_version}/embeddings": {
       "get": {
         "description": "List embeddings for a specific content version.",
         "operationId": "list_content_embeddings_api_contents__source_connection_content_version__embeddings_get",
@@ -1438,7 +1438,7 @@
         ]
       }
     },
-    "/api/sources/": {
+    "/sources/": {
       "get": {
         "description": "List content sources with pagination.",
         "operationId": "list_sources_api_sources__get",
@@ -1542,7 +1542,7 @@
         ]
       }
     },
-    "/api/sources/{source_connection_id}/upload": {
+    "/sources/{source_connection_id}/upload": {
       "post": {
         "description": "Upload a file to a content source.",
         "operationId": "upload_file_to_source_api_sources__source_connection_id__upload_post",

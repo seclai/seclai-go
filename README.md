@@ -63,6 +63,24 @@ func main() {
 }
 ```
 
+### Run an agent with SSE streaming (wait for final result)
+
+This helper returns when the stream emits the final `done` event; it returns an error if the stream ends early or the context deadline is reached.
+
+```go
+// If ctx has no deadline, the SDK applies a default timeout.
+// To control the timeout yourself, pass a context with a deadline.
+run, err := client.RunStreamingAgentAndWait(context.Background(), "agent_id", seclai.AgentRunStreamRequest{
+	Input:    "Hello from streaming",
+	Metadata: map[string]any{"app": "My App"},
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println("run:", run.Id, "status=", run.Status)
+```
+
 ## Development
 
 ### Base URL
