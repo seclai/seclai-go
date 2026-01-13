@@ -1,6 +1,7 @@
 package seclai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -214,6 +215,134 @@ func (c *Client) RunAgent(ctx context.Context, agentID string, body AgentRunRequ
 		return nil, err
 	}
 	return &out, nil
+}
+
+// RunStreamingAgentAndWait runs an agent in priority mode and waits for completion.
+//
+// This method calls POST /api/agents/{agent_id}/runs/stream and consumes Server-Sent Events (SSE).
+// It returns when the stream emits an `event: done` message whose `data:` field contains the final run payload.
+//
+// Timeout behavior is controlled by ctx (for example, use context.WithTimeout). If ctx has no deadline,
+// a default 60s timeout is applied.
+func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, body AgentRunStreamRequest) (*AgentRunResponse, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
+	}
+
+	reqURL := c.buildURL(fmt.Sprintf("/api/agents/%s/runs/stream", url.PathEscape(agentID)), nil)
+	b, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set(c.apiKeyHeader, c.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		text := strings.TrimSpace(string(raw))
+		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
+		if resp.StatusCode == 422 {
+			var ve HTTPValidationError
+			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
+			}
+			return nil, &APIValidationError{APIStatusError: statusErr}
+		}
+		return nil, &statusErr
+	}
+
+	reader := bufio.NewReader(resp.Body)
+	var currentEvent string
+	var dataLines []string
+	var lastSeen *AgentRunResponse
+
+	dispatch := func() (*AgentRunResponse, bool) {
+		if currentEvent == "" && len(dataLines) == 0 {
+			return nil, false
+		}
+		data := strings.Join(dataLines, "\n")
+		data = strings.TrimSuffix(data, "\n")
+		defer func() {
+			currentEvent = ""
+			dataLines = nil
+		}()
+
+		if data == "" {
+			return nil, false
+		}
+
+		if currentEvent == "init" || currentEvent == "done" {
+			var parsed AgentRunResponse
+			if err := json.Unmarshal([]byte(data), &parsed); err == nil {
+				lastSeen = &parsed
+				if currentEvent == "done" {
+					return &parsed, true
+				}
+			}
+		}
+		return nil, false
+	}
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				if done, ok := dispatch(); ok {
+					return done, nil
+				}
+				if lastSeen != nil {
+					return lastSeen, nil
+				}
+				return nil, fmt.Errorf("seclai: stream ended before receiving done event")
+			}
+			return nil, err
+		}
+
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			if done, ok := dispatch(); ok {
+				return done, nil
+			}
+			continue
+		}
+		if strings.HasPrefix(line, ":") {
+			continue
+		}
+
+		field := line
+		value := ""
+		if i := strings.IndexByte(line, ':'); i >= 0 {
+			field = line[:i]
+			value = line[i+1:]
+			if strings.HasPrefix(value, " ") {
+				value = value[1:]
+			}
+		}
+
+		switch field {
+		case "event":
+			currentEvent = value
+		case "data":
+			dataLines = append(dataLines, value)
+		}
+	}
 }
 
 // ListAgentRuns lists runs for an agent.

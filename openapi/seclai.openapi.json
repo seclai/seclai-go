@@ -188,6 +188,43 @@
         "title": "AgentRunResponse",
         "type": "object"
       },
+      "AgentRunStreamRequest": {
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Input to provide to the agent upon running for agents with dynamic triggers.",
+            "title": "Input"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Metadata to make available for string substitution expressions in agent tasks.",
+            "title": "Metadata"
+          }
+        },
+        "required": [
+          "input",
+          "metadata"
+        ],
+        "title": "AgentRunStreamRequest",
+        "type": "object"
+      },
       "Body_upload_file_to_source_api_sources__source_connection_id__upload_post": {
         "properties": {
           "file": {
@@ -1077,6 +1114,63 @@
           }
         },
         "summary": "Run Agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/agents/{agent_id}/runs/stream": {
+      "post": {
+        "description": "Run an agent in priority mode and stream events via Server-Sent Events (SSE).",
+        "operationId": "run_streaming_agent_api_agents__agent_id__runs_stream_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRunStreamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/event-stream": {
+                "example": ": keepalive\n\nevent: init\ndata: {\"run_id\":\"...\",\"status\":\"pending\",\"error_count\":0,\"credits\":0.0,\"priority\":true,\"input\":\"...\",\"output\":null,\"attempts\":[]}\n\nevent: done\ndata: {\"run_id\":\"...\",\"status\":\"completed\",\"error_count\":0,\"credits\":0.0,\"priority\":true,\"input\":\"...\",\"output\":\"...\",\"attempts\":[]}\n\n",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /api/agents/{agent_id}/runs/{run_id}`."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Streaming Agent",
         "tags": [
           "agents"
         ]

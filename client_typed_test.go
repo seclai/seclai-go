@@ -3,6 +3,7 @@ package seclai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -10,9 +11,104 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/seclai/seclai-go/generated"
 )
+
+func TestClient_RunStreamingAgentAndWait_Done(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(405)
+			return
+		}
+		if r.URL.Path != "/api/agents/agent_1/runs/stream" {
+			w.WriteHeader(404)
+			return
+		}
+		if got := r.Header.Get("Accept"); !strings.Contains(got, "text/event-stream") {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl, _ := w.(http.Flusher)
+
+		_, _ = io.WriteString(w, ": keepalive\n\n")
+		if fl != nil {
+			fl.Flush()
+		}
+		_, _ = io.WriteString(w, "event: init\n")
+		_, _ = io.WriteString(w, "data: {\"attempts\":[],\"error_count\":0,\"priority\":false,\"run_id\":\"run_1\",\"status\":\"processing\"}\n\n")
+		if fl != nil {
+			fl.Flush()
+		}
+		_, _ = io.WriteString(w, "event: done\n")
+		_, _ = io.WriteString(w, "data: {\"attempts\":[],\"error_count\":0,\"priority\":false,\"run_id\":\"run_1\",\"status\":\"completed\",\"output\":\"ok\"}\n\n")
+		if fl != nil {
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	meta := map[string]JsonValue{"k": "v"}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	res, err := c.RunStreamingAgentAndWait(ctx, "agent_1", AgentRunStreamRequest{Input: nil, Metadata: &meta})
+	if err != nil {
+		t.Fatalf("RunStreamingAgentAndWait: %v", err)
+	}
+	if res == nil {
+		t.Fatalf("expected response")
+	}
+	if res.RunId != "run_1" {
+		t.Fatalf("expected run_id run_1, got %q", res.RunId)
+	}
+	if res.Output == nil || *res.Output != "ok" {
+		t.Fatalf("expected output ok, got %#v", res.Output)
+	}
+}
+
+func TestClient_RunStreamingAgentAndWait_Timeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/agents/agent_1/runs/stream" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl, _ := w.(http.Flusher)
+		_, _ = io.WriteString(w, "event: init\n")
+		_, _ = io.WriteString(w, "data: {}\n\n")
+		if fl != nil {
+			fl.Flush()
+		}
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	_, err = c.RunStreamingAgentAndWait(ctx, "agent_1", AgentRunStreamRequest{Input: nil, Metadata: &map[string]JsonValue{}})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context deadline exceeded, got %T %v", err, err)
+	}
+}
 
 func TestGeneratedClient_ListSources_SetsAuthAndDecodes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

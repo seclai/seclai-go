@@ -15,6 +15,7 @@ type ValidationError = generated.ValidationError
 type PaginationResponse = generated.PaginationResponse
 
 type AgentRunRequest = generated.AgentRunRequest
+type AgentRunStreamRequest = generated.AgentRunStreamRequest
 type AgentRunResponse = generated.AgentRunResponse
 type AgentRunAttemptResponse = generated.AgentRunAttemptResponse
 
