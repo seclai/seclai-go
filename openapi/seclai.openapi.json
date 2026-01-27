@@ -1157,7 +1157,7 @@
                 }
               }
             },
-            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /agents/{agent_id}/runs/{run_id}`."
+            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /api/agents/{agent_id}/runs/{run_id}`."
           },
           "422": {
             "content": {
@@ -1544,7 +1544,7 @@
     },
     "/sources/{source_connection_id}/upload": {
       "post": {
-        "description": "Upload a file to a content source.",
+        "description": "Upload a file to a content source.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/msword`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.",
         "operationId": "upload_file_to_source_api_sources__source_connection_id__upload_post",
         "parameters": [
           {
@@ -1589,7 +1589,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Upload File To Source",
+        "summary": "Upload a file to a content source",
         "tags": [
           "sources"
         ]

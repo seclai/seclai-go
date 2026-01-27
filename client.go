@@ -7,11 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -419,10 +422,38 @@ func (c *Client) ListContentEmbeddings(ctx context.Context, contentVersionID str
 type UploadFileRequest struct {
 	File     []byte
 	FileName string
+	// MimeType is optional. If omitted, the SDK tries to infer it from FileName.
+	// If still unknown, the upload is sent as application/octet-stream and the server
+	// will attempt to infer the type from the file extension.
+	MimeType string
 	Title    string
 }
 
 // UploadFileToSource uploads a file to a source connection.
+//
+// Maximum file size: 200 MiB.
+//
+// Supported MIME types:
+//   - application/epub+zip
+//   - application/json
+//   - application/msword
+//   - application/pdf
+//   - application/vnd.ms-excel
+//   - application/vnd.ms-outlook
+//   - application/vnd.ms-powerpoint
+//   - application/vnd.openxmlformats-officedocument.presentationml.presentation
+//   - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+//   - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+//   - application/xml
+//   - application/zip
+//   - audio/flac, audio/mp4, audio/mpeg, audio/ogg, audio/wav
+//   - image/bmp, image/gif, image/jpeg, image/png, image/tiff, image/webp
+//   - text/csv, text/html, text/markdown, text/x-markdown, text/plain, text/xml
+//   - video/mp4, video/quicktime, video/x-msvideo
+//
+// If req.MimeType is omitted, the SDK attempts to infer it from req.FileName.
+// If the upload is sent as application/octet-stream, the server attempts to infer
+// the type from the file extension.
 func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID string, req UploadFileRequest) (*FileUploadResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -433,6 +464,10 @@ func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID stri
 	if strings.TrimSpace(req.FileName) == "" {
 		return nil, &ConfigurationError{Message: "upload requires FileName"}
 	}
+	mimeType := strings.TrimSpace(req.MimeType)
+	if mimeType == "" {
+		mimeType = strings.TrimSpace(mime.TypeByExtension(filepath.Ext(req.FileName)))
+	}
 
 	reqURL := c.buildURL(fmt.Sprintf("/sources/%s/upload", url.PathEscape(sourceConnectionID)), nil)
 
@@ -441,7 +476,19 @@ func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID stri
 	if req.Title != "" {
 		_ = w.WriteField("title", req.Title)
 	}
-	fw, err := w.CreateFormFile("file", req.FileName)
+	var (
+		fw  io.Writer
+		err error
+	)
+	if mimeType != "" {
+		fileName := strings.ReplaceAll(req.FileName, "\"", "")
+		h := make(textproto.MIMEHeader)
+		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, fileName))
+		h.Set("Content-Type", mimeType)
+		fw, err = w.CreatePart(h)
+	} else {
+		fw, err = w.CreateFormFile("file", req.FileName)
+	}
 	if err != nil {
 		_ = w.Close()
 		return nil, err
