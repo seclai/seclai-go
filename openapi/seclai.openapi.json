@@ -1109,6 +1109,102 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/agents/runs/{run_id}": {
+      "delete": {
+        "description": "Cancel agent run.",
+        "operationId": "delete_agent_run_api_agents_runs__run_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Agent Run",
+        "tags": [
+          "agents"
+        ]
+      },
+      "get": {
+        "description": "Get agent run details.",
+        "operationId": "get_agent_run_api_agents_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "If true, include per-step outputs with timing, durations, and credits.",
+            "in": "query",
+            "name": "include_step_outputs",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "If true, include per-step outputs with timing, durations, and credits.",
+              "title": "Include Step Outputs",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Agent Run",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/agents/{agent_id}/runs": {
       "get": {
         "description": "List agent runs for an agent with pagination.",
@@ -1268,7 +1364,7 @@
                 }
               }
             },
-            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /api/agents/{agent_id}/runs/{run_id}`."
+            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /api/agents/runs/{run_id}`."
           },
           "422": {
             "content": {
@@ -1282,120 +1378,6 @@
           }
         },
         "summary": "Run Streaming Agent",
-        "tags": [
-          "agents"
-        ]
-      }
-    },
-    "/agents/{agent_id}/runs/{run_id}": {
-      "delete": {
-        "description": "Cancel agent run.",
-        "operationId": "delete_agent_run_api_agents__agent_id__runs__run_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "schema": {
-              "title": "Run Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentRunResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Delete Agent Run",
-        "tags": [
-          "agents"
-        ]
-      },
-      "get": {
-        "description": "Get agent run details.",
-        "operationId": "get_agent_run_api_agents__agent_id__runs__run_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "schema": {
-              "title": "Run Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "If true, include per-step outputs with timing, durations, and credits.",
-            "in": "query",
-            "name": "include_step_outputs",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "If true, include per-step outputs with timing, durations, and credits.",
-              "title": "Include Step Outputs",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentRunResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Agent Run",
         "tags": [
           "agents"
         ]

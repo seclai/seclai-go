@@ -253,7 +253,7 @@ func TestClient_GetAgentRunWithOptions_IncludeStepOutputs(t *testing.T) {
 			w.WriteHeader(405)
 			return
 		}
-		if r.URL.Path != "/agents/agent_1/runs/run_1" {
+		if r.URL.Path != "/agents/runs/run_1" {
 			w.WriteHeader(404)
 			return
 		}

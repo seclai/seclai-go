@@ -76,6 +76,37 @@ type AgentRunResponse struct {
 	// RunId Unique identifier for the agent run.
 	RunId  string                                 `json:"run_id"`
 	Status PendingProcessingCompletedFailedStatus `json:"status"`
+
+	// Steps Step outputs and per-step timing/credits. Only included when requested.
+	Steps *[]AgentRunStepResponse `json:"steps"`
+}
+
+// AgentRunStepResponse defines model for AgentRunStepResponse.
+type AgentRunStepResponse struct {
+	// AgentStepId Agent step identifier.
+	AgentStepId string `json:"agent_step_id"`
+
+	// CreditsUsed Credits consumed by the step attempt, if applicable.
+	CreditsUsed float32 `json:"credits_used"`
+
+	// DurationSeconds Duration of the step attempt in seconds.
+	DurationSeconds *float32 `json:"duration_seconds"`
+
+	// EndedAt Timestamp when the step attempt ended.
+	EndedAt *string `json:"ended_at"`
+
+	// Output Output produced by the step, if any.
+	Output *string `json:"output"`
+
+	// OutputContentType Content type of the step output, if any.
+	OutputContentType *string `json:"output_content_type"`
+
+	// StartedAt Timestamp when the step attempt started.
+	StartedAt *string                                `json:"started_at"`
+	Status    PendingProcessingCompletedFailedStatus `json:"status"`
+
+	// StepType Type of the agent step.
+	StepType string `json:"step_type"`
 }
 
 // AgentRunStreamRequest defines model for AgentRunStreamRequest.
@@ -339,6 +370,12 @@ type RoutersApiSourcesSourceListResponse struct {
 	Pagination PaginationResponse `json:"pagination"`
 }
 
+// GetAgentRunApiAgentsRunsRunIdGetParams defines parameters for GetAgentRunApiAgentsRunsRunIdGet.
+type GetAgentRunApiAgentsRunsRunIdGetParams struct {
+	// IncludeStepOutputs If true, include per-step outputs with timing, durations, and credits.
+	IncludeStepOutputs *bool `form:"include_step_outputs,omitempty" json:"include_step_outputs,omitempty"`
+}
+
 // ListAgentRunsApiAgentsAgentIdRunsGetParams defines parameters for ListAgentRunsApiAgentsAgentIdRunsGet.
 type ListAgentRunsApiAgentsAgentIdRunsGetParams struct {
 	// Page Page number
@@ -522,6 +559,12 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// DeleteAgentRunApiAgentsRunsRunIdDelete request
+	DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentRunApiAgentsRunsRunIdGet request
+	GetAgentRunApiAgentsRunsRunIdGet(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAgentRunsApiAgentsAgentIdRunsGet request
 	ListAgentRunsApiAgentsAgentIdRunsGet(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -534,12 +577,6 @@ type ClientInterface interface {
 	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete request
-	DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetAgentRunApiAgentsAgentIdRunsRunIdGet request
-	GetAgentRunApiAgentsAgentIdRunsRunIdGet(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteContentApiContentsSourceConnectionContentVersionDelete request
 	DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -555,6 +592,30 @@ type ClientInterface interface {
 
 	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody request with any body
 	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest(c.Server, runId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAgentRunApiAgentsRunsRunIdGet(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentRunApiAgentsRunsRunIdGetRequest(c.Server, runId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListAgentRunsApiAgentsAgentIdRunsGet(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -607,30 +668,6 @@ func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx con
 
 func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequest(c.Server, agentId, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteRequest(c.Server, agentId, runId)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetAgentRunApiAgentsAgentIdRunsRunIdGet(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAgentRunApiAgentsAgentIdRunsRunIdGetRequest(c.Server, agentId, runId)
 	if err != nil {
 		return nil, err
 	}
@@ -699,6 +736,96 @@ func (c *Client) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBod
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest generates requests for DeleteAgentRunApiAgentsRunsRunIdDelete
+func NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest(server string, runId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "run_id", runtime.ParamLocationPath, runId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/runs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAgentRunApiAgentsRunsRunIdGetRequest generates requests for GetAgentRunApiAgentsRunsRunIdGet
+func NewGetAgentRunApiAgentsRunsRunIdGetRequest(server string, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "run_id", runtime.ParamLocationPath, runId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/runs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.IncludeStepOutputs != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "include_step_outputs", runtime.ParamLocationQuery, *params.IncludeStepOutputs); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListAgentRunsApiAgentsAgentIdRunsGetRequest generates requests for ListAgentRunsApiAgentsAgentIdRunsGet
@@ -863,88 +990,6 @@ func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server st
 	}
 
 	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteRequest generates requests for DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete
-func NewDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteRequest(server string, agentId string, runId string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "run_id", runtime.ParamLocationPath, runId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/agents/%s/runs/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetAgentRunApiAgentsAgentIdRunsRunIdGetRequest generates requests for GetAgentRunApiAgentsAgentIdRunsRunIdGet
-func NewGetAgentRunApiAgentsAgentIdRunsRunIdGetRequest(server string, agentId string, runId string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "run_id", runtime.ParamLocationPath, runId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/agents/%s/runs/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
 
 	return req, nil
 }
@@ -1319,6 +1364,12 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse request
+	DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error)
+
+	// GetAgentRunApiAgentsRunsRunIdGetWithResponse request
+	GetAgentRunApiAgentsRunsRunIdGetWithResponse(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*GetAgentRunApiAgentsRunsRunIdGetResponse, error)
+
 	// ListAgentRunsApiAgentsAgentIdRunsGetWithResponse request
 	ListAgentRunsApiAgentsAgentIdRunsGetWithResponse(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*ListAgentRunsApiAgentsAgentIdRunsGetResponse, error)
 
@@ -1331,12 +1382,6 @@ type ClientWithResponsesInterface interface {
 	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error)
 
 	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithResponse(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error)
-
-	// DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse request
-	DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse, error)
-
-	// GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse request
-	GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse, error)
 
 	// DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request
 	DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error)
@@ -1352,6 +1397,52 @@ type ClientWithResponsesInterface interface {
 
 	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse request with any body
 	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error)
+}
+
+type DeleteAgentRunApiAgentsRunsRunIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentRunResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteAgentRunApiAgentsRunsRunIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteAgentRunApiAgentsRunsRunIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAgentRunApiAgentsRunsRunIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentRunResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentRunApiAgentsRunsRunIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentRunApiAgentsRunsRunIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ListAgentRunsApiAgentsAgentIdRunsGetResponse struct {
@@ -1417,52 +1508,6 @@ func (r RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse) Status() string
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *AgentRunResponse
-	JSON422      *HTTPValidationError
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *AgentRunResponse
-	JSON422      *HTTPValidationError
-}
-
-// Status returns HTTPResponse.Status
-func (r GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1583,6 +1628,24 @@ func (r UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse) Status
 	return 0
 }
 
+// DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse request returning *DeleteAgentRunApiAgentsRunsRunIdDeleteResponse
+func (c *ClientWithResponses) DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error) {
+	rsp, err := c.DeleteAgentRunApiAgentsRunsRunIdDelete(ctx, runId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAgentRunApiAgentsRunsRunIdDeleteResponse(rsp)
+}
+
+// GetAgentRunApiAgentsRunsRunIdGetWithResponse request returning *GetAgentRunApiAgentsRunsRunIdGetResponse
+func (c *ClientWithResponses) GetAgentRunApiAgentsRunsRunIdGetWithResponse(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*GetAgentRunApiAgentsRunsRunIdGetResponse, error) {
+	rsp, err := c.GetAgentRunApiAgentsRunsRunIdGet(ctx, runId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentRunApiAgentsRunsRunIdGetResponse(rsp)
+}
+
 // ListAgentRunsApiAgentsAgentIdRunsGetWithResponse request returning *ListAgentRunsApiAgentsAgentIdRunsGetResponse
 func (c *ClientWithResponses) ListAgentRunsApiAgentsAgentIdRunsGetWithResponse(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*ListAgentRunsApiAgentsAgentIdRunsGetResponse, error) {
 	rsp, err := c.ListAgentRunsApiAgentsAgentIdRunsGet(ctx, agentId, params, reqEditors...)
@@ -1624,24 +1687,6 @@ func (c *ClientWithResponses) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWit
 		return nil, err
 	}
 	return ParseRunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse(rsp)
-}
-
-// DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse request returning *DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse
-func (c *ClientWithResponses) DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse, error) {
-	rsp, err := c.DeleteAgentRunApiAgentsAgentIdRunsRunIdDelete(ctx, agentId, runId, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse(rsp)
-}
-
-// GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse request returning *GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse
-func (c *ClientWithResponses) GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse, error) {
-	rsp, err := c.GetAgentRunApiAgentsAgentIdRunsRunIdGet(ctx, agentId, runId, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetAgentRunApiAgentsAgentIdRunsRunIdGetResponse(rsp)
 }
 
 // DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request returning *DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse
@@ -1687,6 +1732,72 @@ func (c *ClientWithResponses) UploadFileToSourceApiSourcesSourceConnectionIdUplo
 		return nil, err
 	}
 	return ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse(rsp)
+}
+
+// ParseDeleteAgentRunApiAgentsRunsRunIdDeleteResponse parses an HTTP response from a DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse call
+func ParseDeleteAgentRunApiAgentsRunsRunIdDeleteResponse(rsp *http.Response) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteAgentRunApiAgentsRunsRunIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentRunResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentRunApiAgentsRunsRunIdGetResponse parses an HTTP response from a GetAgentRunApiAgentsRunsRunIdGetWithResponse call
+func ParseGetAgentRunApiAgentsRunsRunIdGetResponse(rsp *http.Response) (*GetAgentRunApiAgentsRunsRunIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentRunApiAgentsRunsRunIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentRunResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListAgentRunsApiAgentsAgentIdRunsGetResponse parses an HTTP response from a ListAgentRunsApiAgentsAgentIdRunsGetWithResponse call
@@ -1785,72 +1896,6 @@ func ParseRunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse(rsp *http.Resp
 
 	case rsp.StatusCode == 200:
 		// Content-type (text/event-stream) unsupported
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse parses an HTTP response from a DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteWithResponse call
-func ParseDeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse(rsp *http.Response) (*DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteAgentRunApiAgentsAgentIdRunsRunIdDeleteResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest AgentRunResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON422 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetAgentRunApiAgentsAgentIdRunsRunIdGetResponse parses an HTTP response from a GetAgentRunApiAgentsAgentIdRunsRunIdGetWithResponse call
-func ParseGetAgentRunApiAgentsAgentIdRunsRunIdGetResponse(rsp *http.Response) (*GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetAgentRunApiAgentsAgentIdRunsRunIdGetResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest AgentRunResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON422 = &dest
 
 	}
 

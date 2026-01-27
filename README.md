@@ -68,7 +68,7 @@ func main() {
 By default, agent run details may omit per-step outputs. To request step details, set `IncludeStepOutputs`.
 
 ```go
-run, err := client.GetAgentRunWithOptions(context.Background(), "agent_id", "run_id", &seclai.GetAgentRunOptions{
+run, err := client.GetAgentRunByIDWithOptions(context.Background(), "run_id", &seclai.GetAgentRunOptions{
 	IncludeStepOutputs: true,
 })
 if err != nil {

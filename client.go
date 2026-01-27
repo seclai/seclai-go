@@ -372,6 +372,25 @@ type GetAgentRunOptions struct {
 	IncludeStepOutputs bool
 }
 
+// GetAgentRunByID fetches a specific run by run ID.
+func (c *Client) GetAgentRunByID(ctx context.Context, runID string) (*AgentRunResponse, error) {
+	return c.GetAgentRunByIDWithOptions(ctx, runID, nil)
+}
+
+// GetAgentRunByIDWithOptions fetches a specific run by run ID with optional query parameters.
+func (c *Client) GetAgentRunByIDWithOptions(ctx context.Context, runID string, opts *GetAgentRunOptions) (*AgentRunResponse, error) {
+	var q map[string]string
+	if opts != nil && opts.IncludeStepOutputs {
+		q = map[string]string{"include_step_outputs": "true"}
+	}
+
+	var out AgentRunResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/runs/%s", url.PathEscape(runID)), q, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // GetAgentRun fetches a specific run.
 func (c *Client) GetAgentRun(ctx context.Context, agentID, runID string) (*AgentRunResponse, error) {
 	return c.GetAgentRunWithOptions(ctx, agentID, runID, nil)
@@ -379,21 +398,21 @@ func (c *Client) GetAgentRun(ctx context.Context, agentID, runID string) (*Agent
 
 // GetAgentRunWithOptions fetches a specific run with optional query parameters.
 func (c *Client) GetAgentRunWithOptions(ctx context.Context, agentID, runID string, opts *GetAgentRunOptions) (*AgentRunResponse, error) {
-	var q map[string]string
-	if opts != nil && opts.IncludeStepOutputs {
-		q = map[string]string{"include_step_outputs": "true"}
-	}
-
-	var out AgentRunResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s", url.PathEscape(agentID), url.PathEscape(runID)), q, nil, nil, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
+	// Backward-compatible signature: agentID is no longer required by the API.
+	_ = agentID
+	return c.GetAgentRunByIDWithOptions(ctx, runID, opts)
 }
 
 // DeleteAgentRun cancels/deletes a specific run.
 func (c *Client) DeleteAgentRun(ctx context.Context, agentID, runID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/%s/runs/%s", url.PathEscape(agentID), url.PathEscape(runID)), nil, nil, nil, nil)
+	// Backward-compatible signature: agentID is no longer required by the API.
+	_ = agentID
+	return c.DeleteAgentRunByID(ctx, runID)
+}
+
+// DeleteAgentRunByID cancels/deletes a specific run by run ID.
+func (c *Client) DeleteAgentRunByID(ctx context.Context, runID string) error {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/runs/%s", url.PathEscape(runID)), nil, nil, nil, nil)
 }
 
 // GetContentDetail fetches content detail.
