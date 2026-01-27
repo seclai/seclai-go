@@ -247,6 +247,50 @@ func TestClient_RunAgent_Typed(t *testing.T) {
 	}
 }
 
+func TestClient_GetAgentRunWithOptions_IncludeStepOutputs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(405)
+			return
+		}
+		if r.URL.Path != "/agents/agent_1/runs/run_1" {
+			w.WriteHeader(404)
+			return
+		}
+		if got := r.URL.Query().Get("include_step_outputs"); got != "true" {
+			w.WriteHeader(400)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"attempts": [],
+			"error_count": 0,
+			"priority": false,
+			"run_id": "run_1",
+			"status": "completed",
+			"steps": []
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	res, err := c.GetAgentRunWithOptions(context.Background(), "agent_1", "run_1", &GetAgentRunOptions{IncludeStepOutputs: true})
+	if err != nil {
+		t.Fatalf("GetAgentRunWithOptions: %v", err)
+	}
+	if res == nil {
+		t.Fatalf("expected response")
+	}
+	if res.RunId != "run_1" {
+		t.Fatalf("expected run_id run_1, got %q", res.RunId)
+	}
+}
+
 func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

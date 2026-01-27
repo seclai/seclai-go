@@ -365,10 +365,27 @@ func (c *Client) ListAgentRuns(ctx context.Context, agentID string, page, limit 
 	return &out, nil
 }
 
+// GetAgentRunOptions controls behavior for GetAgentRunWithOptions.
+type GetAgentRunOptions struct {
+	// IncludeStepOutputs requests per-step details to be included in the response.
+	// This maps to the include_step_outputs query parameter.
+	IncludeStepOutputs bool
+}
+
 // GetAgentRun fetches a specific run.
 func (c *Client) GetAgentRun(ctx context.Context, agentID, runID string) (*AgentRunResponse, error) {
+	return c.GetAgentRunWithOptions(ctx, agentID, runID, nil)
+}
+
+// GetAgentRunWithOptions fetches a specific run with optional query parameters.
+func (c *Client) GetAgentRunWithOptions(ctx context.Context, agentID, runID string, opts *GetAgentRunOptions) (*AgentRunResponse, error) {
+	var q map[string]string
+	if opts != nil && opts.IncludeStepOutputs {
+		q = map[string]string{"include_step_outputs": "true"}
+	}
+
 	var out AgentRunResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s", url.PathEscape(agentID), url.PathEscape(runID)), nil, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s", url.PathEscape(agentID), url.PathEscape(runID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

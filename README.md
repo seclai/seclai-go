@@ -63,6 +63,21 @@ func main() {
 }
 ```
 
+### Get agent run details (optionally include step outputs)
+
+By default, agent run details may omit per-step outputs. To request step details, set `IncludeStepOutputs`.
+
+```go
+run, err := client.GetAgentRunWithOptions(context.Background(), "agent_id", "run_id", &seclai.GetAgentRunOptions{
+	IncludeStepOutputs: true,
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println("run status:", run.Status)
+```
+
 ### Run an agent with SSE streaming (wait for final result)
 
 This helper returns when the stream emits the final `done` event; it returns an error if the stream ends early or the context deadline is reached.

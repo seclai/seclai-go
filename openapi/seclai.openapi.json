@@ -173,6 +173,21 @@
           "status": {
             "$ref": "#/components/schemas/PendingProcessingCompletedFailedStatus",
             "description": "Current status of the agent run."
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AgentRunStepResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Step outputs and per-step timing/credits. Only included when requested.",
+            "title": "Steps"
           }
         },
         "required": [
@@ -186,6 +201,102 @@
           "attempts"
         ],
         "title": "AgentRunResponse",
+        "type": "object"
+      },
+      "AgentRunStepResponse": {
+        "properties": {
+          "agent_step_id": {
+            "description": "Agent step identifier.",
+            "title": "Agent Step Id",
+            "type": "string"
+          },
+          "credits_used": {
+            "description": "Credits consumed by the step attempt, if applicable.",
+            "title": "Credits Used",
+            "type": "number"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Duration of the step attempt in seconds.",
+            "title": "Duration Seconds"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp when the step attempt ended.",
+            "title": "Ended At"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Output produced by the step, if any.",
+            "title": "Output"
+          },
+          "output_content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Content type of the step output, if any.",
+            "title": "Output Content Type"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp when the step attempt started.",
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PendingProcessingCompletedFailedStatus",
+            "description": "Status of the step run."
+          },
+          "step_type": {
+            "description": "Type of the agent step.",
+            "title": "Step Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_step_id",
+          "step_type",
+          "status",
+          "output",
+          "output_content_type",
+          "started_at",
+          "ended_at",
+          "duration_seconds",
+          "credits_used"
+        ],
+        "title": "AgentRunStepResponse",
         "type": "object"
       },
       "AgentRunStreamRequest": {
@@ -1247,6 +1358,18 @@
             "schema": {
               "title": "Run Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "If true, include per-step outputs with timing, durations, and credits.",
+            "in": "query",
+            "name": "include_step_outputs",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "If true, include per-step outputs with timing, durations, and credits.",
+              "title": "Include Step Outputs",
+              "type": "boolean"
             }
           }
         ],
