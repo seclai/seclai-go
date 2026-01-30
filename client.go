@@ -463,6 +463,10 @@ type UploadFileRequest struct {
 	// will attempt to infer the type from the file extension.
 	MimeType string
 	Title    string
+	// Metadata is optional additional metadata to attach to this upload.
+	// It is sent as a single multipart form field named "metadata" containing a JSON object.
+	// Example: map[string]any{"category": "docs", "author": "Ada"}
+	Metadata map[string]any
 }
 
 // UploadFileToSource uploads a file to a source connection.
@@ -490,6 +494,10 @@ type UploadFileRequest struct {
 // If req.MimeType is omitted, the SDK attempts to infer it from req.FileName.
 // If the upload is sent as application/octet-stream, the server attempts to infer
 // the type from the file extension.
+//
+// Metadata:
+// - Use req.Metadata to attach an arbitrary JSON object of metadata (sent as a form field named "metadata").
+// - req.Title is a convenience field and may be merged into metadata as metadata.title by the server.
 func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID string, req UploadFileRequest) (*FileUploadResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -512,6 +520,113 @@ func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID stri
 	if req.Title != "" {
 		_ = w.WriteField("title", req.Title)
 	}
+	if len(req.Metadata) > 0 {
+		b, err := json.Marshal(req.Metadata)
+		if err != nil {
+			_ = w.Close()
+			return nil, err
+		}
+		_ = w.WriteField("metadata", string(b))
+	}
+	var (
+		fw  io.Writer
+		err error
+	)
+	if mimeType != "" {
+		fileName := strings.ReplaceAll(req.FileName, "\"", "")
+		h := make(textproto.MIMEHeader)
+		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, fileName))
+		h.Set("Content-Type", mimeType)
+		fw, err = w.CreatePart(h)
+	} else {
+		fw, err = w.CreateFormFile("file", req.FileName)
+	}
+	if err != nil {
+		_ = w.Close()
+		return nil, err
+	}
+	if _, err := io.Copy(fw, bytes.NewReader(req.File)); err != nil {
+		_ = w.Close()
+		return nil, err
+	}
+	_ = w.Close()
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), &buf)
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set(c.apiKeyHeader, c.apiKey)
+	httpReq.Header.Set("Content-Type", w.FormDataContentType())
+	httpReq.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(resp.Body)
+	text := strings.TrimSpace(string(raw))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
+		if resp.StatusCode == 422 {
+			var ve HTTPValidationError
+			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
+			}
+			return nil, &APIValidationError{APIStatusError: statusErr}
+		}
+		return nil, &statusErr
+	}
+
+	var out FileUploadResponse
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &out); err != nil {
+			return nil, err
+		}
+	}
+	return &out, nil
+}
+
+// UploadFileToContent uploads a new file and replaces the content backing an existing content version.
+//
+// This behaves like UploadFileToSource, but targets an existing content version ID.
+// It's useful for correcting/updating uploaded documents while keeping references stable.
+func (c *Client) UploadFileToContent(ctx context.Context, contentVersionID string, req UploadFileRequest) (*FileUploadResponse, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if strings.TrimSpace(contentVersionID) == "" {
+		return nil, &ConfigurationError{Message: "upload requires contentVersionID"}
+	}
+	if len(req.File) == 0 {
+		return nil, &ConfigurationError{Message: "upload requires non-empty file bytes"}
+	}
+	if strings.TrimSpace(req.FileName) == "" {
+		return nil, &ConfigurationError{Message: "upload requires FileName"}
+	}
+
+	mimeType := strings.TrimSpace(req.MimeType)
+	if mimeType == "" {
+		mimeType = strings.TrimSpace(mime.TypeByExtension(filepath.Ext(req.FileName)))
+	}
+
+	reqURL := c.buildURL(fmt.Sprintf("/contents/%s/upload", url.PathEscape(contentVersionID)), nil)
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	if req.Title != "" {
+		_ = w.WriteField("title", req.Title)
+	}
+	if len(req.Metadata) > 0 {
+		b, err := json.Marshal(req.Metadata)
+		if err != nil {
+			_ = w.Close()
+			return nil, err
+		}
+		_ = w.WriteField("metadata", string(b))
+	}
+
 	var (
 		fw  io.Writer
 		err error

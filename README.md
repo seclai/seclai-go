@@ -126,6 +126,24 @@ upload, err := client.UploadFileToSource(context.Background(), "source_connectio
 	FileName: "hello.txt",
 	MimeType: "text/plain",
 	Title:    "Hello",
+	Metadata: map[string]any{"category": "docs", "author": "Ada"},
+})
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println("upload:", upload.Filename, upload.Status)
+```
+
+### Replace an existing content version (upload a new file)
+
+To replace the file backing an existing content version, upload a new file to `/contents/{source_connection_content_version}/upload`.
+
+```go
+upload, err := client.UploadFileToContent(context.Background(), "content_version_id", seclai.UploadFileRequest{
+	File:     []byte("%PDF-1.4 ..."),
+	FileName: "updated.pdf",
+	MimeType: "application/pdf",
+	Metadata: map[string]any{"revision": 2},
 })
 if err != nil {
 	log.Fatal(err)

@@ -314,6 +314,7 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 		mr := multipart.NewReader(r.Body, params["boundary"])
 		foundFile := false
 		foundTitle := false
+		foundMetadata := false
 		for {
 			part, err := mr.NextPart()
 			if err == io.EOF {
@@ -330,6 +331,15 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 					foundTitle = true
 				}
 			}
+			if name == "metadata" {
+				b, _ := io.ReadAll(part)
+				var m map[string]any
+				if json.Unmarshal(b, &m) == nil {
+					if m["category"] == "docs" && m["author"] == "Ada" {
+						foundMetadata = true
+					}
+				}
+			}
 			if name == "file" {
 				if part.FileName() != "a.txt" {
 					w.WriteHeader(400)
@@ -343,7 +353,7 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 				foundFile = true
 			}
 		}
-		if !foundFile || !foundTitle {
+		if !foundFile || !foundTitle || !foundMetadata {
 			w.WriteHeader(400)
 			return
 		}
@@ -358,7 +368,7 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 		t.Fatalf("NewClient: %v", err)
 	}
 
-	resp, err := c.UploadFileToSource(context.Background(), "sc_1", UploadFileRequest{File: []byte("hello"), FileName: "a.txt", Title: "My Title"})
+	resp, err := c.UploadFileToSource(context.Background(), "sc_1", UploadFileRequest{File: []byte("hello"), FileName: "a.txt", Title: "My Title", Metadata: map[string]any{"category": "docs", "author": "Ada"}})
 	if err != nil {
 		t.Fatalf("UploadFileToSource: %v", err)
 	}
@@ -367,6 +377,88 @@ func TestClient_UploadFileToSource_Multipart(t *testing.T) {
 	}
 	if resp.Filename != "a.txt" {
 		t.Fatalf("expected filename a.txt, got %q", resp.Filename)
+	}
+}
+
+func TestClient_UploadFileToContent_Multipart(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(405)
+			return
+		}
+		if !strings.HasPrefix(r.URL.Path, "/contents/") || !strings.HasSuffix(r.URL.Path, "/upload") {
+			w.WriteHeader(404)
+			return
+		}
+
+		mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		if mediaType != "multipart/form-data" {
+			w.WriteHeader(400)
+			return
+		}
+		mr := multipart.NewReader(r.Body, params["boundary"])
+		foundFile := false
+		foundMetadata := false
+		for {
+			part, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				w.WriteHeader(400)
+				return
+			}
+			name := part.FormName()
+			if name == "metadata" {
+				b, _ := io.ReadAll(part)
+				var m map[string]any
+				if json.Unmarshal(b, &m) == nil {
+					if m["revision"] == float64(2) {
+						foundMetadata = true
+					}
+				}
+			}
+			if name == "file" {
+				if part.FileName() != "updated.pdf" {
+					w.WriteHeader(400)
+					return
+				}
+				b, _ := io.ReadAll(part)
+				if len(b) != 3 {
+					w.WriteHeader(400)
+					return
+				}
+				foundFile = true
+			}
+		}
+		if !foundFile || !foundMetadata {
+			w.WriteHeader(400)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"filename":"updated.pdf","status":"pending"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	resp, err := c.UploadFileToContent(context.Background(), "cv_1", UploadFileRequest{File: []byte{1, 2, 3}, FileName: "updated.pdf", MimeType: "application/pdf", Metadata: map[string]any{"revision": 2}})
+	if err != nil {
+		t.Fatalf("UploadFileToContent: %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected response")
+	}
+	if resp.Filename != "updated.pdf" {
+		t.Fatalf("expected filename updated.pdf, got %q", resp.Filename)
 	}
 }
 
