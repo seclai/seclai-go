@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: "0"
+          fetch-tags: true
 
       - name: Determine next version tag
         id: next-tag
@@ -30,6 +31,7 @@ jobs:
         env:
           DEFAULT_BUMP: patch
           DRY_RUN: "true"
+          TAG_PREFIX: v
 
       - name: Compute Go module tag (v-prefixed)
         id: tag
@@ -55,15 +57,33 @@ jobs:
 
       - name: Push tag
         run: |
-          git tag ${{ steps.tag.outputs.tag }}
-          git push origin ${{ steps.tag.outputs.tag }}
+          set -euo pipefail
+
+          tag='${{ steps.tag.outputs.tag }}'
+
+          # Make reruns safe: if the tag already exists on the remote, don't fail the build.
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists on origin; skipping tag push."
+            exit 0
+          fi
+
+          git tag "${tag}"
+          git push origin "${tag}"
 
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ steps.tag.outputs.tag }} \
-            --title "Release ${{ steps.tag.outputs.tag }}" \
+          set -euo pipefail
+
+          tag='${{ steps.tag.outputs.tag }}'
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists; skipping release creation."
+            exit 0
+          fi
+
+          gh release create "${tag}" \
+            --title "Release ${tag}" \
             --generate-notes
 
   pages:
@@ -83,6 +103,7 @@ jobs:
         with:
           ref: ${{ needs.release.outputs.tag }}
           fetch-depth: "0"
+          fetch-tags: true
 
       - name: Set up Go
         uses: actions/setup-go@v5
