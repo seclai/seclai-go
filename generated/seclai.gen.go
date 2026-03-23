@@ -12,18 +12,87 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AgentEvaluationTier.
+const (
+	Balanced AgentEvaluationTier = "balanced"
+	Fast     AgentEvaluationTier = "fast"
+	Thorough AgentEvaluationTier = "thorough"
+)
+
+// Defines values for EvaluationStatus.
+const (
+	EvaluationStatusError   EvaluationStatus = "error"
+	EvaluationStatusFailed  EvaluationStatus = "failed"
+	EvaluationStatusPassed  EvaluationStatus = "passed"
+	EvaluationStatusPending EvaluationStatus = "pending"
+	EvaluationStatusSkipped EvaluationStatus = "skipped"
+)
+
+// Defines values for ExportFormat.
+const (
+	Csv     ExportFormat = "csv"
+	Jsonl   ExportFormat = "jsonl"
+	Parquet ExportFormat = "parquet"
+	Zip     ExportFormat = "zip"
+)
+
 // Defines values for PendingProcessingCompletedFailedStatus.
 const (
-	Completed  PendingProcessingCompletedFailedStatus = "completed"
-	Failed     PendingProcessingCompletedFailedStatus = "failed"
-	Pending    PendingProcessingCompletedFailedStatus = "pending"
-	Processing PendingProcessingCompletedFailedStatus = "processing"
+	PendingProcessingCompletedFailedStatusCompleted  PendingProcessingCompletedFailedStatus = "completed"
+	PendingProcessingCompletedFailedStatusFailed     PendingProcessingCompletedFailedStatus = "failed"
+	PendingProcessingCompletedFailedStatusPending    PendingProcessingCompletedFailedStatus = "pending"
+	PendingProcessingCompletedFailedStatusProcessing PendingProcessingCompletedFailedStatus = "processing"
 )
+
+// Defines values for PromptModelAutoUpgradeStrategy.
+const (
+	CautiousAdopter PromptModelAutoUpgradeStrategy = "cautious_adopter"
+	EarlyAdopter    PromptModelAutoUpgradeStrategy = "early_adopter"
+	MiddleOfRoad    PromptModelAutoUpgradeStrategy = "middle_of_road"
+	None            PromptModelAutoUpgradeStrategy = "none"
+)
+
+// AddConversationTurnRequest defines model for AddConversationTurnRequest.
+type AddConversationTurnRequest struct {
+	// ActionsTaken Actions taken by the AI
+	ActionsTaken *map[string]interface{} `json:"actions_taken"`
+
+	// AiResponse AI response text
+	AiResponse *string `json:"ai_response"`
+
+	// UserInput User input text
+	UserInput string `json:"user_input"`
+}
+
+// AgentDefinitionResponse defines model for AgentDefinitionResponse.
+type AgentDefinitionResponse struct {
+	// ChangeId Current change ID (use as expected_change_id when updating).
+	ChangeId string `json:"change_id"`
+
+	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, transform, gate, retry, evaluate_step, insight, extract_json, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, and others.
+	Definition map[string]interface{} `json:"definition"`
+
+	// SchemaVersion Agent schema version.
+	SchemaVersion string `json:"schema_version"`
+
+	// Warnings Validation warnings, if any.
+	Warnings *[]map[string]string `json:"warnings"`
+}
+
+// AgentEvaluationTier Controls model selection for agent evaluation.
+//
+// Labels shown in UI:
+//
+//	FAST      → "Fast and cheap"
+//	BALANCED  → "Balanced speed and cost"
+//	THOROUGH  → "Slow and thorough"
+type AgentEvaluationTier string
 
 // AgentRunAttemptResponse defines model for AgentRunAttemptResponse.
 type AgentRunAttemptResponse struct {
@@ -45,6 +114,9 @@ type AgentRunAttemptResponse struct {
 type AgentRunRequest struct {
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
 	Input *string `json:"input"`
+
+	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field.
+	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
 	Metadata *map[string]JsonValue `json:"metadata"`
@@ -114,8 +186,153 @@ type AgentRunStreamRequest struct {
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
 	Input *string `json:"input"`
 
+	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field.
+	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
+
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
 	Metadata *map[string]JsonValue `json:"metadata"`
+}
+
+// AgentSummaryResponse defines model for AgentSummaryResponse.
+type AgentSummaryResponse struct {
+	// CreatedAt ISO 8601 creation timestamp.
+	CreatedAt string `json:"created_at"`
+
+	// DefaultEvaluationTier Default evaluation tier: fast, balanced, or thorough.
+	DefaultEvaluationTier *string `json:"default_evaluation_tier"`
+
+	// Description Agent description.
+	Description *string `json:"description"`
+
+	// EvaluationMode Evaluation mode: output_expectation, eval_and_retry, or sample_and_flag.
+	EvaluationMode *string `json:"evaluation_mode,omitempty"`
+
+	// Id Unique agent identifier.
+	Id string `json:"id"`
+
+	// MaxRetries Max retries for eval_and_retry mode.
+	MaxRetries *int `json:"max_retries,omitempty"`
+
+	// Name Agent name.
+	Name string `json:"name"`
+
+	// PromptModelAutoRollbackEnabled Whether automatic rollback is enabled for upgraded models.
+	PromptModelAutoRollbackEnabled *bool `json:"prompt_model_auto_rollback_enabled,omitempty"`
+
+	// PromptModelAutoRollbackTriggers Failure signals that trigger rollback. Defaults to agent_eval_fail, governance_block, agent_run_failed when null.
+	PromptModelAutoRollbackTriggers *[]string `json:"prompt_model_auto_rollback_triggers"`
+
+	// PromptModelAutoUpgradeStrategy Auto-upgrade strategy: none, early_adopter, middle_of_road, cautious_adopter.
+	PromptModelAutoUpgradeStrategy *string `json:"prompt_model_auto_upgrade_strategy,omitempty"`
+
+	// RetryOnFailure Whether to retry on evaluation failure.
+	RetryOnFailure *bool `json:"retry_on_failure,omitempty"`
+
+	// SamplingConfig Sampling configuration for sample_and_flag mode.
+	SamplingConfig *map[string]interface{} `json:"sampling_config"`
+
+	// TriggerType Trigger type for the agent.
+	TriggerType *string `json:"trigger_type"`
+
+	// UpdatedAt ISO 8601 last-updated timestamp.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// AgentTraceMatchResponse defines model for AgentTraceMatchResponse.
+type AgentTraceMatchResponse struct {
+	// AgentId Agent ID.
+	AgentId *string `json:"agent_id"`
+
+	// AgentRunId Agent run ID.
+	AgentRunId *string `json:"agent_run_id"`
+
+	// AgentRunStatus Status of the agent run.
+	AgentRunStatus *string `json:"agent_run_status"`
+
+	// AgentStepId Step identifier.
+	AgentStepId *string `json:"agent_step_id"`
+
+	// AgentStepRunId Agent step run ID.
+	AgentStepRunId *string `json:"agent_step_run_id"`
+
+	// AgentStepType Type of the step.
+	AgentStepType *string `json:"agent_step_type"`
+
+	// Score Similarity score (0-1, higher is better).
+	Score float32 `json:"score"`
+
+	// Text Matching text chunk.
+	Text string `json:"text"`
+
+	// Title Title of the indexed entry.
+	Title *string `json:"title"`
+}
+
+// AgentTraceSearchResponse defines model for AgentTraceSearchResponse.
+type AgentTraceSearchResponse struct {
+	// Matches List of matching entries.
+	Matches []AgentTraceMatchResponse `json:"matches"`
+
+	// Total Number of matches returned.
+	Total int `json:"total"`
+}
+
+// AiAssistantFeedbackResponse Response after submitting feedback.
+type AiAssistantFeedbackResponse struct {
+	FeedbackId openapi_types.UUID `json:"feedback_id"`
+	FlagReason *string            `json:"flag_reason"`
+	Flagged    bool               `json:"flagged"`
+}
+
+// AiAssistantGenerateRequest Request body for AI assistant generate endpoints.
+type AiAssistantGenerateRequest struct {
+	// UserInput User input describing what to do
+	UserInput string `json:"user_input"`
+}
+
+// AiConversationHistoryResponse defines model for AiConversationHistoryResponse.
+type AiConversationHistoryResponse struct {
+	// Total Total number of conversation turns available.
+	Total int `json:"total"`
+
+	// Turns Conversation turns, ordered oldest first.
+	Turns []AiConversationTurnResponse `json:"turns"`
+}
+
+// AiConversationTurnResponse defines model for AiConversationTurnResponse.
+type AiConversationTurnResponse struct {
+	// Accepted Whether the user accepted this proposal (null if pending).
+	Accepted *bool `json:"accepted"`
+
+	// AiNote AI explanation from this turn.
+	AiNote *string `json:"ai_note"`
+
+	// ConversationId Unique conversation turn ID.
+	ConversationId string `json:"conversation_id"`
+
+	// ResultingConfig The proposed configuration from this turn.
+	ResultingConfig *map[string]interface{} `json:"resulting_config"`
+
+	// StepId Step ID for this conversation.
+	StepId *string `json:"step_id"`
+
+	// StepType Step type for this conversation.
+	StepType *string `json:"step_type"`
+
+	// UserInput User input for this turn.
+	UserInput string `json:"user_input"`
+}
+
+// BodyUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost defines model for Body_upload_file_to_content_api_contents__source_connection_content_version__upload_post.
+type BodyUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost struct {
+	// File File to upload
+	File openapi_types.File `json:"file"`
+
+	// Metadata Optional JSON object string of metadata. Example: `{"category":"docs","author":"Ada"}`. `title` will be merged into this dictionary as `metadata.title` if it is not already present.
+	Metadata *string `json:"metadata"`
+
+	// Title Optional title for the content
+	Title *string `json:"title,omitempty"`
 }
 
 // BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost defines model for Body_upload_file_to_source_api_sources__source_connection_id__upload_post.
@@ -123,8 +340,69 @@ type BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost struct {
 	// File File to upload
 	File openapi_types.File `json:"file"`
 
+	// Metadata Optional JSON object string of metadata. Example: `{"author":"Ada","category":"docs"}`. `title` will be merged into this dictionary as `metadata.title` if it is not already present.
+	Metadata *string `json:"metadata"`
+
 	// Title Optional title for the content
 	Title *string `json:"title,omitempty"`
+}
+
+// ChangeStatusRequest defines model for ChangeStatusRequest.
+type ChangeStatusRequest struct {
+	// Note Optional note
+	Note *string `json:"note"`
+
+	// Status New alert status
+	Status string `json:"status"`
+}
+
+// CompactionEvaluationModel Structured LLM-as-judge evaluation result.
+type CompactionEvaluationModel struct {
+	// Reasoning Explanation of the evaluation.
+	Reasoning string `json:"reasoning"`
+
+	// Score Quality score from 1 to 5.
+	Score int `json:"score"`
+
+	// Verdict 'pass' or 'fail'.
+	Verdict string `json:"verdict"`
+}
+
+// CompactionTestResponseModel Response from a compaction prompt test.
+type CompactionTestResponseModel struct {
+	// CompactionSummary The generated compaction summary.
+	CompactionSummary *string `json:"compaction_summary"`
+
+	// Evaluation Structured LLM-as-judge evaluation result.
+	Evaluation CompactionEvaluationModel `json:"evaluation"`
+
+	// Generated True when entries were LLM-generated rather than real.
+	Generated bool `json:"generated"`
+
+	// OriginalEntries Entries fed into the compactor.
+	OriginalEntries []string `json:"original_entries"`
+
+	// SurvivingEntries Entries that survived after compaction.
+	SurvivingEntries []string `json:"surviving_entries"`
+}
+
+// CompatibleRunListResponse Paginated list of compatible runs.
+type CompatibleRunListResponse struct {
+	Data  []CompatibleRunResponse `json:"data"`
+	Limit int                     `json:"limit"`
+	Page  int                     `json:"page"`
+	Total int                     `json:"total"`
+}
+
+// CompatibleRunResponse A run that has a completed step matching a criteria's step_id.
+type CompatibleRunResponse struct {
+	AgentRunId       openapi_types.UUID `json:"agent_run_id"`
+	AgentStepRunId   openapi_types.UUID `json:"agent_step_run_id"`
+	CompletedAt      *string            `json:"completed_at"`
+	InputPreview     *string            `json:"input_preview"`
+	OutputStorageKey *string            `json:"output_storage_key"`
+	RunStatus        *string            `json:"run_status"`
+	StartedAt        *string            `json:"started_at"`
 }
 
 // ContentEmbeddingResponse Response model for content embedding.
@@ -138,19 +416,399 @@ type ContentEmbeddingResponse struct {
 	Vector        []float32 `json:"vector"`
 }
 
-// FileUploadResponse Response model for file upload
-type FileUploadResponse struct {
-	// ContentVersionId ID of the created content version
-	ContentVersionId *string `json:"content_version_id"`
+// CreateAlertConfigRequest defines model for CreateAlertConfigRequest.
+type CreateAlertConfigRequest struct {
+	// AgentId Agent ID (for agent alerts)
+	AgentId *string `json:"agent_id"`
 
-	// Filename Original filename
-	Filename string `json:"filename"`
+	// AlertType Alert type
+	AlertType string `json:"alert_type"`
 
-	// SourceConnectionContentVersionId ID of the duplicate source connection content version
-	SourceConnectionContentVersionId *string `json:"source_connection_content_version_id"`
+	// CooldownMinutes Cooldown period in minutes
+	CooldownMinutes *int `json:"cooldown_minutes,omitempty"`
 
-	// Status Processing status
+	// DistributionType Distribution type (owner, owner_admins, selected_members)
+	DistributionType *string `json:"distribution_type,omitempty"`
+
+	// Enabled Whether the alert config is enabled
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// RecipientUserIds User IDs for selected_members distribution
+	RecipientUserIds *[]string `json:"recipient_user_ids"`
+
+	// SourceConnectionId Source connection ID (for source alerts)
+	SourceConnectionId *string `json:"source_connection_id"`
+
+	// Threshold Threshold configuration
+	Threshold *map[string]interface{} `json:"threshold"`
+}
+
+// CreateEvaluationCriteriaRequest Request body for creating an evaluation criteria.
+//
+// The evaluation mode, retry settings, and sample frequency are set at the
+// agent level, not per-criteria.
+type CreateEvaluationCriteriaRequest struct {
+	Description      *string `json:"description"`
+	Enabled          *bool   `json:"enabled,omitempty"`
+	EvaluationPrompt *string `json:"evaluation_prompt"`
+
+	// EvaluationTier Controls model selection for agent evaluation.
+	//
+	// Labels shown in UI:
+	//   FAST      → "Fast and cheap"
+	//   BALANCED  → "Balanced speed and cost"
+	//   THOROUGH  → "Slow and thorough"
+	EvaluationTier    *AgentEvaluationTier    `json:"evaluation_tier,omitempty"`
+	ExpectationConfig *map[string]interface{} `json:"expectation_config"`
+	PassThreshold     *float32                `json:"pass_threshold,omitempty"`
+	StepId            string                  `json:"step_id"`
+}
+
+// CreateEvaluationResultRequest Request body for recording an evaluation result.
+type CreateEvaluationResultRequest struct {
+	AgentRunId     openapi_types.UUID      `json:"agent_run_id"`
+	AgentStepRunId *openapi_types.UUID     `json:"agent_step_run_id"`
+	Details        *map[string]interface{} `json:"details"`
+	Flagged        *bool                   `json:"flagged,omitempty"`
+	RetryCount     *int                    `json:"retry_count,omitempty"`
+	RetryTriggered *bool                   `json:"retry_triggered,omitempty"`
+	Score          *float32                `json:"score"`
+
+	// Status Result status of a single evaluation run.
+	Status EvaluationStatus `json:"status"`
+}
+
+// CreateKnowledgeBaseBody Request body for creating a knowledge base.
+type CreateKnowledgeBaseBody struct {
+	// DefaultScoreThreshold Default minimum rerank score threshold.
+	DefaultScoreThreshold *float32 `json:"default_score_threshold"`
+
+	// DefaultTopK Default results after reranking.
+	DefaultTopK *int `json:"default_top_k"`
+
+	// DefaultTopN Default number of results.
+	DefaultTopN *int `json:"default_top_n"`
+
+	// Description Optional description.
+	Description *string `json:"description"`
+
+	// Name Knowledge base name.
+	Name string `json:"name"`
+
+	// RerankerModel Reranker model to use (null for no reranking).
+	RerankerModel *string `json:"reranker_model"`
+
+	// SourceIds List of source connection IDs to link.
+	SourceIds []string `json:"source_ids"`
+}
+
+// CreateMemoryBankBody Request body for creating a memory bank.
+type CreateMemoryBankBody struct {
+	// ChunkOverlap Chunk overlap (custom mode only).
+	ChunkOverlap *int `json:"chunk_overlap"`
+
+	// ChunkSize Chunk size (custom mode only).
+	ChunkSize *int `json:"chunk_size"`
+
+	// CompactionPrompt Custom prompt used when compacting older entries. When set, entries that exceed a threshold are summarized into a new entry before being soft-deleted.
+	CompactionPrompt *string `json:"compaction_prompt"`
+
+	// Description Optional description of the bank's purpose.
+	Description *string `json:"description"`
+
+	// Dimensions Embedding dimensions (custom mode only).
+	Dimensions *int `json:"dimensions"`
+
+	// EmbeddingModel Custom embedding model (custom mode only).
+	EmbeddingModel *string `json:"embedding_model"`
+
+	// MaxAgeDays Max entry age in days before compaction. Checked inline after each write and by the hourly background sweep.
+	MaxAgeDays *int `json:"max_age_days"`
+
+	// MaxSizeTokens Max total tokens (per partition) before compaction. Checked inline after each write and by the hourly background sweep.
+	MaxSizeTokens *int `json:"max_size_tokens"`
+
+	// MaxTurns Max conversation turns (per partition) before compaction. Checked inline after each write and by the hourly background sweep.
+	MaxTurns *int `json:"max_turns"`
+
+	// Mode Embedding quality / cost trade-off. One of: fast_and_cheap, balanced, slow_and_thorough, custom.
+	Mode *string `json:"mode,omitempty"`
+
+	// Name Memory bank name.
+	Name string `json:"name"`
+
+	// RetentionDays Content source retention in days.
+	RetentionDays *int `json:"retention_days"`
+
+	// Type Bank type. 'conversation' for chat-turn data with conversation_key + speaker; 'general' for flat entries with optional group_key.
+	Type *string `json:"type,omitempty"`
+}
+
+// CreateSolutionRequest Request model for creating a new solution
+type CreateSolutionRequest struct {
+	// Description Description of the solution
+	Description *string `json:"description,omitempty"`
+
+	// Name Name of the solution
+	Name string `json:"name"`
+}
+
+// CreateSourceBody Request body for creating a content source.
+type CreateSourceBody struct {
+	// ChunkOverlap Chunk overlap for content processing.
+	ChunkOverlap *int `json:"chunk_overlap"`
+
+	// ChunkSize Chunk size for content processing.
+	ChunkSize *int `json:"chunk_size"`
+
+	// ContentFilter Content filter type.
+	ContentFilter *string `json:"content_filter"`
+
+	// Dimensions Embedding dimensions override.
+	Dimensions *int `json:"dimensions"`
+
+	// EmbeddingModel Embedding model override.
+	EmbeddingModel *string `json:"embedding_model"`
+
+	// Name Source name.
+	Name string `json:"name"`
+
+	// Polling Polling interval (e.g. hourly, daily).
+	Polling *string `json:"polling"`
+
+	// PollingAction Polling action.
+	PollingAction *string `json:"polling_action"`
+
+	// PollingMaxItems Max items per poll.
+	PollingMaxItems *int `json:"polling_max_items"`
+
+	// Retention Retention period in days.
+	Retention *int `json:"retention"`
+
+	// SourceType Source type: rss, website, file_uploads, or custom_index.
+	SourceType string `json:"source_type"`
+
+	// UrlId URL record ID (required for rss/website sources).
+	UrlId *string `json:"url_id"`
+}
+
+// EvaluationCriteriaResponse Response schema for evaluation criteria.
+type EvaluationCriteriaResponse struct {
+	AccountId   openapi_types.UUID `json:"account_id"`
+	AgentId     openapi_types.UUID `json:"agent_id"`
+	CreatedAt   string             `json:"created_at"`
+	Description *string            `json:"description"`
+	Enabled     bool               `json:"enabled"`
+
+	// EvaluationMode Runtime behavior mode. output_expectation (manual validation), eval_and_retry (every run + retry), sample_and_flag (sampled monitoring).
+	EvaluationMode    string                  `json:"evaluation_mode"`
+	EvaluationPrompt  *string                 `json:"evaluation_prompt"`
+	EvaluationTier    *string                 `json:"evaluation_tier"`
+	ExpectationConfig *map[string]interface{} `json:"expectation_config"`
+	Id                openapi_types.UUID      `json:"id"`
+	MaxRetries        int                     `json:"max_retries"`
+
+	// PassThreshold Score cutoff for pass/fail, inclusive (0.0 to 1.0).
+	PassThreshold  float32        `json:"pass_threshold"`
+	ResultSummary  map[string]int `json:"result_summary"`
+	RetryOnFailure bool           `json:"retry_on_failure"`
+	StepId         *string        `json:"step_id"`
+	UpdatedAt      string         `json:"updated_at"`
+}
+
+// EvaluationResultListResponse Paginated list of evaluation results.
+type EvaluationResultListResponse struct {
+	Data  []EvaluationResultResponse `json:"data"`
+	Limit int                        `json:"limit"`
+	Page  int                        `json:"page"`
+	Total int                        `json:"total"`
+}
+
+// EvaluationResultResponse Response schema for a single evaluation result.
+type EvaluationResultResponse struct {
+	AgentRunId     openapi_types.UUID  `json:"agent_run_id"`
+	AgentStepRunId *openapi_types.UUID `json:"agent_step_run_id"`
+	CreatedAt      string              `json:"created_at"`
+	CriteriaId     openapi_types.UUID  `json:"criteria_id"`
+
+	// Details Evaluation details including explanation and raw LLM response.
+	Details     *map[string]interface{} `json:"details"`
+	EvaluatedAt string                  `json:"evaluated_at"`
+
+	// Flagged True when the result was flagged for human review.
+	Flagged        bool               `json:"flagged"`
+	Id             openapi_types.UUID `json:"id"`
+	RetryCount     int                `json:"retry_count"`
+	RetryTriggered bool               `json:"retry_triggered"`
+
+	// Score LLM-assigned quality score between 0.0 (worst) and 1.0 (best).
+	Score *float32 `json:"score"`
+
+	// Status Outcome status: pending, passed, failed, skipped, or error.
 	Status string `json:"status"`
+}
+
+// EvaluationResultSummaryResponse Aggregated pass/fail/error counts and average score for a criteria.
+type EvaluationResultSummaryResponse struct {
+	// AverageScore Mean score across all evaluated results, or null if none.
+	AverageScore *float32 `json:"average_score"`
+	Error        int      `json:"error"`
+	Failed       int      `json:"failed"`
+	Flagged      int      `json:"flagged"`
+	Passed       int      `json:"passed"`
+	Total        int      `json:"total"`
+}
+
+// EvaluationResultWithCriteriaListResponse Paginated list of evaluation results with criteria context.
+type EvaluationResultWithCriteriaListResponse struct {
+	Data  []EvaluationResultWithCriteriaResponse `json:"data"`
+	Limit int                                    `json:"limit"`
+	Page  int                                    `json:"page"`
+	Total int                                    `json:"total"`
+}
+
+// EvaluationResultWithCriteriaResponse Evaluation result including criteria context for aggregated listing.
+type EvaluationResultWithCriteriaResponse struct {
+	AgentRunId          openapi_types.UUID  `json:"agent_run_id"`
+	AgentStepRunId      *openapi_types.UUID `json:"agent_step_run_id"`
+	CreatedAt           string              `json:"created_at"`
+	CriteriaDescription *string             `json:"criteria_description"`
+	CriteriaId          openapi_types.UUID  `json:"criteria_id"`
+
+	// Details Evaluation details including explanation and raw LLM response.
+	Details     *map[string]interface{} `json:"details"`
+	EvaluatedAt string                  `json:"evaluated_at"`
+
+	// Flagged True when the result was flagged for human review.
+	Flagged        bool               `json:"flagged"`
+	Id             openapi_types.UUID `json:"id"`
+	RetryCount     int                `json:"retry_count"`
+	RetryTriggered bool               `json:"retry_triggered"`
+
+	// Score LLM-assigned quality score between 0.0 (worst) and 1.0 (best).
+	Score *float32 `json:"score"`
+
+	// Status Outcome status: pending, passed, failed, skipped, or error.
+	Status string  `json:"status"`
+	StepId *string `json:"step_id"`
+}
+
+// EvaluationRunSummaryListResponse Paginated list of per-run evaluation summaries.
+type EvaluationRunSummaryListResponse struct {
+	Data  []EvaluationRunSummaryResponse `json:"data"`
+	Limit int                            `json:"limit"`
+	Page  int                            `json:"page"`
+	Total int                            `json:"total"`
+}
+
+// EvaluationRunSummaryResponse Per-run evaluation summary with pass/fail/error breakdown.
+type EvaluationRunSummaryResponse struct {
+	AgentRunId   openapi_types.UUID `json:"agent_run_id"`
+	ErrorCount   int                `json:"error_count"`
+	FailedCount  int                `json:"failed_count"`
+	FlaggedCount int                `json:"flagged_count"`
+	PassedCount  int                `json:"passed_count"`
+	RunCreatedAt string             `json:"run_created_at"`
+
+	// RunStatus Status of the agent run (processing, completed, failed).
+	RunStatus        string `json:"run_status"`
+	SkippedCount     int    `json:"skipped_count"`
+	TotalEvaluations int    `json:"total_evaluations"`
+}
+
+// EvaluationStatus Result status of a single evaluation run.
+type EvaluationStatus string
+
+// ExamplePrompt defines model for ExamplePrompt.
+type ExamplePrompt map[string]string
+
+// ExportFormat Supported export file formats.
+type ExportFormat string
+
+// ExportListResponse Paginated list of export jobs.
+type ExportListResponse struct {
+	Data []interface{} `json:"data"`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:"pagination"`
+}
+
+// GenerateAgentStepsRequest defines model for GenerateAgentStepsRequest.
+type GenerateAgentStepsRequest struct {
+	// AgentDescription Agent description for additional AI context.
+	AgentDescription *string `json:"agent_description"`
+
+	// AgentSteps Current agent step hierarchy for context when modifying.
+	AgentSteps *[]map[string]interface{} `json:"agent_steps"`
+
+	// Mode 'generate_full' to create from scratch, 'modify_workflow' to refine.
+	Mode *string `json:"mode,omitempty"`
+
+	// TriggerType Agent trigger type for context (e.g. 'dynamic_input', 'content_added').
+	TriggerType *string `json:"trigger_type"`
+
+	// UserInput Natural language description of the desired agent workflow.
+	UserInput string `json:"user_input"`
+}
+
+// GenerateAgentStepsResponse defines model for GenerateAgentStepsResponse.
+type GenerateAgentStepsResponse struct {
+	// AgentConfig Suggested agent-level configuration, if any.
+	AgentConfig *map[string]interface{} `json:"agent_config"`
+
+	// ConversationId Conversation turn ID for tracking.
+	ConversationId string `json:"conversation_id"`
+
+	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of this AI assistant for the given mode.
+	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// Note AI explanation of the proposed workflow.
+	Note string `json:"note"`
+
+	// Steps Generated agent steps.
+	Steps []map[string]interface{} `json:"steps"`
+
+	// Success Whether steps were successfully generated.
+	Success bool `json:"success"`
+}
+
+// GenerateStepConfigRequest defines model for GenerateStepConfigRequest.
+type GenerateStepConfigRequest struct {
+	// AgentSteps Current agent step hierarchy for context.
+	AgentSteps *[]map[string]interface{} `json:"agent_steps"`
+
+	// CurrentConfig Current step configuration to refine, if any.
+	CurrentConfig *map[string]interface{} `json:"current_config"`
+
+	// StepId ID of the specific step to refine. Omit for new steps.
+	StepId *string `json:"step_id"`
+
+	// StepType The step type to generate config for (e.g. 'transform', 'gate', 'text', 'prompt_call', 'retrieval').
+	StepType string `json:"step_type"`
+
+	// UserInput Natural language description of what the step should do.
+	UserInput string `json:"user_input"`
+}
+
+// GenerateStepConfigResponse defines model for GenerateStepConfigResponse.
+type GenerateStepConfigResponse struct {
+	// ConversationId Conversation turn ID for tracking.
+	ConversationId string `json:"conversation_id"`
+
+	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of this AI assistant for the given step type.
+	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// Note AI explanation of the proposed configuration.
+	Note string `json:"note"`
+
+	// ResultingConfig The proposed step configuration.
+	ResultingConfig *map[string]interface{} `json:"resulting_config"`
+
+	// StepType The step type that was generated.
+	StepType string `json:"step_type"`
+
+	// Success Whether a valid configuration was generated.
+	Success bool `json:"success"`
 }
 
 // HTTPValidationError defines model for HTTPValidationError.
@@ -158,8 +816,182 @@ type HTTPValidationError struct {
 	Detail *[]ValidationError `json:"detail,omitempty"`
 }
 
+// InlineTextReplaceRequest Request model for inline text content replacement.
+type InlineTextReplaceRequest struct {
+	// ContentType MIME type for the text content
+	ContentType *string `json:"content_type"`
+
+	// Metadata Optional metadata object
+	Metadata *map[string]interface{} `json:"metadata"`
+
+	// Text Text content to upload
+	Text string `json:"text"`
+
+	// Title Optional title
+	Title *string `json:"title"`
+}
+
+// InlineTextUploadRequest Request model for inline text uploads.
+type InlineTextUploadRequest struct {
+	// ContentType MIME type for the text content
+	ContentType *string `json:"content_type"`
+
+	// Metadata Optional metadata object
+	Metadata *map[string]interface{} `json:"metadata"`
+
+	// Text Text content to upload
+	Text string `json:"text"`
+
+	// Title Optional title
+	Title *string `json:"title"`
+}
+
 // JsonValue defines model for JsonValue.
 type JsonValue = interface{}
+
+// KnowledgeBaseListResponseModel Paginated list of knowledge bases.
+type KnowledgeBaseListResponseModel struct {
+	// KnowledgeBases List of knowledge bases on this page.
+	KnowledgeBases []KnowledgeBaseResponseModel `json:"knowledge_bases"`
+
+	// Limit Items per page.
+	Limit int `json:"limit"`
+
+	// Page Current page number (1-based).
+	Page int `json:"page"`
+
+	// Total Total number of knowledge bases.
+	Total int `json:"total"`
+}
+
+// KnowledgeBaseResponseModel Response model for a single knowledge base.
+type KnowledgeBaseResponseModel struct {
+	// CreatedAt ISO-8601 creation timestamp.
+	CreatedAt string `json:"created_at"`
+
+	// DefaultScoreThreshold Default minimum rerank score.
+	DefaultScoreThreshold *float32 `json:"default_score_threshold"`
+
+	// DefaultTopK Default results after reranking.
+	DefaultTopK *int `json:"default_top_k"`
+
+	// DefaultTopN Default number of results to return.
+	DefaultTopN *int `json:"default_top_n"`
+
+	// Description Optional description.
+	Description *string `json:"description"`
+
+	// Id Unique knowledge base identifier.
+	Id string `json:"id"`
+
+	// Name Human-readable name.
+	Name string `json:"name"`
+
+	// Readonly Whether the knowledge base is read-only.
+	Readonly *bool `json:"readonly,omitempty"`
+
+	// RerankerModel Reranker model in use.
+	RerankerModel *string `json:"reranker_model"`
+
+	// Sources Linked source connections.
+	Sources *[]SourceConnectionResponseModel `json:"sources,omitempty"`
+
+	// UpdatedAt ISO-8601 last-update timestamp.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// LinkResourcesRequest defines model for LinkResourcesRequest.
+type LinkResourcesRequest struct {
+	// Ids Resource IDs to link
+	Ids []openapi_types.UUID `json:"ids"`
+}
+
+// MarkAiSuggestionRequest defines model for MarkAiSuggestionRequest.
+type MarkAiSuggestionRequest struct {
+	// Accepted True to accept the suggestion, false to decline it.
+	Accepted bool `json:"accepted"`
+}
+
+// MarkConversationTurnRequest defines model for MarkConversationTurnRequest.
+type MarkConversationTurnRequest struct {
+	// Accepted Whether the suggestion was accepted
+	Accepted bool `json:"accepted"`
+}
+
+// MemoryBankListResponseModel Paginated list of memory banks.
+type MemoryBankListResponseModel struct {
+	// Limit Items per page.
+	Limit int `json:"limit"`
+
+	// MemoryBanks List of memory banks on this page.
+	MemoryBanks []MemoryBankResponseModel `json:"memory_banks"`
+
+	// Page Current page number (1-based).
+	Page int `json:"page"`
+
+	// Total Total number of memory banks.
+	Total int `json:"total"`
+}
+
+// MemoryBankResponseModel Response model for a single memory bank.
+type MemoryBankResponseModel struct {
+	// ChunkOverlap Character overlap between chunks.
+	ChunkOverlap *int `json:"chunk_overlap"`
+
+	// ChunkSize Characters per chunk.
+	ChunkSize *int `json:"chunk_size"`
+
+	// CompactionPrompt Custom prompt used when compacting older entries. When set, entries that exceed a threshold are summarized into a new entry before being soft-deleted.
+	CompactionPrompt *string `json:"compaction_prompt"`
+
+	// CreatedAt ISO-8601 creation timestamp.
+	CreatedAt string `json:"created_at"`
+
+	// Description Optional description of the memory bank's purpose.
+	Description *string `json:"description"`
+
+	// Dimensions Vector embedding dimensions.
+	Dimensions *int `json:"dimensions"`
+
+	// EmbeddingModel Embedding model identifier.
+	EmbeddingModel *string `json:"embedding_model"`
+
+	// Id Unique memory bank identifier.
+	Id string `json:"id"`
+
+	// MaxAgeDays Max entry age in days before compaction. Checked both inline after each write and by the hourly background sweep.
+	MaxAgeDays *int `json:"max_age_days"`
+
+	// MaxSizeTokens Max total tokens (per partition) before compaction. Checked both inline after each write and by the hourly background sweep.
+	MaxSizeTokens *int `json:"max_size_tokens"`
+
+	// MaxTurns Max conversation turns (per partition) before compaction. Checked both inline after each write and by the hourly background sweep.
+	MaxTurns *int `json:"max_turns"`
+
+	// Mode Embedding mode: fast_and_cheap, balanced, slow_and_thorough, or custom.
+	Mode string `json:"mode"`
+
+	// Name Human-readable name.
+	Name string `json:"name"`
+
+	// RetentionDays Content retention period in days (null = indefinite).
+	RetentionDays *int `json:"retention_days"`
+
+	// SourceConnectionId Linked content source ID (null if not yet provisioned).
+	SourceConnectionId *string `json:"source_connection_id"`
+
+	// Type Bank type: conversation (chat-turn with speaker) or general (flat entries).
+	Type string `json:"type"`
+
+	// UpdatedAt ISO-8601 last-update timestamp.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// OrganizationAlertPreferenceListResponse defines model for OrganizationAlertPreferenceListResponse.
+type OrganizationAlertPreferenceListResponse struct {
+	Preferences []RoutersApiAlertsOrganizationAlertPreferenceResponse `json:"preferences"`
+	Total       int                                                   `json:"total"`
+}
 
 // PaginationResponse Pagination information.
 type PaginationResponse struct {
@@ -173,6 +1005,85 @@ type PaginationResponse struct {
 
 // PendingProcessingCompletedFailedStatus defines model for PendingProcessingCompletedFailedStatus.
 type PendingProcessingCompletedFailedStatus string
+
+// PromptModelAutoUpgradeStrategy defines model for PromptModelAutoUpgradeStrategy.
+type PromptModelAutoUpgradeStrategy string
+
+// SolutionSourceConnectionResponse defines model for SolutionSourceConnectionResponse.
+type SolutionSourceConnectionResponse struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+}
+
+// SolutionSummaryResponse Response model for solution summary.
+type SolutionSummaryResponse struct {
+	// AgentCount Number of linked agents.
+	AgentCount int `json:"agent_count"`
+
+	// CreatedAt Timestamp when the solution was created.
+	CreatedAt string `json:"created_at"`
+
+	// Description Description of the solution.
+	Description string `json:"description"`
+
+	// Id Unique identifier for the solution.
+	Id openapi_types.UUID `json:"id"`
+
+	// KnowledgeBaseCount Number of linked knowledge bases.
+	KnowledgeBaseCount int `json:"knowledge_base_count"`
+
+	// MemoryBankCount Number of linked memory banks.
+	MemoryBankCount int `json:"memory_bank_count"`
+
+	// Name Name of the solution.
+	Name string `json:"name"`
+
+	// SourceConnectionCount Number of linked source connections.
+	SourceConnectionCount int `json:"source_connection_count"`
+
+	// UpdatedAt Timestamp when the solution was last updated.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// SourceConnectionResponseModel Nested source connection summary within a knowledge base response.
+type SourceConnectionResponseModel struct {
+	// Id Source connection identifier.
+	Id string `json:"id"`
+
+	// Name Source connection name.
+	Name string `json:"name"`
+
+	// Polling Polling configuration.
+	Polling *string `json:"polling"`
+
+	// SourceType Type of source (rss, website, etc.).
+	SourceType string `json:"source_type"`
+
+	// Url Source URL.
+	Url string `json:"url"`
+}
+
+// SourceEmbeddingMigrationResponse Response model for source embedding migration status.
+type SourceEmbeddingMigrationResponse struct {
+	CompletedAt            *string   `json:"completed_at"`
+	CreatedAt              string    `json:"created_at"`
+	FailureMessage         *string   `json:"failure_message"`
+	Id                     string    `json:"id"`
+	NotificationRecipients *[]string `json:"notification_recipients"`
+	Phase                  string    `json:"phase"`
+	ProgressCurrent        int       `json:"progress_current"`
+	ProgressMessage        *string   `json:"progress_message"`
+	ProgressTotal          int       `json:"progress_total"`
+	SourceConnectionId     string    `json:"source_connection_id"`
+	SourceIdNew            string    `json:"source_id_new"`
+	SourceIdOld            string    `json:"source_id_old"`
+	StartedAt              *string   `json:"started_at"`
+	Status                 string    `json:"status"`
+	TargetDimensions       int       `json:"target_dimensions"`
+	TargetEmbeddingModel   string    `json:"target_embedding_model"`
+	TaskExecutionId        *string   `json:"task_execution_id"`
+	UpdatedAt              string    `json:"updated_at"`
+}
 
 // SourceResponse Response model for source data.
 type SourceResponse struct {
@@ -218,6 +1129,9 @@ type SourceResponse struct {
 	// EmbeddingModelType Type of the embedding model.
 	EmbeddingModelType *string `json:"embedding_model_type"`
 
+	// FreeRetentionDays Number of days content is stored for free before billing applies.
+	FreeRetentionDays *int `json:"free_retention_days"`
+
 	// HasHistoricalData Indicates if the source connection has historical data.
 	HasHistoricalData *bool `json:"has_historical_data,omitempty"`
 
@@ -251,11 +1165,269 @@ type SourceResponse struct {
 	// SourceType Type of the source connection.
 	SourceType string `json:"source_type"`
 
+	// SystemManaged Indicates if this source is automatically managed by the system (e.g., agent traces).
+	SystemManaged *bool `json:"system_managed,omitempty"`
+
 	// UpdatedAt Timestamp when the source connection was last updated.
 	UpdatedAt string `json:"updated_at"`
 
 	// Url URL of the source connection.
 	Url *string `json:"url"`
+}
+
+// StandaloneTestCompactionRequest Request body for testing a compaction prompt *without* an existing bank.
+//
+// Used on the create-memory-bank page where no bank ID exists yet.
+// “compaction_prompt“ is required (no bank to fall back to).
+// Content must come from “sample_entries“ or “generate_direction“
+// (no existing entries to fetch).
+type StandaloneTestCompactionRequest struct {
+	// BankType Memory bank type ('conversation' or 'general') — controls the style of generated entries.
+	BankType *string `json:"bank_type,omitempty"`
+
+	// CompactionPrompt Compaction prompt to test.
+	CompactionPrompt string `json:"compaction_prompt"`
+
+	// EntryCount Number of entries to generate when using generate_direction.
+	EntryCount *int `json:"entry_count,omitempty"`
+
+	// GenerateDirection Direction for the LLM to generate sample entries.
+	GenerateDirection *string `json:"generate_direction"`
+
+	// SampleEntries Explicit sample entries to compact.
+	SampleEntries *[]string `json:"sample_entries"`
+}
+
+// StartSourceEmbeddingMigrationRequest Request payload to start a source embedding migration.
+type StartSourceEmbeddingMigrationRequest struct {
+	// ChunkLanguage Language-specific chunking language code
+	ChunkLanguage *string `json:"chunk_language"`
+
+	// ChunkOverlap Override chunk overlap (characters)
+	ChunkOverlap *int `json:"chunk_overlap"`
+
+	// ChunkRegexSeparators Whether chunk separators are regex patterns
+	ChunkRegexSeparators *bool `json:"chunk_regex_separators"`
+
+	// ChunkSeparators Custom chunk separators (JSON-encoded list)
+	ChunkSeparators *string `json:"chunk_separators"`
+
+	// ChunkSize Override chunk size (characters per chunk)
+	ChunkSize *int `json:"chunk_size"`
+
+	// NotificationRecipients Optional notification recipient emails
+	NotificationRecipients *[]string `json:"notification_recipients"`
+
+	// TargetDimensions Target embedding dimensions
+	TargetDimensions int `json:"target_dimensions"`
+
+	// TargetEmbeddingModel Target embedding model enum
+	TargetEmbeddingModel string `json:"target_embedding_model"`
+}
+
+// TestCompactionRequest Request body for testing a compaction prompt against an existing bank.
+//
+// The user may supply a “compaction_prompt“ to override (or provide when
+// the bank has none).  Content can come from three sources:
+//
+//  1. Existing entries in the bank (default when neither field is set).
+//  2. “sample_entries“ – caller-provided list of strings.
+//  3. “generate_direction“ – an instruction to the LLM to generate sample
+//     memory entries.  Useful for trying a prompt before any real data
+//     exists.
+//
+// At most one of “sample_entries“ / “generate_direction“ may be given.
+type TestCompactionRequest struct {
+	// CompactionPrompt Compaction prompt to test.  Falls back to the bank's current prompt when omitted.
+	CompactionPrompt *string `json:"compaction_prompt"`
+
+	// EntryCount Number of entries to generate when using generate_direction.
+	EntryCount *int `json:"entry_count,omitempty"`
+
+	// GenerateDirection Direction for the LLM to generate sample entries (e.g. 'Generate 5 entries about a customer support interaction').
+	GenerateDirection *string `json:"generate_direction"`
+
+	// SampleEntries Explicit sample entries to compact.
+	SampleEntries *[]string `json:"sample_entries"`
+}
+
+// TestDraftEvaluationRequest Request body for ephemeral (non-persisted) evaluation testing.
+//
+// Provide either “step_output“ (raw text) **or** “agent_step_run_id“
+// (to load output from storage).  Exactly one must be supplied.
+type TestDraftEvaluationRequest struct {
+	// AgentInput The original agent run input for context.  When agent_step_run_id is supplied this is loaded automatically from the parent run if omitted.
+	AgentInput *string `json:"agent_input"`
+
+	// AgentStepRunId Load step output from this completed step run instead of supplying text.
+	AgentStepRunId   *openapi_types.UUID `json:"agent_step_run_id"`
+	EvaluationPrompt *string             `json:"evaluation_prompt"`
+
+	// EvaluationTier Controls model selection for agent evaluation.
+	//
+	// Labels shown in UI:
+	//   FAST      → "Fast and cheap"
+	//   BALANCED  → "Balanced speed and cost"
+	//   THOROUGH  → "Slow and thorough"
+	EvaluationTier    *AgentEvaluationTier    `json:"evaluation_tier,omitempty"`
+	ExpectationConfig *map[string]interface{} `json:"expectation_config"`
+	PassThreshold     *float32                `json:"pass_threshold,omitempty"`
+
+	// StepOutput The step output text to evaluate.  Omit if agent_step_run_id is supplied.
+	StepOutput *string `json:"step_output"`
+}
+
+// TestDraftEvaluationResponse Response for an ephemeral evaluation test.
+type TestDraftEvaluationResponse struct {
+	Explanation *string `json:"explanation"`
+	Passed      bool    `json:"passed"`
+	Score       float32 `json:"score"`
+}
+
+// UnlinkResourcesRequest defines model for UnlinkResourcesRequest.
+type UnlinkResourcesRequest struct {
+	// Ids Resource IDs to unlink
+	Ids []openapi_types.UUID `json:"ids"`
+}
+
+// UpdateAgentDefinitionRequest defines model for UpdateAgentDefinitionRequest.
+type UpdateAgentDefinitionRequest struct {
+	// Definition The full agent definition (name, description, tags, steps). Steps form a tree workflow. Each step has a `step_type`, `id`, `name`, and type-specific config. Content enrichment steps (write_metadata, write_content_attachment, load_content_attachment, load_content) require content-triggered agents.
+	Definition map[string]interface{} `json:"definition"`
+
+	// ExpectedChangeId The change_id from the last GET, for optimistic locking.
+	ExpectedChangeId string `json:"expected_change_id"`
+}
+
+// UpdateAlertConfigRequest defines model for UpdateAlertConfigRequest.
+type UpdateAlertConfigRequest struct {
+	// CooldownMinutes Cooldown period in minutes
+	CooldownMinutes *int `json:"cooldown_minutes"`
+
+	// DistributionType Distribution type
+	DistributionType *string `json:"distribution_type"`
+
+	// Enabled Whether the alert config is enabled
+	Enabled *bool `json:"enabled"`
+
+	// RecipientUserIds User IDs for selected_members distribution
+	RecipientUserIds *[]string `json:"recipient_user_ids"`
+
+	// Threshold Threshold configuration
+	Threshold *map[string]interface{} `json:"threshold"`
+}
+
+// UpdateEvaluationCriteriaRequest Request body for updating an evaluation criteria.
+//
+// Retry settings and sample frequency are set at the agent level.
+type UpdateEvaluationCriteriaRequest struct {
+	Description      *string `json:"description"`
+	Enabled          *bool   `json:"enabled"`
+	EvaluationPrompt *string `json:"evaluation_prompt"`
+
+	// EvaluationTier Controls model selection for agent evaluation.
+	//
+	// Labels shown in UI:
+	//   FAST      → "Fast and cheap"
+	//   BALANCED  → "Balanced speed and cost"
+	//   THOROUGH  → "Slow and thorough"
+	EvaluationTier    *AgentEvaluationTier    `json:"evaluation_tier,omitempty"`
+	ExpectationConfig *map[string]interface{} `json:"expectation_config"`
+	PassThreshold     *float32                `json:"pass_threshold"`
+	StepId            *string                 `json:"step_id"`
+}
+
+// UpdateKnowledgeBaseBody Request body for updating a knowledge base.
+type UpdateKnowledgeBaseBody struct {
+	// DefaultScoreThreshold Default score threshold (-1 to clear).
+	DefaultScoreThreshold *float32 `json:"default_score_threshold"`
+
+	// DefaultTopK Default reranked results (0 to clear).
+	DefaultTopK *int `json:"default_top_k"`
+
+	// DefaultTopN Default results (0 to clear).
+	DefaultTopN *int `json:"default_top_n"`
+
+	// Description New description.
+	Description *string `json:"description"`
+
+	// Name New name.
+	Name *string `json:"name"`
+
+	// RerankerModel Reranker model (empty string for no reranking).
+	RerankerModel *string `json:"reranker_model"`
+
+	// SourceIds New list of source connection IDs.
+	SourceIds *[]string `json:"source_ids"`
+}
+
+// UpdateMemoryBankBody Request body for updating a memory bank.
+//
+// Omitted fields are left unchanged.  To **clear** a field back to null,
+// send a zero-value sentinel: “0“ for integers, “""“ for strings.
+type UpdateMemoryBankBody struct {
+	// CompactionPrompt Custom prompt used when compacting older entries. When set, entries that exceed a threshold are summarized into a new entry before being soft-deleted. Send empty string "" to clear and disable summarisation.
+	CompactionPrompt *string `json:"compaction_prompt"`
+
+	// Description Optional description. Send empty string "" to clear.
+	Description *string `json:"description"`
+
+	// MaxAgeDays Max entry age in days before compaction. Checked inline after each write and by the hourly background sweep. Send 0 to disable.
+	MaxAgeDays *int `json:"max_age_days"`
+
+	// MaxSizeTokens Max total tokens (per partition) before compaction. Checked inline after each write and by the hourly background sweep. Send 0 to disable.
+	MaxSizeTokens *int `json:"max_size_tokens"`
+
+	// MaxTurns Max conversation turns (per partition) before compaction. Checked inline after each write and by the hourly background sweep. Send 0 to disable.
+	MaxTurns *int `json:"max_turns"`
+
+	// Name New name.
+	Name *string `json:"name"`
+
+	// RetentionDays Content source retention in days. Send 0 to clear (indefinite).
+	RetentionDays *int `json:"retention_days"`
+}
+
+// UpdateSolutionRequest Request model for updating a solution
+type UpdateSolutionRequest struct {
+	// Description Description of the solution
+	Description *string `json:"description"`
+
+	// Name Name of the solution
+	Name *string `json:"name"`
+}
+
+// UpdateSourceBody Request body for updating a content source.
+type UpdateSourceBody struct {
+	// Name New name.
+	Name *string `json:"name"`
+
+	// Polling New polling interval.
+	Polling *string `json:"polling"`
+
+	// RetentionDays New retention period in days (null for unlimited).
+	RetentionDays *int `json:"retention_days"`
+}
+
+// UploadAgentInputApiResponse defines model for UploadAgentInputApiResponse.
+type UploadAgentInputApiResponse struct {
+	// ContentType Resolved MIME type.
+	ContentType string `json:"content_type"`
+
+	// Error Error message if status is failed.
+	Error *string `json:"error"`
+
+	// FileSize Size in bytes.
+	FileSize int `json:"file_size"`
+
+	// Filename Original filename.
+	Filename string `json:"filename"`
+
+	// Id Unique identifier for the upload.
+	Id string `json:"id"`
+
+	// Status processing, ready, or failed.
+	Status string `json:"status"`
 }
 
 // ValidationError defines model for ValidationError.
@@ -276,6 +1448,15 @@ type ValidationError_Loc_Item struct {
 	union json.RawMessage
 }
 
+// RoutersApiAgentsAgentListResponse defines model for routers__api__agents__AgentListResponse.
+type RoutersApiAgentsAgentListResponse struct {
+	// Data List of agents.
+	Data []AgentSummaryResponse `json:"data"`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:"pagination"`
+}
+
 // RoutersApiAgentsAgentRunListResponse defines model for routers__api__agents__AgentRunListResponse.
 type RoutersApiAgentsAgentRunListResponse struct {
 	// Data List of agent runs.
@@ -283,6 +1464,123 @@ type RoutersApiAgentsAgentRunListResponse struct {
 
 	// Pagination Pagination information.
 	Pagination PaginationResponse `json:"pagination"`
+}
+
+// RoutersApiAgentsAgentTraceSearchRequest defines model for routers__api__agents__AgentTraceSearchRequest.
+type RoutersApiAgentsAgentTraceSearchRequest struct {
+	// AgentId Filter by agent ID.
+	AgentId *string `json:"agent_id"`
+
+	// Query Search query text.
+	Query string `json:"query"`
+
+	// RunStatus Filter by run status.
+	RunStatus *string `json:"run_status"`
+
+	// StepType Filter by step type.
+	StepType *string `json:"step_type"`
+
+	// TopN Maximum number of results.
+	TopN *int `json:"top_n,omitempty"`
+}
+
+// RoutersApiAgentsCreateAgentRequest defines model for routers__api__agents__CreateAgentRequest.
+type RoutersApiAgentsCreateAgentRequest struct {
+	// AgentTemplate Template to initialize the agent from. Values: blank, retrieval_example, simple_qa, summarizer, json_extractor, content_change_notifier, scheduled_report, webhook_pipeline.
+	AgentTemplate *string `json:"agent_template"`
+
+	// Description Optional description.
+	Description *string `json:"description"`
+
+	// Name Name for the new agent.
+	Name string `json:"name"`
+
+	// TriggerType Trigger type: dynamic_input, template_input, schedule, new_content.
+	TriggerType *string `json:"trigger_type,omitempty"`
+}
+
+// RoutersApiAgentsUpdateAgentRequest defines model for routers__api__agents__UpdateAgentRequest.
+type RoutersApiAgentsUpdateAgentRequest struct {
+	// DefaultEvaluationTier Default evaluation tier: 'fast', 'balanced', or 'thorough'.
+	DefaultEvaluationTier *string `json:"default_evaluation_tier"`
+
+	// Description New description for the agent.
+	Description *string `json:"description"`
+
+	// EvaluationMode Evaluation mode: 'output_expectation', 'eval_and_retry', or 'sample_and_flag'.
+	EvaluationMode *string `json:"evaluation_mode"`
+
+	// MaxRetries Max retries for eval_and_retry mode (1-10).
+	MaxRetries *int `json:"max_retries"`
+
+	// Name New name for the agent.
+	Name *string `json:"name"`
+
+	// PromptModelAutoRollbackEnabled Enable or disable automatic rollback for upgraded models.
+	PromptModelAutoRollbackEnabled *bool `json:"prompt_model_auto_rollback_enabled"`
+
+	// PromptModelAutoRollbackTriggers Failure signals that trigger rollback: agent_eval_fail, governance_flag, governance_block, agent_run_failed.
+	PromptModelAutoRollbackTriggers *[]string                       `json:"prompt_model_auto_rollback_triggers"`
+	PromptModelAutoUpgradeStrategy  *PromptModelAutoUpgradeStrategy `json:"prompt_model_auto_upgrade_strategy,omitempty"`
+
+	// RetryOnFailure Whether to retry on evaluation failure.
+	RetryOnFailure *bool `json:"retry_on_failure"`
+
+	// SamplingConfig Sampling configuration for sample_and_flag mode. Format: {combinator: 'and'|'or', rules: [...]}.
+	SamplingConfig *map[string]interface{} `json:"sampling_config"`
+
+	// SetDefaultEvaluationTier When true and default_evaluation_tier is omitted, clears the tier to null (system default).
+	SetDefaultEvaluationTier *bool `json:"set_default_evaluation_tier,omitempty"`
+
+	// SetPromptModelAutoRollbackTriggers When true and prompt_model_auto_rollback_triggers is omitted, clears the list to null (revert to system defaults).
+	SetPromptModelAutoRollbackTriggers *bool `json:"set_prompt_model_auto_rollback_triggers,omitempty"`
+
+	// SetSamplingConfig When true and sampling_config is omitted, clears the config to null.
+	SetSamplingConfig *bool `json:"set_sampling_config,omitempty"`
+}
+
+// RoutersApiAiAssistantAiAssistantFeedbackRequest Request body for submitting AI assistant feedback.
+type RoutersApiAiAssistantAiAssistantFeedbackRequest struct {
+	// AgentConversationId Agent conversation ID, if applicable.
+	AgentConversationId *openapi_types.UUID `json:"agent_conversation_id"`
+
+	// Comment Optional comment.
+	Comment *string `json:"comment"`
+
+	// Context Additional context.
+	Context *map[string]interface{} `json:"context"`
+
+	// ConversationId Conversation ID for the interaction.
+	ConversationId *openapi_types.UUID `json:"conversation_id"`
+
+	// Feature Feature name (e.g. 'source', 'solution').
+	Feature string `json:"feature"`
+
+	// PromptCallId Prompt call ID for credit tracking.
+	PromptCallId *openapi_types.UUID `json:"prompt_call_id"`
+
+	// Rating Rating: 'thumbs_up' or 'thumbs_down'.
+	Rating string `json:"rating"`
+}
+
+// RoutersApiAlertsAddCommentRequest defines model for routers__api__alerts__AddCommentRequest.
+type RoutersApiAlertsAddCommentRequest struct {
+	// Body Comment text
+	Body string `json:"body"`
+}
+
+// RoutersApiAlertsOrganizationAlertPreferenceResponse defines model for routers__api__alerts__OrganizationAlertPreferenceResponse.
+type RoutersApiAlertsOrganizationAlertPreferenceResponse struct {
+	AlertType      string `json:"alert_type"`
+	IsOverride     bool   `json:"is_override"`
+	OrganizationId string `json:"organization_id"`
+	Subscribed     bool   `json:"subscribed"`
+}
+
+// RoutersApiAlertsUpdateOrganizationAlertPreferenceRequest defines model for routers__api__alerts__UpdateOrganizationAlertPreferenceRequest.
+type RoutersApiAlertsUpdateOrganizationAlertPreferenceRequest struct {
+	// Subscribed Whether the user should receive this alert for the organization
+	Subscribed bool `json:"subscribed"`
 }
 
 // RoutersApiContentsContentDetailResponse Response model for content detail.
@@ -362,6 +1660,515 @@ type RoutersApiContentsContentEmbeddingsListResponse struct {
 	Pagination PaginationResponse `json:"pagination"`
 }
 
+// RoutersApiContentsFileUploadResponse Response model for content file replacement upload.
+type RoutersApiContentsFileUploadResponse struct {
+	// ContentVersionId ID of the content version being replaced
+	ContentVersionId *string `json:"content_version_id"`
+
+	// Filename Original filename
+	Filename string `json:"filename"`
+
+	// SourceConnectionContentVersionId ID of the source connection content version
+	SourceConnectionContentVersionId *string `json:"source_connection_content_version_id"`
+
+	// Status Processing status
+	Status string `json:"status"`
+}
+
+// RoutersApiGovernanceAppliedActionResponse Result of a single executed governance action.
+type RoutersApiGovernanceAppliedActionResponse struct {
+	// ActionType Type of action that was executed.
+	ActionType string `json:"action_type"`
+
+	// Description Human-readable description of the executed action.
+	Description string `json:"description"`
+
+	// Error Error message if this action failed, or null.
+	Error *string `json:"error"`
+
+	// PolicyId ID of the policy that was created or modified, or null.
+	PolicyId *string `json:"policy_id"`
+
+	// Success Whether this individual action succeeded.
+	Success bool `json:"success"`
+}
+
+// RoutersApiGovernanceGovernanceAiAcceptResponse Response from accepting a governance AI assistant plan.
+type RoutersApiGovernanceGovernanceAiAcceptResponse struct {
+	// ActionsApplied Results of each action that was executed.
+	ActionsApplied []RoutersApiGovernanceAppliedActionResponse `json:"actions_applied"`
+
+	// ConversationId Conversation ID that was accepted.
+	ConversationId string `json:"conversation_id"`
+
+	// Error Overall error message if the plan failed, or null.
+	Error *string `json:"error"`
+
+	// Success Whether all actions were applied successfully.
+	Success bool `json:"success"`
+}
+
+// RoutersApiGovernanceGovernanceAiAssistantRequest Request body for the governance AI assistant.
+type RoutersApiGovernanceGovernanceAiAssistantRequest struct {
+	// UserInput Natural-language request for the governance AI assistant.
+	UserInput string `json:"user_input"`
+}
+
+// RoutersApiGovernanceGovernanceAiAssistantResponse Response from the governance AI assistant generate endpoint.
+type RoutersApiGovernanceGovernanceAiAssistantResponse struct {
+	// ConversationId Conversation ID to accept or decline this plan.
+	ConversationId string `json:"conversation_id"`
+
+	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of the governance AI assistant.
+	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// Note AI-generated summary of the proposed changes.
+	Note string `json:"note"`
+
+	// PromptCallId Prompt call ID for credit tracking, or null.
+	PromptCallId *string `json:"prompt_call_id"`
+
+	// ProposedActions Ordered list of policy actions the AI proposes to execute.
+	ProposedActions []RoutersApiGovernanceProposedPolicyActionResponse `json:"proposed_actions"`
+
+	// Success Whether the plan was generated successfully.
+	Success bool `json:"success"`
+}
+
+// RoutersApiGovernanceGovernanceConversationResponse A governance AI assistant conversation entry.
+type RoutersApiGovernanceGovernanceConversationResponse struct {
+	// Accepted True if accepted, false if declined, null if pending.
+	Accepted *bool `json:"accepted"`
+
+	// AiResponse The AI assistant's response note, or null.
+	AiResponse *string `json:"ai_response"`
+
+	// CreatedAt ISO 8601 creation timestamp.
+	CreatedAt string `json:"created_at"`
+
+	// Id Conversation ID.
+	Id string `json:"id"`
+
+	// ProposedActions JSON of proposed actions, or null.
+	ProposedActions *map[string]interface{} `json:"proposed_actions"`
+
+	// UserInput The original user request.
+	UserInput string `json:"user_input"`
+}
+
+// RoutersApiGovernanceProposedPolicyActionResponse A single proposed governance policy action.
+type RoutersApiGovernanceProposedPolicyActionResponse struct {
+	// ActionType Type of action: create, update, delete, enable, or disable.
+	ActionType string `json:"action_type"`
+
+	// Description Human-readable description of what this action will do.
+	Description string `json:"description"`
+
+	// Params Parameters for the action (e.g. policy_document_id, thresholds).
+	Params map[string]interface{} `json:"params"`
+}
+
+// RoutersApiMemoryBanksMemoryBankAcceptRequest Accept or decline a memory bank AI suggestion.
+type RoutersApiMemoryBanksMemoryBankAcceptRequest struct {
+	// Accepted Whether the user accepted the proposed configuration.
+	Accepted bool `json:"accepted"`
+}
+
+// RoutersApiMemoryBanksMemoryBankAiAssistantRequest Request body for the memory bank AI assistant.
+type RoutersApiMemoryBanksMemoryBankAiAssistantRequest struct {
+	// ConversationId Previous conversation ID to continue.
+	ConversationId *string `json:"conversation_id"`
+
+	// CurrentConfig Current configuration to refine, if any.
+	CurrentConfig *map[string]interface{} `json:"current_config"`
+
+	// UserInput Natural-language description of the memory bank.
+	UserInput string `json:"user_input"`
+}
+
+// RoutersApiMemoryBanksMemoryBankAiAssistantResponse Response from the memory bank AI assistant.
+type RoutersApiMemoryBanksMemoryBankAiAssistantResponse struct {
+	// Config Suggested memory bank configuration from the AI assistant.
+	Config *RoutersApiMemoryBanksMemoryBankConfigResponse `json:"config,omitempty"`
+
+	// ConversationId Conversation ID for follow-up.
+	ConversationId string `json:"conversation_id"`
+
+	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of the memory bank AI assistant.
+	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// Note AI-generated explanation.
+	Note string `json:"note"`
+
+	// PromptCallId Prompt call ID for credit tracking.
+	PromptCallId *string `json:"prompt_call_id"`
+
+	// Success Whether generation succeeded.
+	Success *bool `json:"success,omitempty"`
+}
+
+// RoutersApiMemoryBanksMemoryBankConfigResponse Suggested memory bank configuration from the AI assistant.
+type RoutersApiMemoryBanksMemoryBankConfigResponse struct {
+	// CompactionPrompt Suggested compaction prompt.
+	CompactionPrompt *string `json:"compaction_prompt"`
+
+	// Description Suggested description.
+	Description *string `json:"description"`
+
+	// MaxAgeDays Max age in days.
+	MaxAgeDays *int `json:"max_age_days"`
+
+	// MaxSizeTokens Max size in tokens.
+	MaxSizeTokens *int `json:"max_size_tokens"`
+
+	// MaxTurns Max conversation turns.
+	MaxTurns *int `json:"max_turns"`
+
+	// Mode Memory bank mode.
+	Mode string `json:"mode"`
+
+	// Name Suggested name.
+	Name string `json:"name"`
+
+	// RetentionDays Retention in days.
+	RetentionDays *int `json:"retention_days"`
+
+	// Type Memory bank type: conversation or general.
+	Type string `json:"type"`
+}
+
+// RoutersApiMemoryBanksMemoryBankConversationTurnResponse A single turn of memory bank AI assistant conversation.
+type RoutersApiMemoryBanksMemoryBankConversationTurnResponse struct {
+	// Accepted Whether the user accepted this proposal.
+	Accepted *bool `json:"accepted"`
+
+	// AiNote AI note from this turn.
+	AiNote *string `json:"ai_note"`
+
+	// ConversationId Unique ID for this conversation turn.
+	ConversationId string `json:"conversation_id"`
+
+	// ResultingConfig The proposed configuration from this turn.
+	ResultingConfig *map[string]interface{} `json:"resulting_config"`
+
+	// UserInput User input for this turn.
+	UserInput string `json:"user_input"`
+}
+
+// RoutersApiMemoryBanksMemoryBankLastConversationResponse Response for fetching memory bank conversation history.
+type RoutersApiMemoryBanksMemoryBankLastConversationResponse struct {
+	// Accepted Whether the user accepted the last proposal.
+	Accepted *bool `json:"accepted"`
+
+	// AiNote AI note from the most recent turn.
+	AiNote *string `json:"ai_note"`
+
+	// Total Total conversation turns.
+	Total *int `json:"total,omitempty"`
+
+	// Turns Recent conversation turns (oldest first).
+	Turns *[]RoutersApiMemoryBanksMemoryBankConversationTurnResponse `json:"turns,omitempty"`
+
+	// UserInput Most recent user input.
+	UserInput *string `json:"user_input"`
+}
+
+// RoutersApiSolutionsAiAssistantAcceptRequest Request body for accepting a proposed plan.
+type RoutersApiSolutionsAiAssistantAcceptRequest struct {
+	// ConfirmDeletions Must be true when the plan contains destructive actions
+	ConfirmDeletions *bool `json:"confirm_deletions,omitempty"`
+
+	// SolutionDescription When running in standalone mode (no pre-existing solution), provide a description for the auto-created solution.
+	SolutionDescription *string `json:"solution_description"`
+
+	// SolutionName When running in standalone mode (no pre-existing solution), provide a name to auto-create a solution and link resources.
+	SolutionName *string `json:"solution_name"`
+}
+
+// RoutersApiSolutionsAiAssistantAcceptResponse Response from accepting and executing a plan.
+type RoutersApiSolutionsAiAssistantAcceptResponse struct {
+	// ConversationId Conversation ID.
+	ConversationId openapi_types.UUID `json:"conversation_id"`
+
+	// Error Error message if failed.
+	Error *string `json:"error"`
+
+	// ExecutedActions Results of each executed action.
+	ExecutedActions []RoutersApiSolutionsExecutedActionResponse `json:"executed_actions"`
+
+	// SolutionId Solution ID when a new solution was auto-created.
+	SolutionId *openapi_types.UUID `json:"solution_id"`
+
+	// Success Whether execution succeeded.
+	Success *bool `json:"success,omitempty"`
+}
+
+// RoutersApiSolutionsAiAssistantGenerateResponse Response from an AI assistant generate endpoint.
+type RoutersApiSolutionsAiAssistantGenerateResponse struct {
+	// ConversationId Conversation ID for accept/decline.
+	ConversationId openapi_types.UUID `json:"conversation_id"`
+
+	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of this AI assistant.
+	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// Note AI-generated note about the plan.
+	Note string `json:"note"`
+
+	// ProposedActions List of proposed actions.
+	ProposedActions []RoutersApiSolutionsProposedActionResponse `json:"proposed_actions"`
+
+	// RequiresDeleteConfirmation Whether destructive actions require explicit confirmation.
+	RequiresDeleteConfirmation *bool `json:"requires_delete_confirmation,omitempty"`
+
+	// Success Whether plan generation succeeded.
+	Success *bool `json:"success,omitempty"`
+}
+
+// RoutersApiSolutionsExecutedActionResponse A single executed action result.
+type RoutersApiSolutionsExecutedActionResponse struct {
+	// ActionType Type of the executed action.
+	ActionType string `json:"action_type"`
+
+	// Description Human-readable description.
+	Description string `json:"description"`
+
+	// Error Error message if failed.
+	Error *string `json:"error"`
+
+	// ResourceId ID of the affected resource.
+	ResourceId *string `json:"resource_id"`
+
+	// ResourceType Type of the affected resource.
+	ResourceType *string `json:"resource_type"`
+
+	// Success Whether the action succeeded.
+	Success *bool `json:"success,omitempty"`
+}
+
+// RoutersApiSolutionsProposedActionResponse A single proposed action.
+type RoutersApiSolutionsProposedActionResponse struct {
+	// ActionType Type of the proposed action.
+	ActionType string `json:"action_type"`
+
+	// Description Human-readable description of the action.
+	Description string `json:"description"`
+
+	// IsDestructive Whether the action is destructive.
+	IsDestructive *bool `json:"is_destructive,omitempty"`
+
+	// Params Parameters for the action.
+	Params map[string]interface{} `json:"params"`
+}
+
+// RoutersApiSolutionsSolutionAgentResponse defines model for routers__api__solutions__SolutionAgentResponse.
+type RoutersApiSolutionsSolutionAgentResponse struct {
+	Id openapi_types.UUID `json:"id"`
+
+	// KnowledgeBaseIds Knowledge base IDs connected to this agent via triggers.
+	KnowledgeBaseIds *[]openapi_types.UUID `json:"knowledge_base_ids,omitempty"`
+	Name             string                `json:"name"`
+}
+
+// RoutersApiSolutionsSolutionConversationResponse Response model for a conversation turn.
+type RoutersApiSolutionsSolutionConversationResponse struct {
+	// Accepted Whether the suggestion was accepted or declined.
+	Accepted *bool `json:"accepted"`
+
+	// ActionsTaken Actions taken by the AI.
+	ActionsTaken *map[string]interface{} `json:"actions_taken"`
+
+	// AiResponse AI response text.
+	AiResponse *string `json:"ai_response"`
+
+	// CreatedAt Timestamp when the conversation was created.
+	CreatedAt string `json:"created_at"`
+
+	// Id Unique identifier for the conversation turn.
+	Id openapi_types.UUID `json:"id"`
+
+	// UserInput User input text.
+	UserInput string `json:"user_input"`
+}
+
+// RoutersApiSolutionsSolutionKnowledgeBaseResponse defines model for routers__api__solutions__SolutionKnowledgeBaseResponse.
+type RoutersApiSolutionsSolutionKnowledgeBaseResponse struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+
+	// SourceConnectionIds Source connection IDs linked to this knowledge base.
+	SourceConnectionIds *[]openapi_types.UUID `json:"source_connection_ids,omitempty"`
+}
+
+// RoutersApiSolutionsSolutionListResponse Response model for paginated solution list.
+type RoutersApiSolutionsSolutionListResponse struct {
+	Data []SolutionSummaryResponse `json:"data"`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:"pagination"`
+}
+
+// RoutersApiSolutionsSolutionResponse Response model for solution data.
+type RoutersApiSolutionsSolutionResponse struct {
+	// Agents Agents linked to the solution.
+	Agents []RoutersApiSolutionsSolutionAgentResponse `json:"agents"`
+
+	// CreatedAt Timestamp when the solution was created.
+	CreatedAt string `json:"created_at"`
+
+	// Description Description of the solution.
+	Description string `json:"description"`
+
+	// Id Unique identifier for the solution.
+	Id openapi_types.UUID `json:"id"`
+
+	// KnowledgeBases Knowledge bases linked to the solution.
+	KnowledgeBases []RoutersApiSolutionsSolutionKnowledgeBaseResponse `json:"knowledge_bases"`
+
+	// Name Name of the solution.
+	Name string `json:"name"`
+
+	// SourceConnections Source connections linked to the solution.
+	SourceConnections []SolutionSourceConnectionResponse `json:"source_connections"`
+
+	// UpdatedAt Timestamp when the solution was last updated.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// RoutersApiSourceExportsCreateExportRequest Parameters for creating a new export job.
+type RoutersApiSourceExportsCreateExportRequest struct {
+	// DateFrom Only include content created on or after this timestamp.
+	DateFrom *time.Time `json:"date_from"`
+
+	// DateTo Only include content created on or before this timestamp.
+	DateTo *time.Time `json:"date_to"`
+
+	// Format Supported export file formats.
+	Format ExportFormat `json:"format"`
+
+	// MetadataFilter JSONB containment filter applied to content metadata.
+	MetadataFilter *map[string]interface{} `json:"metadata_filter"`
+
+	// QueryFilter Title substring filter (case-insensitive ILIKE).
+	QueryFilter *string `json:"query_filter"`
+}
+
+// RoutersApiSourceExportsEstimateExportRequest Parameters for estimating export size.
+type RoutersApiSourceExportsEstimateExportRequest struct {
+	// DateFrom Only include content created on or after this timestamp.
+	DateFrom *time.Time `json:"date_from"`
+
+	// DateTo Only include content created on or before this timestamp.
+	DateTo *time.Time `json:"date_to"`
+
+	// Format Supported export file formats.
+	Format ExportFormat `json:"format"`
+
+	// MetadataFilter JSONB containment filter applied to content metadata.
+	MetadataFilter *map[string]interface{} `json:"metadata_filter"`
+
+	// QueryFilter Title substring filter (case-insensitive ILIKE).
+	QueryFilter *string `json:"query_filter"`
+}
+
+// RoutersApiSourceExportsEstimateExportResponse Rough size estimate for a potential export.
+type RoutersApiSourceExportsEstimateExportResponse struct {
+	// EstimatedSizeBytes Estimated export file size in bytes.
+	EstimatedSizeBytes int `json:"estimated_size_bytes"`
+
+	// SourceConnectionId Source connection ID.
+	SourceConnectionId string `json:"source_connection_id"`
+}
+
+// RoutersApiSourceExportsExportResponse Status and metadata for a content source export job.
+type RoutersApiSourceExportsExportResponse struct {
+	// AccountId Owning account ID.
+	AccountId string `json:"account_id"`
+
+	// CompletedAt Completion time.
+	CompletedAt *string `json:"completed_at"`
+
+	// CreatedAt Creation time.
+	CreatedAt string `json:"created_at"`
+
+	// DateFrom Date-from filter applied to this export.
+	DateFrom *string `json:"date_from"`
+
+	// DateTo Date-to filter applied to this export.
+	DateTo *string `json:"date_to"`
+
+	// Destination Storage destination.
+	Destination string `json:"destination"`
+
+	// Error Error message if failed.
+	Error *string `json:"error"`
+
+	// EstimatedSizeBytes Pre-run size estimate.
+	EstimatedSizeBytes *int `json:"estimated_size_bytes"`
+
+	// ExpiresAt Download expiry time.
+	ExpiresAt *string `json:"expires_at"`
+
+	// FileSizeBytes File size in bytes.
+	FileSizeBytes *int `json:"file_size_bytes"`
+
+	// Format Output format.
+	Format string `json:"format"`
+
+	// Id Export job ID.
+	Id string `json:"id"`
+
+	// ItemCount Items exported.
+	ItemCount *int `json:"item_count"`
+
+	// MetadataFilter Metadata filter applied to this export.
+	MetadataFilter *map[string]interface{} `json:"metadata_filter"`
+
+	// ProgressCurrent Items processed so far.
+	ProgressCurrent *int `json:"progress_current"`
+
+	// ProgressTotal Total items to process.
+	ProgressTotal *int `json:"progress_total"`
+
+	// QueryFilter Query filter applied to this export.
+	QueryFilter *string `json:"query_filter"`
+
+	// RequestedByUserId ID of the user who requested this export.
+	RequestedByUserId *string `json:"requested_by_user_id"`
+
+	// RequestedByUserName Name of the user who requested this export.
+	RequestedByUserName *string `json:"requested_by_user_name"`
+
+	// SourceConnectionId Source connection ID.
+	SourceConnectionId string `json:"source_connection_id"`
+
+	// StartedAt Processing start time.
+	StartedAt *string `json:"started_at"`
+
+	// Status Job status.
+	Status string `json:"status"`
+
+	// StorageKey S3 key of exported file.
+	StorageKey *string `json:"storage_key"`
+
+	// UpdatedAt Last update time.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// RoutersApiSourcesFileUploadResponse Response model for file upload
+type RoutersApiSourcesFileUploadResponse struct {
+	// ContentVersionId ID of the created content version
+	ContentVersionId *string `json:"content_version_id"`
+
+	// Filename Original filename
+	Filename string `json:"filename"`
+
+	// SourceConnectionContentVersionId ID of the duplicate source connection content version
+	SourceConnectionContentVersionId *string `json:"source_connection_content_version_id"`
+
+	// Status Processing status
+	Status string `json:"status"`
+}
+
 // RoutersApiSourcesSourceListResponse Response model for paginated source list
 type RoutersApiSourcesSourceListResponse struct {
 	Data []SourceResponse `json:"data"`
@@ -370,10 +2177,101 @@ type RoutersApiSourcesSourceListResponse struct {
 	Pagination PaginationResponse `json:"pagination"`
 }
 
+// SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse Per-mode rollup for evaluation activity.
+type SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse struct {
+	Failed      int     `json:"failed"`
+	FailureRate float32 `json:"failure_rate"`
+	Flagged     int     `json:"flagged"`
+	Mode        string  `json:"mode"`
+	PassRate    float32 `json:"pass_rate"`
+	Passed      int     `json:"passed"`
+	Total       int     `json:"total"`
+}
+
+// SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse Account-level summary for evaluations.
+type SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse struct {
+	ByMode      []SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse `json:"by_mode"`
+	Failed      int                                                            `json:"failed"`
+	FailureRate float32                                                        `json:"failure_rate"`
+	Flagged     int                                                            `json:"flagged"`
+	PassRate    float32                                                        `json:"pass_rate"`
+	Passed      int                                                            `json:"passed"`
+	Total       int                                                            `json:"total"`
+}
+
+// ListAgentsApiAgentsGetParams defines parameters for ListAgentsApiAgentsGet.
+type ListAgentsApiAgentsGetParams struct {
+	// Page Page number
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams defines parameters for ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet.
+type ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams struct {
+	Page         *int       `form:"page,omitempty" json:"page,omitempty"`
+	Limit        *int       `form:"limit,omitempty" json:"limit,omitempty"`
+	StartedAfter *time.Time `form:"started_after,omitempty" json:"started_after,omitempty"`
+}
+
+// ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams defines parameters for ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet.
+type ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams struct {
+	Status      *string `form:"status,omitempty" json:"status,omitempty"`
+	FlaggedOnly *bool   `form:"flagged_only,omitempty" json:"flagged_only,omitempty"`
+	TimeFrom    *string `form:"time_from,omitempty" json:"time_from,omitempty"`
+	TimeTo      *string `form:"time_to,omitempty" json:"time_to,omitempty"`
+	Page        *int    `form:"page,omitempty" json:"page,omitempty"`
+	Limit       *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams defines parameters for GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet.
+type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams struct {
+	Days      *int    `form:"days,omitempty" json:"days,omitempty"`
+	StartDate *string `form:"start_date,omitempty" json:"start_date,omitempty"`
+	EndDate   *string `form:"end_date,omitempty" json:"end_date,omitempty"`
+}
+
 // GetAgentRunApiAgentsRunsRunIdGetParams defines parameters for GetAgentRunApiAgentsRunsRunIdGet.
 type GetAgentRunApiAgentsRunsRunIdGetParams struct {
 	// IncludeStepOutputs If true, include per-step outputs with timing, durations, and credits.
 	IncludeStepOutputs *bool `form:"include_step_outputs,omitempty" json:"include_step_outputs,omitempty"`
+}
+
+// GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams defines parameters for GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet.
+type GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams struct {
+	// StepType Step type to look up.
+	StepType string `form:"step_type" json:"step_type"`
+
+	// StepId Step ID to filter by.
+	StepId *string `form:"step_id,omitempty" json:"step_id,omitempty"`
+
+	// Limit Max turns to return.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Number of recent turns to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams defines parameters for ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet.
+type ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams struct {
+	Status      *string `form:"status,omitempty" json:"status,omitempty"`
+	Step        *string `form:"step,omitempty" json:"step,omitempty"`
+	FlaggedOnly *bool   `form:"flagged_only,omitempty" json:"flagged_only,omitempty"`
+	TimeFrom    *string `form:"time_from,omitempty" json:"time_from,omitempty"`
+	TimeTo      *string `form:"time_to,omitempty" json:"time_to,omitempty"`
+	Page        *int    `form:"page,omitempty" json:"page,omitempty"`
+	Limit       *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams defines parameters for ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet.
+type ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams struct {
+	Status   *string `form:"status,omitempty" json:"status,omitempty"`
+	Step     *string `form:"step,omitempty" json:"step,omitempty"`
+	TimeFrom *string `form:"time_from,omitempty" json:"time_from,omitempty"`
+	TimeTo   *string `form:"time_to,omitempty" json:"time_to,omitempty"`
+	Page     *int    `form:"page,omitempty" json:"page,omitempty"`
+	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListAgentRunsApiAgentsAgentIdRunsGetParams defines parameters for ListAgentRunsApiAgentsAgentIdRunsGet.
@@ -383,6 +2281,63 @@ type ListAgentRunsApiAgentsAgentIdRunsGetParams struct {
 
 	// Limit Items per page
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Status Filter runs by status
+	Status *PendingProcessingCompletedFailedStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams defines parameters for ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet.
+type ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams struct {
+	// Limit Max turns.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Skip count.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListAlertsApiAlertsGetParams defines parameters for ListAlertsApiAlertsGet.
+type ListAlertsApiAlertsGetParams struct {
+	// Page Page number
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Status Filter by alert status
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+
+	// AgentId Filter by agent ID
+	AgentId *string `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+
+	// SourceConnectionId Filter by source connection ID
+	SourceConnectionId *string `form:"source_connection_id,omitempty" json:"source_connection_id,omitempty"`
+
+	// TimeFrom From (ISO 8601)
+	TimeFrom *time.Time `form:"time_from,omitempty" json:"time_from,omitempty"`
+
+	// TimeTo To (ISO 8601)
+	TimeTo *time.Time `form:"time_to,omitempty" json:"time_to,omitempty"`
+}
+
+// ListAlertConfigsApiAlertsConfigsGetParams defines parameters for ListAlertConfigsApiAlertsConfigsGet.
+type ListAlertConfigsApiAlertsConfigsGetParams struct {
+	// AgentId Filter by agent ID
+	AgentId *string `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+
+	// SourceConnectionId Filter by source connection ID
+	SourceConnectionId *string `form:"source_connection_id,omitempty" json:"source_connection_id,omitempty"`
+
+	// Scope Set to 'source' to list account-level source alert configs
+	Scope *string `form:"scope,omitempty" json:"scope,omitempty"`
+}
+
+// ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams defines parameters for ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet.
+type ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams struct {
+	// OrganizationId Optional organization filter
+	OrganizationId *openapi_types.UUID `form:"organization_id,omitempty" json:"organization_id,omitempty"`
+
+	// IncludeDefaults Include default subscribed entries for all alert types
+	IncludeDefaults *bool `form:"include_defaults,omitempty" json:"include_defaults,omitempty"`
 }
 
 // GetContentDetailApiContentsSourceConnectionContentVersionGetParams defines parameters for GetContentDetailApiContentsSourceConnectionContentVersionGet.
@@ -395,6 +2350,124 @@ type GetContentDetailApiContentsSourceConnectionContentVersionGetParams struct {
 type ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams struct {
 	Page  *int `form:"page,omitempty" json:"page,omitempty"`
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams defines parameters for ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet.
+type ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams struct {
+	// Limit Number of conversations.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListKnowledgeBasesApiKnowledgeBasesGetParams defines parameters for ListKnowledgeBasesApiKnowledgeBasesGet.
+type ListKnowledgeBasesApiKnowledgeBasesGetParams struct {
+	// Page Page number (1-based).
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Sort Sort field. One of: created_at, updated_at, name.
+	Sort *string `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Order Sort direction: asc or desc.
+	Order *string `form:"order,omitempty" json:"order,omitempty"`
+}
+
+// ListMemoryBanksApiMemoryBanksGetParams defines parameters for ListMemoryBanksApiMemoryBanksGet.
+type ListMemoryBanksApiMemoryBanksGetParams struct {
+	// Page Page number (1-based).
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Sort Sort field. One of: created_at, updated_at, name.
+	Sort *string `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Order Sort direction: asc or desc.
+	Order *string `form:"order,omitempty" json:"order,omitempty"`
+
+	// Type Filter by bank type: conversation or general.
+	Type *string `form:"type,omitempty" json:"type,omitempty"`
+}
+
+// MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams defines parameters for MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet.
+type MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams struct {
+	// Limit Max turns to return.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Number of most-recent turns to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams defines parameters for GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet.
+type GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams struct {
+	Days      *int                `form:"days,omitempty" json:"days,omitempty"`
+	StartDate *openapi_types.Date `form:"start_date,omitempty" json:"start_date,omitempty"`
+	EndDate   *openapi_types.Date `form:"end_date,omitempty" json:"end_date,omitempty"`
+}
+
+// ListAlertsApiModelsAlertsGetParams defines parameters for ListAlertsApiModelsAlertsGet.
+type ListAlertsApiModelsAlertsGetParams struct {
+	// AgentId Filter alerts to a specific agent UUID.
+	AgentId *string `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+
+	// UnreadOnly When true, only return unread alerts.
+	UnreadOnly *bool `form:"unread_only,omitempty" json:"unread_only,omitempty"`
+
+	// Limit Maximum number of alerts to return (1-100).
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Pagination offset.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// GetRecommendationsApiModelsModelIdRecommendationsGetParams defines parameters for GetRecommendationsApiModelsModelIdRecommendationsGet.
+type GetRecommendationsApiModelsModelIdRecommendationsGetParams struct {
+	// RequireToolUse Only recommend models that support tool use.
+	RequireToolUse *bool `form:"require_tool_use,omitempty" json:"require_tool_use,omitempty"`
+
+	// RequireStructuredOutput Only recommend models that support structured output.
+	RequireStructuredOutput *bool `form:"require_structured_output,omitempty" json:"require_structured_output,omitempty"`
+
+	// RequireThinking Only recommend models that support thinking/reasoning.
+	RequireThinking *bool `form:"require_thinking,omitempty" json:"require_thinking,omitempty"`
+
+	// MinContextTokens Minimum context window size in tokens.
+	MinContextTokens *int `form:"min_context_tokens,omitempty" json:"min_context_tokens,omitempty"`
+
+	// MinOutputTokens Minimum output token limit.
+	MinOutputTokens *int `form:"min_output_tokens,omitempty" json:"min_output_tokens,omitempty"`
+}
+
+// SearchApiSearchGetParams defines parameters for SearchApiSearchGet.
+type SearchApiSearchGetParams struct {
+	// Q Search query
+	Q string `form:"q" json:"q"`
+
+	// Limit Maximum results
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// EntityType Optional entity type filter (e.g. 'agent', 'knowledge_base')
+	EntityType *string `form:"entity_type,omitempty" json:"entity_type,omitempty"`
+}
+
+// ListSolutionsApiSolutionsGetParams defines parameters for ListSolutionsApiSolutionsGet.
+type ListSolutionsApiSolutionsGetParams struct {
+	// Page Page number
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Sort Sort field
+	Sort *string `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Order Sort order
+	Order *string `form:"order,omitempty" json:"order,omitempty"`
+
+	// Search Filter by solution name (case-insensitive partial match)
+	Search *string `form:"search,omitempty" json:"search,omitempty"`
 }
 
 // ListSourcesApiSourcesGetParams defines parameters for ListSourcesApiSourcesGet.
@@ -415,11 +2488,179 @@ type ListSourcesApiSourcesGetParams struct {
 	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
 }
 
+// ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams defines parameters for ListSourceExportsApiSourcesSourceConnectionIdExportsGet.
+type ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// CreateAgentApiAgentsPostJSONRequestBody defines body for CreateAgentApiAgentsPost for application/json ContentType.
+type CreateAgentApiAgentsPostJSONRequestBody = RoutersApiAgentsCreateAgentRequest
+
+// UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody defines body for UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch for application/json ContentType.
+type UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody = UpdateEvaluationCriteriaRequest
+
+// CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody defines body for CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost for application/json ContentType.
+type CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody = CreateEvaluationResultRequest
+
+// SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody defines body for SearchAgentRunsApiAgentsRunsSearchPost for application/json ContentType.
+type SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody = RoutersApiAgentsAgentTraceSearchRequest
+
+// UpdateAgentApiAgentsAgentIdPutJSONRequestBody defines body for UpdateAgentApiAgentsAgentIdPut for application/json ContentType.
+type UpdateAgentApiAgentsAgentIdPutJSONRequestBody = RoutersApiAgentsUpdateAgentRequest
+
+// GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody defines body for GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost for application/json ContentType.
+type GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody = GenerateAgentStepsRequest
+
+// GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody defines body for GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost for application/json ContentType.
+type GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody = GenerateStepConfigRequest
+
+// MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody defines body for MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch for application/json ContentType.
+type MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody = MarkAiSuggestionRequest
+
+// UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody defines body for UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut for application/json ContentType.
+type UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody = UpdateAgentDefinitionRequest
+
+// CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody defines body for CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost for application/json ContentType.
+type CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody = CreateEvaluationCriteriaRequest
+
+// TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody defines body for TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost for application/json ContentType.
+type TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody = TestDraftEvaluationRequest
+
 // RunAgentApiAgentsAgentIdRunsPostJSONRequestBody defines body for RunAgentApiAgentsAgentIdRunsPost for application/json ContentType.
 type RunAgentApiAgentsAgentIdRunsPostJSONRequestBody = AgentRunRequest
 
 // RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody defines body for RunStreamingAgentApiAgentsAgentIdRunsStreamPost for application/json ContentType.
 type RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody = AgentRunStreamRequest
+
+// ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody defines body for ApiAiFeedbackApiAiAssistantFeedbackPost for application/json ContentType.
+type ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody = RoutersApiAiAssistantAiAssistantFeedbackRequest
+
+// ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody defines body for ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost for application/json ContentType.
+type ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody = AiAssistantGenerateRequest
+
+// ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody defines body for ApiAiMemoryBankApiAiAssistantMemoryBankPost for application/json ContentType.
+type ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody = RoutersApiMemoryBanksMemoryBankAiAssistantRequest
+
+// ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody defines body for ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch for application/json ContentType.
+type ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody = RoutersApiMemoryBanksMemoryBankAcceptRequest
+
+// ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody defines body for ApiAiSolutionApiAiAssistantSolutionPost for application/json ContentType.
+type ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody = AiAssistantGenerateRequest
+
+// ApiAiSourceApiAiAssistantSourcePostJSONRequestBody defines body for ApiAiSourceApiAiAssistantSourcePost for application/json ContentType.
+type ApiAiSourceApiAiAssistantSourcePostJSONRequestBody = AiAssistantGenerateRequest
+
+// ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody defines body for ApiAiAcceptApiAiAssistantConversationIdAcceptPost for application/json ContentType.
+type ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody = RoutersApiSolutionsAiAssistantAcceptRequest
+
+// CreateAlertConfigApiAlertsConfigsPostJSONRequestBody defines body for CreateAlertConfigApiAlertsConfigsPost for application/json ContentType.
+type CreateAlertConfigApiAlertsConfigsPostJSONRequestBody = CreateAlertConfigRequest
+
+// UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody defines body for UpdateAlertConfigApiAlertsConfigsConfigIdPatch for application/json ContentType.
+type UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody = UpdateAlertConfigRequest
+
+// UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody defines body for UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch for application/json ContentType.
+type UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody = RoutersApiAlertsUpdateOrganizationAlertPreferenceRequest
+
+// AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody defines body for AddAlertCommentApiAlertsAlertIdCommentsPost for application/json ContentType.
+type AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody = RoutersApiAlertsAddCommentRequest
+
+// ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody defines body for ChangeAlertStatusApiAlertsAlertIdStatusPost for application/json ContentType.
+type ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody = ChangeStatusRequest
+
+// ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody defines body for ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut for application/json ContentType.
+type ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody = InlineTextReplaceRequest
+
+// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostMultipartRequestBody defines body for UploadFileToContentApiContentsSourceConnectionContentVersionUploadPost for multipart/form-data ContentType.
+type UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostMultipartRequestBody = BodyUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost
+
+// GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody defines body for GovernanceAiGenerateApiGovernanceAiAssistantPost for application/json ContentType.
+type GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody = RoutersApiGovernanceGovernanceAiAssistantRequest
+
+// CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody defines body for CreateKnowledgeBaseApiKnowledgeBasesPost for application/json ContentType.
+type CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody = CreateKnowledgeBaseBody
+
+// UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody defines body for UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut for application/json ContentType.
+type UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody = UpdateKnowledgeBaseBody
+
+// CreateMemoryBankApiMemoryBanksPostJSONRequestBody defines body for CreateMemoryBankApiMemoryBanksPost for application/json ContentType.
+type CreateMemoryBankApiMemoryBanksPostJSONRequestBody = CreateMemoryBankBody
+
+// MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody defines body for MemoryBankAiGenerateApiMemoryBanksAiAssistantPost for application/json ContentType.
+type MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody = RoutersApiMemoryBanksMemoryBankAiAssistantRequest
+
+// MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody defines body for MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch for application/json ContentType.
+type MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody = RoutersApiMemoryBanksMemoryBankAcceptRequest
+
+// TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody defines body for TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost for application/json ContentType.
+type TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody = StandaloneTestCompactionRequest
+
+// UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody defines body for UpdateMemoryBankApiMemoryBanksMemoryBankIdPut for application/json ContentType.
+type UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody = UpdateMemoryBankBody
+
+// TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody defines body for TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost for application/json ContentType.
+type TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody = TestCompactionRequest
+
+// CreateSolutionApiSolutionsPostJSONRequestBody defines body for CreateSolutionApiSolutionsPost for application/json ContentType.
+type CreateSolutionApiSolutionsPostJSONRequestBody = CreateSolutionRequest
+
+// UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody defines body for UpdateSolutionApiSolutionsSolutionIdPatch for application/json ContentType.
+type UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody = UpdateSolutionRequest
+
+// UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody defines body for UnlinkAgentsApiSolutionsSolutionIdAgentsDelete for application/json ContentType.
+type UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody = UnlinkResourcesRequest
+
+// LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody defines body for LinkAgentsApiSolutionsSolutionIdAgentsPost for application/json ContentType.
+type LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody = LinkResourcesRequest
+
+// AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody defines body for AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost for application/json ContentType.
+type AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody = AiAssistantGenerateRequest
+
+// AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody defines body for AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost for application/json ContentType.
+type AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody = AiAssistantGenerateRequest
+
+// AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody defines body for AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost for application/json ContentType.
+type AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody = AiAssistantGenerateRequest
+
+// AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody defines body for AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost for application/json ContentType.
+type AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody = RoutersApiSolutionsAiAssistantAcceptRequest
+
+// AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody defines body for AddConversationTurnApiSolutionsSolutionIdConversationsPost for application/json ContentType.
+type AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody = AddConversationTurnRequest
+
+// MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody defines body for MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch for application/json ContentType.
+type MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody = MarkConversationTurnRequest
+
+// UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody defines body for UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete for application/json ContentType.
+type UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody = UnlinkResourcesRequest
+
+// LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody defines body for LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost for application/json ContentType.
+type LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody = LinkResourcesRequest
+
+// UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody defines body for UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete for application/json ContentType.
+type UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody = UnlinkResourcesRequest
+
+// LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody defines body for LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost for application/json ContentType.
+type LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody = LinkResourcesRequest
+
+// CreateSourceApiSourcesPostJSONRequestBody defines body for CreateSourceApiSourcesPost for application/json ContentType.
+type CreateSourceApiSourcesPostJSONRequestBody = CreateSourceBody
+
+// UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody defines body for UploadInlineTextToSourceApiSourcesSourceConnectionIdPost for application/json ContentType.
+type UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody = InlineTextUploadRequest
+
+// UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody defines body for UpdateSourceApiSourcesSourceConnectionIdPut for application/json ContentType.
+type UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody = UpdateSourceBody
+
+// StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody defines body for StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost for application/json ContentType.
+type StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody = StartSourceEmbeddingMigrationRequest
+
+// CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody defines body for CreateSourceExportApiSourcesSourceConnectionIdExportsPost for application/json ContentType.
+type CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody = RoutersApiSourceExportsCreateExportRequest
+
+// EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody defines body for EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost for application/json ContentType.
+type EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody = RoutersApiSourceExportsEstimateExportRequest
 
 // UploadFileToSourceApiSourcesSourceConnectionIdUploadPostMultipartRequestBody defines body for UploadFileToSourceApiSourcesSourceConnectionIdUploadPost for multipart/form-data ContentType.
 type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostMultipartRequestBody = BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost
@@ -559,11 +2800,111 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// ListAgentsApiAgentsGet request
+	ListAgentsApiAgentsGet(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateAgentApiAgentsPostWithBody request with any body
+	CreateAgentApiAgentsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateAgentApiAgentsPost(ctx context.Context, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete request
+	DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet request
+	GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody request with any body
+	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx context.Context, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet request
+	ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet(ctx context.Context, criteriaId string, params *ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet request
+	ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet(ctx context.Context, criteriaId string, params *ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody request with any body
+	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx context.Context, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet request
+	GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet request
+	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchAgentRunsApiAgentsRunsSearchPostWithBody request with any body
+	SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SearchAgentRunsApiAgentsRunsSearchPost(ctx context.Context, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteAgentRunApiAgentsRunsRunIdDelete request
 	DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgentRunApiAgentsRunsRunIdGet request
 	GetAgentRunApiAgentsRunsRunIdGet(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteAgentApiAgentsAgentIdDelete request
+	DeleteAgentApiAgentsAgentIdDelete(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentMetadataApiAgentsAgentIdGet request
+	GetAgentMetadataApiAgentsAgentIdGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgentApiAgentsAgentIdPutWithBody request with any body
+	UpdateAgentApiAgentsAgentIdPutWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateAgentApiAgentsAgentIdPut(ctx context.Context, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet request
+	GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet(ctx context.Context, agentId string, params *GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody request with any body
+	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx context.Context, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody request with any body
+	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx context.Context, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody request with any body
+	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx context.Context, agentId string, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx context.Context, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentDefinitionApiAgentsAgentIdDefinitionGet request
+	GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody request with any body
+	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.Context, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet request
+	ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody request with any body
+	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx context.Context, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody request with any body
+	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx context.Context, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet request
+	ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet(ctx context.Context, agentId string, params *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet request
+	ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet request
+	ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx context.Context, agentId string, uploadId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgentRunsApiAgentsAgentIdRunsGet request
 	ListAgentRunsApiAgentsAgentIdRunsGet(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -578,20 +2919,554 @@ type ClientInterface interface {
 
 	RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet request
+	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPost request
+	ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiFeedbackApiAiAssistantFeedbackPostWithBody request with any body
+	ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApiAiFeedbackApiAiAssistantFeedbackPost(ctx context.Context, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody request with any body
+	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx context.Context, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody request with any body
+	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx context.Context, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet request
+	ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet(ctx context.Context, params *ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody request with any body
+	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiSolutionApiAiAssistantSolutionPostWithBody request with any body
+	ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApiAiSolutionApiAiAssistantSolutionPost(ctx context.Context, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiSourceApiAiAssistantSourcePostWithBody request with any body
+	ApiAiSourceApiAiAssistantSourcePostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApiAiSourceApiAiAssistantSourcePost(ctx context.Context, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody request with any body
+	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiAiDeclineApiAiAssistantConversationIdDeclinePost request
+	ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAlertsApiAlertsGet request
+	ListAlertsApiAlertsGet(ctx context.Context, params *ListAlertsApiAlertsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAlertConfigsApiAlertsConfigsGet request
+	ListAlertConfigsApiAlertsConfigsGet(ctx context.Context, params *ListAlertConfigsApiAlertsConfigsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateAlertConfigApiAlertsConfigsPostWithBody request with any body
+	CreateAlertConfigApiAlertsConfigsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateAlertConfigApiAlertsConfigsPost(ctx context.Context, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteAlertConfigApiAlertsConfigsConfigIdDelete request
+	DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAlertConfigApiAlertsConfigsConfigIdGet request
+	GetAlertConfigApiAlertsConfigsConfigIdGet(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody request with any body
+	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx context.Context, configId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx context.Context, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet request
+	ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet(ctx context.Context, params *ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody request with any body
+	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx context.Context, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx context.Context, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAlertDetailApiAlertsAlertIdGet request
+	GetAlertDetailApiAlertsAlertIdGet(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddAlertCommentApiAlertsAlertIdCommentsPostWithBody request with any body
+	AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AddAlertCommentApiAlertsAlertIdCommentsPost(ctx context.Context, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody request with any body
+	ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx context.Context, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SubscribeToAlertApiAlertsAlertIdSubscribePost request
+	SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost request
+	UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteContentApiContentsSourceConnectionContentVersionDelete request
 	DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetContentDetailApiContentsSourceConnectionContentVersionGet request
 	GetContentDetailApiContentsSourceConnectionContentVersionGet(ctx context.Context, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody request with any body
+	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx context.Context, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet request
 	ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody request with any body
+	UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody request with any body
+	GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx context.Context, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet request
+	ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet(ctx context.Context, params *ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost request
+	GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost request
+	GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListKnowledgeBasesApiKnowledgeBasesGet request
+	ListKnowledgeBasesApiKnowledgeBasesGet(ctx context.Context, params *ListKnowledgeBasesApiKnowledgeBasesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateKnowledgeBaseApiKnowledgeBasesPostWithBody request with any body
+	CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateKnowledgeBaseApiKnowledgeBasesPost(ctx context.Context, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete request
+	DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet request
+	GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody request with any body
+	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx context.Context, knowledgeBaseId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMemoryBanksApiMemoryBanksGet request
+	ListMemoryBanksApiMemoryBanksGet(ctx context.Context, params *ListMemoryBanksApiMemoryBanksGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateMemoryBankApiMemoryBanksPostWithBody request with any body
+	CreateMemoryBankApiMemoryBanksPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateMemoryBankApiMemoryBanksPost(ctx context.Context, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody request with any body
+	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx context.Context, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet request
+	MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet(ctx context.Context, params *MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody request with any body
+	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListTemplatesApiMemoryBanksTemplatesGet request
+	ListTemplatesApiMemoryBanksTemplatesGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody request with any body
+	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx context.Context, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete request
+	DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMemoryBankApiMemoryBanksMemoryBankIdGet request
+	GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody request with any body
+	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx context.Context, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet request
+	GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost request
+	CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete request
+	DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet request
+	GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet(ctx context.Context, memoryBankId string, params *GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody request with any body
+	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx context.Context, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAlertsApiModelsAlertsGet request
+	ListAlertsApiModelsAlertsGet(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MarkAllReadApiModelsAlertsMarkAllReadPost request
+	MarkAllReadApiModelsAlertsMarkAllReadPost(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAlertUnreadCountApiModelsAlertsUnreadCountGet request
+	GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MarkReadApiModelsAlertsAlertIdReadPatch request
+	MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRecommendationsApiModelsModelIdRecommendationsGet request
+	GetRecommendationsApiModelsModelIdRecommendationsGet(ctx context.Context, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SearchApiSearchGet request
+	SearchApiSearchGet(ctx context.Context, params *SearchApiSearchGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSolutionsApiSolutionsGet request
+	ListSolutionsApiSolutionsGet(ctx context.Context, params *ListSolutionsApiSolutionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSolutionApiSolutionsPostWithBody request with any body
+	CreateSolutionApiSolutionsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateSolutionApiSolutionsPost(ctx context.Context, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteSolutionApiSolutionsSolutionIdDelete request
+	DeleteSolutionApiSolutionsSolutionIdDelete(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSolutionApiSolutionsSolutionIdGet request
+	GetSolutionApiSolutionsSolutionIdGet(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateSolutionApiSolutionsSolutionIdPatchWithBody request with any body
+	UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateSolutionApiSolutionsSolutionIdPatch(ctx context.Context, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody request with any body
+	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody request with any body
+	LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx context.Context, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody request with any body
+	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody request with any body
+	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody request with any body
+	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody request with any body
+	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost request
+	AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListConversationsApiSolutionsSolutionIdConversationsGet request
+	ListConversationsApiSolutionsSolutionIdConversationsGet(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody request with any body
+	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx context.Context, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody request with any body
+	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody request with any body
+	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody request with any body
+	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx context.Context, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody request with any body
+	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody request with any body
+	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx context.Context, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSourceApiSourcesPostWithBody request with any body
+	CreateSourceApiSourcesPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateSourceApiSourcesPost(ctx context.Context, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSourcesApiSourcesGet request
 	ListSourcesApiSourcesGet(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteSourceApiSourcesSourceConnectionIdDelete request
+	DeleteSourceApiSourcesSourceConnectionIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSourceApiSourcesSourceConnectionIdGet request
+	GetSourceApiSourcesSourceConnectionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody request with any body
+	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateSourceApiSourcesSourceConnectionIdPutWithBody request with any body
+	UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet request
+	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody request with any body
+	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost request
+	CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSourceExportsApiSourcesSourceConnectionIdExportsGet request
+	ListSourceExportsApiSourcesSourceConnectionIdExportsGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody request with any body
+	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody request with any body
+	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx context.Context, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete request
+	DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet request
+	GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost request
+	CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet request
+	DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody request with any body
 	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) ListAgentsApiAgentsGet(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentsApiAgentsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateAgentApiAgentsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentApiAgentsPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateAgentApiAgentsPost(ctx context.Context, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentApiAgentsPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest(c.Server, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest(c.Server, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(c.Server, criteriaId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx context.Context, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequest(c.Server, criteriaId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet(ctx context.Context, criteriaId string, params *ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetRequest(c.Server, criteriaId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet(ctx context.Context, criteriaId string, params *ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetRequest(c.Server, criteriaId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(c.Server, criteriaId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx context.Context, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequest(c.Server, criteriaId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRequest(c.Server, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchAgentRunsApiAgentsRunsSearchPost(ctx context.Context, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchAgentRunsApiAgentsRunsSearchPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -608,6 +3483,270 @@ func (c *Client) DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, run
 
 func (c *Client) GetAgentRunApiAgentsRunsRunIdGet(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAgentRunApiAgentsRunsRunIdGetRequest(c.Server, runId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteAgentApiAgentsAgentIdDelete(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAgentApiAgentsAgentIdDeleteRequest(c.Server, agentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAgentMetadataApiAgentsAgentIdGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentMetadataApiAgentsAgentIdGetRequest(c.Server, agentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentApiAgentsAgentIdPutWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(c.Server, agentId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentApiAgentsAgentIdPut(ctx context.Context, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentApiAgentsAgentIdPutRequest(c.Server, agentId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet(ctx context.Context, agentId string, params *GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetRequest(c.Server, agentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(c.Server, agentId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx context.Context, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequest(c.Server, agentId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(c.Server, agentId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx context.Context, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequest(c.Server, agentId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx context.Context, agentId string, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(c.Server, agentId, conversationId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx context.Context, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest(c.Server, agentId, conversationId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(c.Server, agentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(c.Server, agentId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.Context, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest(c.Server, agentId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(c.Server, agentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(c.Server, agentId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx context.Context, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequest(c.Server, agentId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(c.Server, agentId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx context.Context, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequest(c.Server, agentId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet(ctx context.Context, agentId string, params *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetRequest(c.Server, agentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetRequest(c.Server, agentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx context.Context, agentId string, uploadId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest(c.Server, agentId, uploadId)
 	if err != nil {
 		return nil, err
 	}
@@ -678,6 +3817,438 @@ func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Con
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest(c.Server, agentId, runId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest(c.Server, agentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiFeedbackApiAiAssistantFeedbackPost(ctx context.Context, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiFeedbackApiAiAssistantFeedbackPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx context.Context, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx context.Context, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet(ctx context.Context, params *ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(c.Server, conversationId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequest(c.Server, conversationId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiSolutionApiAiAssistantSolutionPost(ctx context.Context, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiSolutionApiAiAssistantSolutionPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiSourceApiAiAssistantSourcePostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiSourceApiAiAssistantSourcePost(ctx context.Context, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiSourceApiAiAssistantSourcePostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(c.Server, conversationId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequest(c.Server, conversationId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest(c.Server, conversationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAlertsApiAlertsGet(ctx context.Context, params *ListAlertsApiAlertsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAlertsApiAlertsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAlertConfigsApiAlertsConfigsGet(ctx context.Context, params *ListAlertConfigsApiAlertsConfigsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAlertConfigsApiAlertsConfigsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateAlertConfigApiAlertsConfigsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateAlertConfigApiAlertsConfigsPost(ctx context.Context, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAlertConfigApiAlertsConfigsPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest(c.Server, configId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAlertConfigApiAlertsConfigsConfigIdGet(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest(c.Server, configId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx context.Context, configId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(c.Server, configId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx context.Context, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequest(c.Server, configId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet(ctx context.Context, params *ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx context.Context, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(c.Server, organizationId, alertType, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx context.Context, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequest(c.Server, organizationId, alertType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAlertDetailApiAlertsAlertIdGet(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAlertDetailApiAlertsAlertIdGetRequest(c.Server, alertId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(c.Server, alertId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddAlertCommentApiAlertsAlertIdCommentsPost(ctx context.Context, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddAlertCommentApiAlertsAlertIdCommentsPostRequest(c.Server, alertId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(c.Server, alertId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx context.Context, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewChangeAlertStatusApiAlertsAlertIdStatusPostRequest(c.Server, alertId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest(c.Server, alertId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(c.Server, alertId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(c.Server, sourceConnectionContentVersion)
 	if err != nil {
@@ -702,8 +4273,932 @@ func (c *Client) GetContentDetailApiContentsSourceConnectionContentVersionGet(ct
 	return c.Client.Do(req)
 }
 
+func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(c.Server, sourceConnectionContentVersion, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx context.Context, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest(c.Server, sourceConnectionContentVersion, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetRequest(c.Server, sourceConnectionContentVersion, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRequestWithBody(c.Server, sourceConnectionContentVersion, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx context.Context, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet(ctx context.Context, params *ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostRequest(c.Server, conversationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequest(c.Server, conversationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListKnowledgeBasesApiKnowledgeBasesGet(ctx context.Context, params *ListKnowledgeBasesApiKnowledgeBasesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListKnowledgeBasesApiKnowledgeBasesGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateKnowledgeBaseApiKnowledgeBasesPost(ctx context.Context, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateKnowledgeBaseApiKnowledgeBasesPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest(c.Server, knowledgeBaseId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest(c.Server, knowledgeBaseId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx context.Context, knowledgeBaseId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(c.Server, knowledgeBaseId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest(c.Server, knowledgeBaseId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListMemoryBanksApiMemoryBanksGet(ctx context.Context, params *ListMemoryBanksApiMemoryBanksGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMemoryBanksApiMemoryBanksGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMemoryBankApiMemoryBanksPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMemoryBankApiMemoryBanksPost(ctx context.Context, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMemoryBankApiMemoryBanksPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx context.Context, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet(ctx context.Context, params *MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(c.Server, conversationId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequest(c.Server, conversationId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListTemplatesApiMemoryBanksTemplatesGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTemplatesApiMemoryBanksTemplatesGetRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx context.Context, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest(c.Server, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest(c.Server, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(c.Server, memoryBankId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx context.Context, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequest(c.Server, memoryBankId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest(c.Server, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest(c.Server, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest(c.Server, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet(ctx context.Context, memoryBankId string, params *GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetRequest(c.Server, memoryBankId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(c.Server, memoryBankId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx context.Context, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequest(c.Server, memoryBankId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAlertsApiModelsAlertsGet(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAlertsApiModelsAlertsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MarkAllReadApiModelsAlertsMarkAllReadPost(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(c.Server, alertId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRecommendationsApiModelsModelIdRecommendationsGet(ctx context.Context, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRecommendationsApiModelsModelIdRecommendationsGetRequest(c.Server, modelId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SearchApiSearchGet(ctx context.Context, params *SearchApiSearchGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchApiSearchGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListSolutionsApiSolutionsGet(ctx context.Context, params *ListSolutionsApiSolutionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSolutionsApiSolutionsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSolutionApiSolutionsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSolutionApiSolutionsPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSolutionApiSolutionsPost(ctx context.Context, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSolutionApiSolutionsPostRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteSolutionApiSolutionsSolutionIdDelete(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest(c.Server, solutionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSolutionApiSolutionsSolutionIdGet(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSolutionApiSolutionsSolutionIdGetRequest(c.Server, solutionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateSolutionApiSolutionsSolutionIdPatch(ctx context.Context, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSolutionApiSolutionsSolutionIdPatchRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx context.Context, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(c.Server, solutionId, conversationId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequest(c.Server, solutionId, conversationId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostRequest(c.Server, solutionId, conversationId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListConversationsApiSolutionsSolutionIdConversationsGet(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListConversationsApiSolutionsSolutionIdConversationsGetRequest(c.Server, solutionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx context.Context, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(c.Server, solutionId, conversationId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequest(c.Server, solutionId, conversationId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx context.Context, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(c.Server, solutionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx context.Context, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequest(c.Server, solutionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSourceApiSourcesPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSourceApiSourcesPostRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSourceApiSourcesPost(ctx context.Context, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSourceApiSourcesPostRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -726,6 +5221,234 @@ func (c *Client) ListSourcesApiSourcesGet(ctx context.Context, params *ListSourc
 	return c.Client.Do(req)
 }
 
+func (c *Client) DeleteSourceApiSourcesSourceConnectionIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest(c.Server, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSourceApiSourcesSourceConnectionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSourceApiSourcesSourceConnectionIdGetRequest(c.Server, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequest(c.Server, sourceConnectionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSourceApiSourcesSourceConnectionIdPutRequest(c.Server, sourceConnectionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest(c.Server, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest(c.Server, sourceConnectionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostRequest(c.Server, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListSourceExportsApiSourcesSourceConnectionIdExportsGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSourceExportsApiSourcesSourceConnectionIdExportsGetRequest(c.Server, sourceConnectionId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequest(c.Server, sourceConnectionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx context.Context, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequest(c.Server, sourceConnectionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRequest(c.Server, sourceConnectionId, exportId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest(c.Server, sourceConnectionId, exportId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostRequest(c.Server, sourceConnectionId, exportId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetRequest(c.Server, sourceConnectionId, exportId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
 	if err != nil {
@@ -736,6 +5459,652 @@ func (c *Client) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBod
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListAgentsApiAgentsGetRequest generates requests for ListAgentsApiAgentsGet
+func NewListAgentsApiAgentsGetRequest(server string, params *ListAgentsApiAgentsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateAgentApiAgentsPostRequest calls the generic CreateAgentApiAgentsPost builder with application/json body
+func NewCreateAgentApiAgentsPostRequest(server string, body CreateAgentApiAgentsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateAgentApiAgentsPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateAgentApiAgentsPostRequestWithBody generates requests for CreateAgentApiAgentsPost with any type of body
+func NewCreateAgentApiAgentsPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest generates requests for DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete
+func NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest(server string, criteriaId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "criteria_id", runtime.ParamLocationPath, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/evaluation-criteria/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest generates requests for GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet
+func NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest(server string, criteriaId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "criteria_id", runtime.ParamLocationPath, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/evaluation-criteria/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequest calls the generic UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch builder with application/json body
+func NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequest(server string, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(server, criteriaId, "application/json", bodyReader)
+}
+
+// NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody generates requests for UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch with any type of body
+func NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(server string, criteriaId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "criteria_id", runtime.ParamLocationPath, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/evaluation-criteria/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetRequest generates requests for ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet
+func NewListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetRequest(server string, criteriaId string, params *ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "criteria_id", runtime.ParamLocationPath, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/evaluation-criteria/%s/compatible-runs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.StartedAfter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "started_after", runtime.ParamLocationQuery, *params.StartedAfter); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetRequest generates requests for ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet
+func NewListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetRequest(server string, criteriaId string, params *ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "criteria_id", runtime.ParamLocationPath, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/evaluation-criteria/%s/results", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FlaggedOnly != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "flagged_only", runtime.ParamLocationQuery, *params.FlaggedOnly); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TimeFrom != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "time_from", runtime.ParamLocationQuery, *params.TimeFrom); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TimeTo != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "time_to", runtime.ParamLocationQuery, *params.TimeTo); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequest calls the generic CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost builder with application/json body
+func NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequest(server string, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(server, criteriaId, "application/json", bodyReader)
+}
+
+// NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody generates requests for CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost with any type of body
+func NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(server string, criteriaId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "criteria_id", runtime.ParamLocationPath, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/evaluation-criteria/%s/results", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRequest generates requests for GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet
+func NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRequest(server string, criteriaId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "criteria_id", runtime.ParamLocationPath, criteriaId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/evaluation-criteria/%s/summary", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetRequest generates requests for GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet
+func NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetRequest(server string, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/evaluation-results/non-manual-summary")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Days != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "days", runtime.ParamLocationQuery, *params.Days); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.StartDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "start_date", runtime.ParamLocationQuery, *params.StartDate); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EndDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "end_date", runtime.ParamLocationQuery, *params.EndDate); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSearchAgentRunsApiAgentsRunsSearchPostRequest calls the generic SearchAgentRunsApiAgentsRunsSearchPost builder with application/json body
+func NewSearchAgentRunsApiAgentsRunsSearchPostRequest(server string, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody generates requests for SearchAgentRunsApiAgentsRunsSearchPost with any type of body
+func NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/runs/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest generates requests for DeleteAgentRunApiAgentsRunsRunIdDelete
@@ -828,6 +6197,907 @@ func NewGetAgentRunApiAgentsRunsRunIdGetRequest(server string, runId string, par
 	return req, nil
 }
 
+// NewDeleteAgentApiAgentsAgentIdDeleteRequest generates requests for DeleteAgentApiAgentsAgentIdDelete
+func NewDeleteAgentApiAgentsAgentIdDeleteRequest(server string, agentId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAgentMetadataApiAgentsAgentIdGetRequest generates requests for GetAgentMetadataApiAgentsAgentIdGet
+func NewGetAgentMetadataApiAgentsAgentIdGetRequest(server string, agentId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateAgentApiAgentsAgentIdPutRequest calls the generic UpdateAgentApiAgentsAgentIdPut builder with application/json body
+func NewUpdateAgentApiAgentsAgentIdPutRequest(server string, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(server, agentId, "application/json", bodyReader)
+}
+
+// NewUpdateAgentApiAgentsAgentIdPutRequestWithBody generates requests for UpdateAgentApiAgentsAgentIdPut with any type of body
+func NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetRequest generates requests for GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet
+func NewGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetRequest(server string, agentId string, params *GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/ai-assistant/conversations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "step_type", runtime.ParamLocationQuery, params.StepType); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.StepId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "step_id", runtime.ParamLocationQuery, *params.StepId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "offset", runtime.ParamLocationQuery, *params.Offset); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequest calls the generic GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost builder with application/json body
+func NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequest(server string, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(server, agentId, "application/json", bodyReader)
+}
+
+// NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody generates requests for GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost with any type of body
+func NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/ai-assistant/generate-steps", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequest calls the generic GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost builder with application/json body
+func NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequest(server string, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(server, agentId, "application/json", bodyReader)
+}
+
+// NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody generates requests for GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost with any type of body
+func NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/ai-assistant/step-config", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest calls the generic MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch builder with application/json body
+func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest(server string, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(server, agentId, conversationId, "application/json", bodyReader)
+}
+
+// NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody generates requests for MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch with any type of body
+func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(server string, agentId string, conversationId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/ai-assistant/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest generates requests for GetAgentDefinitionApiAgentsAgentIdDefinitionGet
+func NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(server string, agentId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/definition", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest calls the generic UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut builder with application/json body
+func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest(server string, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server, agentId, "application/json", bodyReader)
+}
+
+// NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody generates requests for UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut with any type of body
+func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/definition", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest generates requests for ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet
+func NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(server string, agentId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/evaluation-criteria", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequest calls the generic CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost builder with application/json body
+func NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequest(server string, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(server, agentId, "application/json", bodyReader)
+}
+
+// NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody generates requests for CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost with any type of body
+func NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/evaluation-criteria", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequest calls the generic TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost builder with application/json body
+func NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequest(server string, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(server, agentId, "application/json", bodyReader)
+}
+
+// NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody generates requests for TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost with any type of body
+func NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/evaluation-criteria/test-draft", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetRequest generates requests for ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet
+func NewListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetRequest(server string, agentId string, params *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/evaluation-results", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Step != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "step", runtime.ParamLocationQuery, *params.Step); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.FlaggedOnly != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "flagged_only", runtime.ParamLocationQuery, *params.FlaggedOnly); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TimeFrom != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "time_from", runtime.ParamLocationQuery, *params.TimeFrom); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TimeTo != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "time_to", runtime.ParamLocationQuery, *params.TimeTo); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetRequest generates requests for ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet
+func NewListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetRequest(server string, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/evaluation-runs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Step != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "step", runtime.ParamLocationQuery, *params.Step); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TimeFrom != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "time_from", runtime.ParamLocationQuery, *params.TimeFrom); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TimeTo != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "time_to", runtime.ParamLocationQuery, *params.TimeTo); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest generates requests for ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet
+func NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest(server string, agentId string, uploadId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "upload_id", runtime.ParamLocationPath, uploadId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/input-uploads/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListAgentRunsApiAgentsAgentIdRunsGetRequest generates requests for ListAgentRunsApiAgentsAgentIdRunsGet
 func NewListAgentRunsApiAgentsAgentIdRunsGetRequest(server string, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams) (*http.Request, error) {
 	var err error
@@ -876,6 +7146,22 @@ func NewListAgentRunsApiAgentsAgentIdRunsGetRequest(server string, agentId strin
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err
@@ -994,6 +7280,1170 @@ func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server st
 	return req, nil
 }
 
+// NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest generates requests for ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet
+func NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest(server string, agentId string, runId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "run_id", runtime.ParamLocationPath, runId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/runs/%s/evaluation-results", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest generates requests for ApiUploadAgentInputApiAgentsAgentIdUploadInputPost
+func NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest(server string, agentId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/upload-input", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApiAiFeedbackApiAiAssistantFeedbackPostRequest calls the generic ApiAiFeedbackApiAiAssistantFeedbackPost builder with application/json body
+func NewApiAiFeedbackApiAiAssistantFeedbackPostRequest(server string, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody generates requests for ApiAiFeedbackApiAiAssistantFeedbackPost with any type of body
+func NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/feedback")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequest calls the generic ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost builder with application/json body
+func NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequest(server string, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody generates requests for ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost with any type of body
+func NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/knowledge-base")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequest calls the generic ApiAiMemoryBankApiAiAssistantMemoryBankPost builder with application/json body
+func NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequest(server string, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody generates requests for ApiAiMemoryBankApiAiAssistantMemoryBankPost with any type of body
+func NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/memory-bank")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetRequest generates requests for ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet
+func NewApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetRequest(server string, params *ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/memory-bank/last-conversation")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "offset", runtime.ParamLocationQuery, *params.Offset); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequest calls the generic ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch builder with application/json body
+func NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequest(server string, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(server, conversationId, "application/json", bodyReader)
+}
+
+// NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody generates requests for ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch with any type of body
+func NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(server string, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/memory-bank/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApiAiSolutionApiAiAssistantSolutionPostRequest calls the generic ApiAiSolutionApiAiAssistantSolutionPost builder with application/json body
+func NewApiAiSolutionApiAiAssistantSolutionPostRequest(server string, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody generates requests for ApiAiSolutionApiAiAssistantSolutionPost with any type of body
+func NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/solution")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApiAiSourceApiAiAssistantSourcePostRequest calls the generic ApiAiSourceApiAiAssistantSourcePost builder with application/json body
+func NewApiAiSourceApiAiAssistantSourcePostRequest(server string, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewApiAiSourceApiAiAssistantSourcePostRequestWithBody generates requests for ApiAiSourceApiAiAssistantSourcePost with any type of body
+func NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/source")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequest calls the generic ApiAiAcceptApiAiAssistantConversationIdAcceptPost builder with application/json body
+func NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequest(server string, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(server, conversationId, "application/json", bodyReader)
+}
+
+// NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody generates requests for ApiAiAcceptApiAiAssistantConversationIdAcceptPost with any type of body
+func NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(server string, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/%s/accept", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest generates requests for ApiAiDeclineApiAiAssistantConversationIdDeclinePost
+func NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest(server string, conversationId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/ai-assistant/%s/decline", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListAlertsApiAlertsGetRequest generates requests for ListAlertsApiAlertsGet
+func NewListAlertsApiAlertsGetRequest(server string, params *ListAlertsApiAlertsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.AgentId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "agent_id", runtime.ParamLocationQuery, *params.AgentId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.SourceConnectionId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "source_connection_id", runtime.ParamLocationQuery, *params.SourceConnectionId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TimeFrom != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "time_from", runtime.ParamLocationQuery, *params.TimeFrom); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TimeTo != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "time_to", runtime.ParamLocationQuery, *params.TimeTo); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListAlertConfigsApiAlertsConfigsGetRequest generates requests for ListAlertConfigsApiAlertsConfigsGet
+func NewListAlertConfigsApiAlertsConfigsGetRequest(server string, params *ListAlertConfigsApiAlertsConfigsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/configs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.AgentId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "agent_id", runtime.ParamLocationQuery, *params.AgentId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.SourceConnectionId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "source_connection_id", runtime.ParamLocationQuery, *params.SourceConnectionId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Scope != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "scope", runtime.ParamLocationQuery, *params.Scope); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateAlertConfigApiAlertsConfigsPostRequest calls the generic CreateAlertConfigApiAlertsConfigsPost builder with application/json body
+func NewCreateAlertConfigApiAlertsConfigsPostRequest(server string, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody generates requests for CreateAlertConfigApiAlertsConfigsPost with any type of body
+func NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/configs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest generates requests for DeleteAlertConfigApiAlertsConfigsConfigIdDelete
+func NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest(server string, configId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "config_id", runtime.ParamLocationPath, configId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/configs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest generates requests for GetAlertConfigApiAlertsConfigsConfigIdGet
+func NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest(server string, configId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "config_id", runtime.ParamLocationPath, configId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/configs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequest calls the generic UpdateAlertConfigApiAlertsConfigsConfigIdPatch builder with application/json body
+func NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequest(server string, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(server, configId, "application/json", bodyReader)
+}
+
+// NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody generates requests for UpdateAlertConfigApiAlertsConfigsConfigIdPatch with any type of body
+func NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(server string, configId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "config_id", runtime.ParamLocationPath, configId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/configs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetRequest generates requests for ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet
+func NewListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetRequest(server string, params *ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/organization-preferences/list")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.OrganizationId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "organization_id", runtime.ParamLocationQuery, *params.OrganizationId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.IncludeDefaults != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "include_defaults", runtime.ParamLocationQuery, *params.IncludeDefaults); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequest calls the generic UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch builder with application/json body
+func NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequest(server string, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(server, organizationId, alertType, "application/json", bodyReader)
+}
+
+// NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody generates requests for UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch with any type of body
+func NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(server string, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "organization_id", runtime.ParamLocationPath, organizationId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "alert_type", runtime.ParamLocationPath, alertType)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/organization-preferences/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAlertDetailApiAlertsAlertIdGetRequest generates requests for GetAlertDetailApiAlertsAlertIdGet
+func NewGetAlertDetailApiAlertsAlertIdGetRequest(server string, alertId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "alert_id", runtime.ParamLocationPath, alertId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAddAlertCommentApiAlertsAlertIdCommentsPostRequest calls the generic AddAlertCommentApiAlertsAlertIdCommentsPost builder with application/json body
+func NewAddAlertCommentApiAlertsAlertIdCommentsPostRequest(server string, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(server, alertId, "application/json", bodyReader)
+}
+
+// NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody generates requests for AddAlertCommentApiAlertsAlertIdCommentsPost with any type of body
+func NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(server string, alertId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "alert_id", runtime.ParamLocationPath, alertId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/%s/comments", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewChangeAlertStatusApiAlertsAlertIdStatusPostRequest calls the generic ChangeAlertStatusApiAlertsAlertIdStatusPost builder with application/json body
+func NewChangeAlertStatusApiAlertsAlertIdStatusPostRequest(server string, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(server, alertId, "application/json", bodyReader)
+}
+
+// NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody generates requests for ChangeAlertStatusApiAlertsAlertIdStatusPost with any type of body
+func NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(server string, alertId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "alert_id", runtime.ParamLocationPath, alertId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/%s/status", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest generates requests for SubscribeToAlertApiAlertsAlertIdSubscribePost
+func NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest(server string, alertId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "alert_id", runtime.ParamLocationPath, alertId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/%s/subscribe", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest generates requests for UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost
+func NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(server string, alertId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "alert_id", runtime.ParamLocationPath, alertId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/alerts/%s/unsubscribe", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest generates requests for DeleteContentApiContentsSourceConnectionContentVersionDelete
 func NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(server string, sourceConnectionContentVersion string) (*http.Request, error) {
 	var err error
@@ -1100,6 +8550,53 @@ func NewGetContentDetailApiContentsSourceConnectionContentVersionGetRequest(serv
 	return req, nil
 }
 
+// NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest calls the generic ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut builder with application/json body
+func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest(server string, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(server, sourceConnectionContentVersion, "application/json", bodyReader)
+}
+
+// NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody generates requests for ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut with any type of body
+func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(server string, sourceConnectionContentVersion string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_content_version", runtime.ParamLocationPath, sourceConnectionContentVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/contents/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetRequest generates requests for ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet
 func NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetRequest(server string, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams) (*http.Request, error) {
 	var err error
@@ -1168,6 +8665,2518 @@ func NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddings
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRequestWithBody generates requests for UploadFileToContentApiContentsSourceConnectionContentVersionUploadPost with any type of body
+func NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRequestWithBody(server string, sourceConnectionContentVersion string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_content_version", runtime.ParamLocationPath, sourceConnectionContentVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/contents/%s/upload", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest calls the generic GovernanceAiGenerateApiGovernanceAiAssistantPost builder with application/json body
+func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest(server string, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody generates requests for GovernanceAiGenerateApiGovernanceAiAssistantPost with any type of body
+func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/governance/ai-assistant")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetRequest generates requests for ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet
+func NewListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetRequest(server string, params *ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/governance/ai-assistant/conversations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostRequest generates requests for GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost
+func NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostRequest(server string, conversationId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/governance/ai-assistant/%s/accept", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequest generates requests for GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost
+func NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequest(server string, conversationId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/governance/ai-assistant/%s/decline", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListKnowledgeBasesApiKnowledgeBasesGetRequest generates requests for ListKnowledgeBasesApiKnowledgeBasesGet
+func NewListKnowledgeBasesApiKnowledgeBasesGetRequest(server string, params *ListKnowledgeBasesApiKnowledgeBasesGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/knowledge_bases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "sort", runtime.ParamLocationQuery, *params.Sort); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Order != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "order", runtime.ParamLocationQuery, *params.Order); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateKnowledgeBaseApiKnowledgeBasesPostRequest calls the generic CreateKnowledgeBaseApiKnowledgeBasesPost builder with application/json body
+func NewCreateKnowledgeBaseApiKnowledgeBasesPostRequest(server string, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody generates requests for CreateKnowledgeBaseApiKnowledgeBasesPost with any type of body
+func NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/knowledge_bases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest generates requests for DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete
+func NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest(server string, knowledgeBaseId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "knowledge_base_id", runtime.ParamLocationPath, knowledgeBaseId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/knowledge_bases/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest generates requests for GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet
+func NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest(server string, knowledgeBaseId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "knowledge_base_id", runtime.ParamLocationPath, knowledgeBaseId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/knowledge_bases/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest calls the generic UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut builder with application/json body
+func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest(server string, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(server, knowledgeBaseId, "application/json", bodyReader)
+}
+
+// NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody generates requests for UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut with any type of body
+func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(server string, knowledgeBaseId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "knowledge_base_id", runtime.ParamLocationPath, knowledgeBaseId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/knowledge_bases/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListMemoryBanksApiMemoryBanksGetRequest generates requests for ListMemoryBanksApiMemoryBanksGet
+func NewListMemoryBanksApiMemoryBanksGetRequest(server string, params *ListMemoryBanksApiMemoryBanksGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "sort", runtime.ParamLocationQuery, *params.Sort); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Order != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "order", runtime.ParamLocationQuery, *params.Order); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Type != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "type", runtime.ParamLocationQuery, *params.Type); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateMemoryBankApiMemoryBanksPostRequest calls the generic CreateMemoryBankApiMemoryBanksPost builder with application/json body
+func NewCreateMemoryBankApiMemoryBanksPostRequest(server string, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateMemoryBankApiMemoryBanksPostRequestWithBody generates requests for CreateMemoryBankApiMemoryBanksPost with any type of body
+func NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequest calls the generic MemoryBankAiGenerateApiMemoryBanksAiAssistantPost builder with application/json body
+func NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequest(server string, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody generates requests for MemoryBankAiGenerateApiMemoryBanksAiAssistantPost with any type of body
+func NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/ai-assistant")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetRequest generates requests for MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet
+func NewMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetRequest(server string, params *MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/ai-assistant/last-conversation")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "offset", runtime.ParamLocationQuery, *params.Offset); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequest calls the generic MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch builder with application/json body
+func NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequest(server string, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(server, conversationId, "application/json", bodyReader)
+}
+
+// NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody generates requests for MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch with any type of body
+func NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(server string, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/ai-assistant/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListTemplatesApiMemoryBanksTemplatesGetRequest generates requests for ListTemplatesApiMemoryBanksTemplatesGet
+func NewListTemplatesApiMemoryBanksTemplatesGetRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/templates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequest calls the generic TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost builder with application/json body
+func NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequest(server string, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody generates requests for TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost with any type of body
+func NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/test-compaction")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest generates requests for DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete
+func NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest(server string, memoryBankId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "memory_bank_id", runtime.ParamLocationPath, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest generates requests for GetMemoryBankApiMemoryBanksMemoryBankIdGet
+func NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest(server string, memoryBankId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "memory_bank_id", runtime.ParamLocationPath, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequest calls the generic UpdateMemoryBankApiMemoryBanksMemoryBankIdPut builder with application/json body
+func NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequest(server string, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(server, memoryBankId, "application/json", bodyReader)
+}
+
+// NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody generates requests for UpdateMemoryBankApiMemoryBanksMemoryBankIdPut with any type of body
+func NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(server string, memoryBankId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "memory_bank_id", runtime.ParamLocationPath, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest generates requests for GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet
+func NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest(server string, memoryBankId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "memory_bank_id", runtime.ParamLocationPath, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/%s/agents", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest generates requests for CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost
+func NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest(server string, memoryBankId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "memory_bank_id", runtime.ParamLocationPath, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/%s/compact", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest generates requests for DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete
+func NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest(server string, memoryBankId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "memory_bank_id", runtime.ParamLocationPath, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/%s/source", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetRequest generates requests for GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet
+func NewGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetRequest(server string, memoryBankId string, params *GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "memory_bank_id", runtime.ParamLocationPath, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/%s/stats", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Days != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "days", runtime.ParamLocationQuery, *params.Days); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.StartDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "start_date", runtime.ParamLocationQuery, *params.StartDate); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EndDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "end_date", runtime.ParamLocationQuery, *params.EndDate); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequest calls the generic TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost builder with application/json body
+func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequest(server string, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(server, memoryBankId, "application/json", bodyReader)
+}
+
+// NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody generates requests for TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost with any type of body
+func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(server string, memoryBankId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "memory_bank_id", runtime.ParamLocationPath, memoryBankId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/memory_banks/%s/test-compaction", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAlertsApiModelsAlertsGetRequest generates requests for ListAlertsApiModelsAlertsGet
+func NewListAlertsApiModelsAlertsGetRequest(server string, params *ListAlertsApiModelsAlertsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/alerts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.AgentId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "agent_id", runtime.ParamLocationQuery, *params.AgentId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.UnreadOnly != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "unread_only", runtime.ParamLocationQuery, *params.UnreadOnly); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "offset", runtime.ParamLocationQuery, *params.Offset); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest generates requests for MarkAllReadApiModelsAlertsMarkAllReadPost
+func NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/alerts/mark-all-read")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest generates requests for GetAlertUnreadCountApiModelsAlertsUnreadCountGet
+func NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/alerts/unread-count")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewMarkReadApiModelsAlertsAlertIdReadPatchRequest generates requests for MarkReadApiModelsAlertsAlertIdReadPatch
+func NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(server string, alertId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "alert_id", runtime.ParamLocationPath, alertId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/alerts/%s/read", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetRecommendationsApiModelsModelIdRecommendationsGetRequest generates requests for GetRecommendationsApiModelsModelIdRecommendationsGet
+func NewGetRecommendationsApiModelsModelIdRecommendationsGetRequest(server string, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "model_id", runtime.ParamLocationPath, modelId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/%s/recommendations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.RequireToolUse != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "require_tool_use", runtime.ParamLocationQuery, *params.RequireToolUse); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.RequireStructuredOutput != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "require_structured_output", runtime.ParamLocationQuery, *params.RequireStructuredOutput); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.RequireThinking != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "require_thinking", runtime.ParamLocationQuery, *params.RequireThinking); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.MinContextTokens != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "min_context_tokens", runtime.ParamLocationQuery, *params.MinContextTokens); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.MinOutputTokens != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "min_output_tokens", runtime.ParamLocationQuery, *params.MinOutputTokens); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSearchApiSearchGetRequest generates requests for SearchApiSearchGet
+func NewSearchApiSearchGetRequest(server string, params *SearchApiSearchGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "q", runtime.ParamLocationQuery, params.Q); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EntityType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "entity_type", runtime.ParamLocationQuery, *params.EntityType); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListSolutionsApiSolutionsGetRequest generates requests for ListSolutionsApiSolutionsGet
+func NewListSolutionsApiSolutionsGetRequest(server string, params *ListSolutionsApiSolutionsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "sort", runtime.ParamLocationQuery, *params.Sort); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Order != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "order", runtime.ParamLocationQuery, *params.Order); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Search != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "search", runtime.ParamLocationQuery, *params.Search); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateSolutionApiSolutionsPostRequest calls the generic CreateSolutionApiSolutionsPost builder with application/json body
+func NewCreateSolutionApiSolutionsPostRequest(server string, body CreateSolutionApiSolutionsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSolutionApiSolutionsPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateSolutionApiSolutionsPostRequestWithBody generates requests for CreateSolutionApiSolutionsPost with any type of body
+func NewCreateSolutionApiSolutionsPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest generates requests for DeleteSolutionApiSolutionsSolutionIdDelete
+func NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest(server string, solutionId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSolutionApiSolutionsSolutionIdGetRequest generates requests for GetSolutionApiSolutionsSolutionIdGet
+func NewGetSolutionApiSolutionsSolutionIdGetRequest(server string, solutionId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateSolutionApiSolutionsSolutionIdPatchRequest calls the generic UpdateSolutionApiSolutionsSolutionIdPatch builder with application/json body
+func NewUpdateSolutionApiSolutionsSolutionIdPatchRequest(server string, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody generates requests for UpdateSolutionApiSolutionsSolutionIdPatch with any type of body
+func NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequest calls the generic UnlinkAgentsApiSolutionsSolutionIdAgentsDelete builder with application/json body
+func NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequest(server string, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody generates requests for UnlinkAgentsApiSolutionsSolutionIdAgentsDelete with any type of body
+func NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/agents", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequest calls the generic LinkAgentsApiSolutionsSolutionIdAgentsPost builder with application/json body
+func NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequest(server string, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody generates requests for LinkAgentsApiSolutionsSolutionIdAgentsPost with any type of body
+func NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/agents", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequest calls the generic AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost builder with application/json body
+func NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequest(server string, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody generates requests for AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost with any type of body
+func NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/ai-assistant/generate", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequest calls the generic AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost builder with application/json body
+func NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequest(server string, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody generates requests for AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost with any type of body
+func NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/ai-assistant/knowledge-base", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequest calls the generic AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost builder with application/json body
+func NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequest(server string, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody generates requests for AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost with any type of body
+func NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/ai-assistant/source", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequest calls the generic AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost builder with application/json body
+func NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(server, solutionId, conversationId, "application/json", bodyReader)
+}
+
+// NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody generates requests for AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost with any type of body
+func NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/ai-assistant/%s/accept", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostRequest generates requests for AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost
+func NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/ai-assistant/%s/decline", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListConversationsApiSolutionsSolutionIdConversationsGetRequest generates requests for ListConversationsApiSolutionsSolutionIdConversationsGet
+func NewListConversationsApiSolutionsSolutionIdConversationsGetRequest(server string, solutionId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/conversations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequest calls the generic AddConversationTurnApiSolutionsSolutionIdConversationsPost builder with application/json body
+func NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequest(server string, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody generates requests for AddConversationTurnApiSolutionsSolutionIdConversationsPost with any type of body
+func NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/conversations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequest calls the generic MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch builder with application/json body
+func NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(server, solutionId, conversationId, "application/json", bodyReader)
+}
+
+// NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody generates requests for MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch with any type of body
+func NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "conversation_id", runtime.ParamLocationPath, conversationId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/conversations/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequest calls the generic UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete builder with application/json body
+func NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequest(server string, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody generates requests for UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete with any type of body
+func NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/knowledge-bases", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequest calls the generic LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost builder with application/json body
+func NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequest(server string, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody generates requests for LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost with any type of body
+func NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/knowledge-bases", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequest calls the generic UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete builder with application/json body
+func NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequest(server string, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody generates requests for UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete with any type of body
+func NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/source-connections", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequest calls the generic LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost builder with application/json body
+func NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequest(server string, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(server, solutionId, "application/json", bodyReader)
+}
+
+// NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody generates requests for LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost with any type of body
+func NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "solution_id", runtime.ParamLocationPath, solutionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/solutions/%s/source-connections", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateSourceApiSourcesPostRequest calls the generic CreateSourceApiSourcesPost builder with application/json body
+func NewCreateSourceApiSourcesPostRequest(server string, body CreateSourceApiSourcesPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSourceApiSourcesPostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateSourceApiSourcesPostRequestWithBody generates requests for CreateSourceApiSourcesPost with any type of body
+func NewCreateSourceApiSourcesPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -1285,6 +11294,613 @@ func NewListSourcesApiSourcesGetRequest(server string, params *ListSourcesApiSou
 	return req, nil
 }
 
+// NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest generates requests for DeleteSourceApiSourcesSourceConnectionIdDelete
+func NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest(server string, sourceConnectionId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSourceApiSourcesSourceConnectionIdGetRequest generates requests for GetSourceApiSourcesSourceConnectionIdGet
+func NewGetSourceApiSourcesSourceConnectionIdGetRequest(server string, sourceConnectionId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequest calls the generic UploadInlineTextToSourceApiSourcesSourceConnectionIdPost builder with application/json body
+func NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequest(server string, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+}
+
+// NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody generates requests for UploadInlineTextToSourceApiSourcesSourceConnectionIdPost with any type of body
+func NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUpdateSourceApiSourcesSourceConnectionIdPutRequest calls the generic UpdateSourceApiSourcesSourceConnectionIdPut builder with application/json body
+func NewUpdateSourceApiSourcesSourceConnectionIdPutRequest(server string, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+}
+
+// NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody generates requests for UpdateSourceApiSourcesSourceConnectionIdPut with any type of body
+func NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest generates requests for GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet
+func NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest(server string, sourceConnectionId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/embedding-migration", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest calls the generic StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost builder with application/json body
+func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest(server string, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+}
+
+// NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody generates requests for StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost with any type of body
+func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/embedding-migration", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostRequest generates requests for CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost
+func NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostRequest(server string, sourceConnectionId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/embedding-migration/cancel", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListSourceExportsApiSourcesSourceConnectionIdExportsGetRequest generates requests for ListSourceExportsApiSourcesSourceConnectionIdExportsGet
+func NewListSourceExportsApiSourcesSourceConnectionIdExportsGetRequest(server string, sourceConnectionId openapi_types.UUID, params *ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/exports", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequest calls the generic CreateSourceExportApiSourcesSourceConnectionIdExportsPost builder with application/json body
+func NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequest(server string, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+}
+
+// NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody generates requests for CreateSourceExportApiSourcesSourceConnectionIdExportsPost with any type of body
+func NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/exports", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequest calls the generic EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost builder with application/json body
+func NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequest(server string, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+}
+
+// NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody generates requests for EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost with any type of body
+func NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/exports/estimate", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRequest generates requests for DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete
+func NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "export_id", runtime.ParamLocationPath, exportId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/exports/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest generates requests for GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet
+func NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "export_id", runtime.ParamLocationPath, exportId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/exports/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostRequest generates requests for CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost
+func NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "export_id", runtime.ParamLocationPath, exportId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/exports/%s/cancel", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetRequest generates requests for DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet
+func NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "export_id", runtime.ParamLocationPath, exportId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/exports/%s/download", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody generates requests for UploadFileToSourceApiSourcesSourceConnectionIdUploadPost with any type of body
 func NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(server string, sourceConnectionId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
@@ -1364,11 +11980,111 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// ListAgentsApiAgentsGetWithResponse request
+	ListAgentsApiAgentsGetWithResponse(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*ListAgentsApiAgentsGetResponse, error)
+
+	// CreateAgentApiAgentsPostWithBodyWithResponse request with any body
+	CreateAgentApiAgentsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error)
+
+	CreateAgentApiAgentsPostWithResponse(ctx context.Context, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error)
+
+	// DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse request
+	DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error)
+
+	// GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse request
+	GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse, error)
+
+	// UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse request with any body
+	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error)
+
+	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithResponse(ctx context.Context, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error)
+
+	// ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetWithResponse request
+	ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetWithResponse(ctx context.Context, criteriaId string, params *ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams, reqEditors ...RequestEditorFn) (*ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse, error)
+
+	// ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetWithResponse request
+	ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetWithResponse(ctx context.Context, criteriaId string, params *ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse, error)
+
+	// CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse request with any body
+	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error)
+
+	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithResponse(ctx context.Context, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error)
+
+	// GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse request
+	GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse, error)
+
+	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse request
+	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse, error)
+
+	// SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse request with any body
+	SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error)
+
+	SearchAgentRunsApiAgentsRunsSearchPostWithResponse(ctx context.Context, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error)
+
 	// DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse request
 	DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error)
 
 	// GetAgentRunApiAgentsRunsRunIdGetWithResponse request
 	GetAgentRunApiAgentsRunsRunIdGetWithResponse(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*GetAgentRunApiAgentsRunsRunIdGetResponse, error)
+
+	// DeleteAgentApiAgentsAgentIdDeleteWithResponse request
+	DeleteAgentApiAgentsAgentIdDeleteWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*DeleteAgentApiAgentsAgentIdDeleteResponse, error)
+
+	// GetAgentMetadataApiAgentsAgentIdGetWithResponse request
+	GetAgentMetadataApiAgentsAgentIdGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*GetAgentMetadataApiAgentsAgentIdGetResponse, error)
+
+	// UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse request with any body
+	UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error)
+
+	UpdateAgentApiAgentsAgentIdPutWithResponse(ctx context.Context, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error)
+
+	// GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetWithResponse request
+	GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetWithResponse(ctx context.Context, agentId string, params *GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse, error)
+
+	// GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse request with any body
+	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error)
+
+	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithResponse(ctx context.Context, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error)
+
+	// GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse request with any body
+	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error)
+
+	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithResponse(ctx context.Context, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error)
+
+	// MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse request with any body
+	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, agentId string, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error)
+
+	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithResponse(ctx context.Context, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error)
+
+	// GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse request
+	GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error)
+
+	// UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse request with any body
+	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error)
+
+	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithResponse(ctx context.Context, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error)
+
+	// ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse request
+	ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse, error)
+
+	// CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse request with any body
+	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error)
+
+	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithResponse(ctx context.Context, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error)
+
+	// TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse request with any body
+	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error)
+
+	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithResponse(ctx context.Context, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error)
+
+	// ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetWithResponse request
+	ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, params *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse, error)
+
+	// ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetWithResponse request
+	ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetWithResponse(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse, error)
+
+	// ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse request
+	ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse(ctx context.Context, agentId string, uploadId string, reqEditors ...RequestEditorFn) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error)
 
 	// ListAgentRunsApiAgentsAgentIdRunsGetWithResponse request
 	ListAgentRunsApiAgentsAgentIdRunsGetWithResponse(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*ListAgentRunsApiAgentsAgentIdRunsGetResponse, error)
@@ -1383,20 +12099,626 @@ type ClientWithResponsesInterface interface {
 
 	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithResponse(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error)
 
+	// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse request
+	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error)
+
+	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request
+	ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error)
+
+	// ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse request with any body
+	ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error)
+
+	ApiAiFeedbackApiAiAssistantFeedbackPostWithResponse(ctx context.Context, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error)
+
+	// ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse request with any body
+	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error)
+
+	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error)
+
+	// ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse request with any body
+	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error)
+
+	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithResponse(ctx context.Context, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error)
+
+	// ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetWithResponse request
+	ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetWithResponse(ctx context.Context, params *ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse, error)
+
+	// ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse request with any body
+	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error)
+
+	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error)
+
+	// ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse request with any body
+	ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error)
+
+	ApiAiSolutionApiAiAssistantSolutionPostWithResponse(ctx context.Context, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error)
+
+	// ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse request with any body
+	ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error)
+
+	ApiAiSourceApiAiAssistantSourcePostWithResponse(ctx context.Context, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error)
+
+	// ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse request with any body
+	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error)
+
+	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error)
+
+	// ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse request
+	ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse, error)
+
+	// ListAlertsApiAlertsGetWithResponse request
+	ListAlertsApiAlertsGetWithResponse(ctx context.Context, params *ListAlertsApiAlertsGetParams, reqEditors ...RequestEditorFn) (*ListAlertsApiAlertsGetResponse, error)
+
+	// ListAlertConfigsApiAlertsConfigsGetWithResponse request
+	ListAlertConfigsApiAlertsConfigsGetWithResponse(ctx context.Context, params *ListAlertConfigsApiAlertsConfigsGetParams, reqEditors ...RequestEditorFn) (*ListAlertConfigsApiAlertsConfigsGetResponse, error)
+
+	// CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse request with any body
+	CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error)
+
+	CreateAlertConfigApiAlertsConfigsPostWithResponse(ctx context.Context, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error)
+
+	// DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse request
+	DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse, error)
+
+	// GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse request
+	GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*GetAlertConfigApiAlertsConfigsConfigIdGetResponse, error)
+
+	// UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse request with any body
+	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse(ctx context.Context, configId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error)
+
+	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithResponse(ctx context.Context, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error)
+
+	// ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetWithResponse request
+	ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetWithResponse(ctx context.Context, params *ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams, reqEditors ...RequestEditorFn) (*ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse, error)
+
+	// UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse request with any body
+	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error)
+
+	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error)
+
+	// GetAlertDetailApiAlertsAlertIdGetWithResponse request
+	GetAlertDetailApiAlertsAlertIdGetWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*GetAlertDetailApiAlertsAlertIdGetResponse, error)
+
+	// AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse request with any body
+	AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error)
+
+	AddAlertCommentApiAlertsAlertIdCommentsPostWithResponse(ctx context.Context, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error)
+
+	// ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse request with any body
+	ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error)
+
+	ChangeAlertStatusApiAlertsAlertIdStatusPostWithResponse(ctx context.Context, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error)
+
+	// SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse request
+	SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*SubscribeToAlertApiAlertsAlertIdSubscribePostResponse, error)
+
+	// UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse request
+	UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse, error)
+
 	// DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request
 	DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error)
 
 	// GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse request
 	GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams, reqEditors ...RequestEditorFn) (*GetContentDetailApiContentsSourceConnectionContentVersionGetResponse, error)
 
+	// ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse request with any body
+	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error)
+
+	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithResponse(ctx context.Context, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error)
+
 	// ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse request
 	ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse, error)
+
+	// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse request with any body
+	UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse, error)
+
+	// GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse request with any body
+	GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error)
+
+	GovernanceAiGenerateApiGovernanceAiAssistantPostWithResponse(ctx context.Context, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error)
+
+	// ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetWithResponse request
+	ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetWithResponse(ctx context.Context, params *ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse, error)
+
+	// GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse request
+	GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse, error)
+
+	// GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse request
+	GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse, error)
+
+	// ListKnowledgeBasesApiKnowledgeBasesGetWithResponse request
+	ListKnowledgeBasesApiKnowledgeBasesGetWithResponse(ctx context.Context, params *ListKnowledgeBasesApiKnowledgeBasesGetParams, reqEditors ...RequestEditorFn) (*ListKnowledgeBasesApiKnowledgeBasesGetResponse, error)
+
+	// CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse request with any body
+	CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error)
+
+	CreateKnowledgeBaseApiKnowledgeBasesPostWithResponse(ctx context.Context, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error)
+
+	// DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse request
+	DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse, error)
+
+	// GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse request
+	GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse, error)
+
+	// UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse request with any body
+	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse(ctx context.Context, knowledgeBaseId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
+
+	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse(ctx context.Context, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
+
+	// ListMemoryBanksApiMemoryBanksGetWithResponse request
+	ListMemoryBanksApiMemoryBanksGetWithResponse(ctx context.Context, params *ListMemoryBanksApiMemoryBanksGetParams, reqEditors ...RequestEditorFn) (*ListMemoryBanksApiMemoryBanksGetResponse, error)
+
+	// CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse request with any body
+	CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error)
+
+	CreateMemoryBankApiMemoryBanksPostWithResponse(ctx context.Context, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error)
+
+	// MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse request with any body
+	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error)
+
+	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithResponse(ctx context.Context, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error)
+
+	// MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetWithResponse request
+	MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetWithResponse(ctx context.Context, params *MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams, reqEditors ...RequestEditorFn) (*MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse, error)
+
+	// MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse request with any body
+	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error)
+
+	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error)
+
+	// ListTemplatesApiMemoryBanksTemplatesGetWithResponse request
+	ListTemplatesApiMemoryBanksTemplatesGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTemplatesApiMemoryBanksTemplatesGetResponse, error)
+
+	// TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse request with any body
+	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error)
+
+	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithResponse(ctx context.Context, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error)
+
+	// DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse request
+	DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse, error)
+
+	// GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse request
+	GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse, error)
+
+	// UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse request with any body
+	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error)
+
+	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithResponse(ctx context.Context, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error)
+
+	// GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse request
+	GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse, error)
+
+	// CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse request
+	CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse, error)
+
+	// DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse request
+	DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse, error)
+
+	// GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetWithResponse request
+	GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetWithResponse(ctx context.Context, memoryBankId string, params *GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams, reqEditors ...RequestEditorFn) (*GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse, error)
+
+	// TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse request with any body
+	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error)
+
+	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithResponse(ctx context.Context, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error)
+
+	// ListAlertsApiModelsAlertsGetWithResponse request
+	ListAlertsApiModelsAlertsGetWithResponse(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*ListAlertsApiModelsAlertsGetResponse, error)
+
+	// MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse request
+	MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*MarkAllReadApiModelsAlertsMarkAllReadPostResponse, error)
+
+	// GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse request
+	GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse, error)
+
+	// MarkReadApiModelsAlertsAlertIdReadPatchWithResponse request
+	MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error)
+
+	// GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse request
+	GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse(ctx context.Context, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams, reqEditors ...RequestEditorFn) (*GetRecommendationsApiModelsModelIdRecommendationsGetResponse, error)
+
+	// SearchApiSearchGetWithResponse request
+	SearchApiSearchGetWithResponse(ctx context.Context, params *SearchApiSearchGetParams, reqEditors ...RequestEditorFn) (*SearchApiSearchGetResponse, error)
+
+	// ListSolutionsApiSolutionsGetWithResponse request
+	ListSolutionsApiSolutionsGetWithResponse(ctx context.Context, params *ListSolutionsApiSolutionsGetParams, reqEditors ...RequestEditorFn) (*ListSolutionsApiSolutionsGetResponse, error)
+
+	// CreateSolutionApiSolutionsPostWithBodyWithResponse request with any body
+	CreateSolutionApiSolutionsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error)
+
+	CreateSolutionApiSolutionsPostWithResponse(ctx context.Context, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error)
+
+	// DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse request
+	DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSolutionApiSolutionsSolutionIdDeleteResponse, error)
+
+	// GetSolutionApiSolutionsSolutionIdGetWithResponse request
+	GetSolutionApiSolutionsSolutionIdGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSolutionApiSolutionsSolutionIdGetResponse, error)
+
+	// UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse request with any body
+	UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error)
+
+	UpdateSolutionApiSolutionsSolutionIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error)
+
+	// UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse request with any body
+	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error)
+
+	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error)
+
+	// LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse request with any body
+	LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error)
+
+	LinkAgentsApiSolutionsSolutionIdAgentsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error)
+
+	// AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse request with any body
+	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error)
+
+	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error)
+
+	// AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse request with any body
+	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error)
+
+	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error)
+
+	// AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse request with any body
+	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error)
+
+	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error)
+
+	// AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse request with any body
+	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error)
+
+	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error)
+
+	// AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse request
+	AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse, error)
+
+	// ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse request
+	ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListConversationsApiSolutionsSolutionIdConversationsGetResponse, error)
+
+	// AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse request with any body
+	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error)
+
+	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error)
+
+	// MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse request with any body
+	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error)
+
+	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error)
+
+	// UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse request with any body
+	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error)
+
+	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error)
+
+	// LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse request with any body
+	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error)
+
+	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error)
+
+	// UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse request with any body
+	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error)
+
+	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error)
+
+	// LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse request with any body
+	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error)
+
+	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error)
+
+	// CreateSourceApiSourcesPostWithBodyWithResponse request with any body
+	CreateSourceApiSourcesPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error)
+
+	CreateSourceApiSourcesPostWithResponse(ctx context.Context, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error)
 
 	// ListSourcesApiSourcesGetWithResponse request
 	ListSourcesApiSourcesGetWithResponse(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*ListSourcesApiSourcesGetResponse, error)
 
+	// DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse request
+	DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSourceApiSourcesSourceConnectionIdDeleteResponse, error)
+
+	// GetSourceApiSourcesSourceConnectionIdGetWithResponse request
+	GetSourceApiSourcesSourceConnectionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceApiSourcesSourceConnectionIdGetResponse, error)
+
+	// UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse request with any body
+	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error)
+
+	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error)
+
+	// UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse request with any body
+	UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error)
+
+	UpdateSourceApiSourcesSourceConnectionIdPutWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error)
+
+	// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse request
+	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error)
+
+	// StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse request with any body
+	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error)
+
+	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error)
+
+	// CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse request
+	CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse, error)
+
+	// ListSourceExportsApiSourcesSourceConnectionIdExportsGetWithResponse request
+	ListSourceExportsApiSourcesSourceConnectionIdExportsGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams, reqEditors ...RequestEditorFn) (*ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse, error)
+
+	// CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse request with any body
+	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error)
+
+	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error)
+
+	// EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse request with any body
+	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error)
+
+	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error)
+
+	// DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse request
+	DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse, error)
+
+	// GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse request
+	GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse, error)
+
+	// CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse request
+	CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse, error)
+
+	// DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse request
+	DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse, error)
+
 	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse request with any body
 	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error)
+}
+
+type ListAgentsApiAgentsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiAgentsAgentListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentsApiAgentsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentsApiAgentsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateAgentApiAgentsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *AgentSummaryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateAgentApiAgentsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateAgentApiAgentsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EvaluationCriteriaResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EvaluationCriteriaResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CompatibleRunListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EvaluationResultListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *EvaluationResultResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EvaluationResultSummaryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SearchAgentRunsApiAgentsRunsSearchPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentTraceSearchResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchAgentRunsApiAgentsRunsSearchPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchAgentRunsApiAgentsRunsSearchPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type DeleteAgentRunApiAgentsRunsRunIdDeleteResponse struct {
@@ -1439,6 +12761,350 @@ func (r GetAgentRunApiAgentsRunsRunIdGetResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetAgentRunApiAgentsRunsRunIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteAgentApiAgentsAgentIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteAgentApiAgentsAgentIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteAgentApiAgentsAgentIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAgentMetadataApiAgentsAgentIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentSummaryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentMetadataApiAgentsAgentIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentMetadataApiAgentsAgentIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateAgentApiAgentsAgentIdPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentSummaryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAgentApiAgentsAgentIdPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAgentApiAgentsAgentIdPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AiConversationHistoryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *GenerateAgentStepsResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *GenerateStepConfigResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]bool
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentDefinitionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentDefinitionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]EvaluationCriteriaResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *EvaluationCriteriaResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TestDraftEvaluationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EvaluationResultWithCriteriaListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EvaluationRunSummaryListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *UploadAgentInputApiResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1514,6 +13180,556 @@ func (r RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse) StatusCode() in
 	return 0
 }
 
+type ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]EvaluationResultWithCriteriaResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *UploadAgentInputApiResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiFeedbackApiAiAssistantFeedbackPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AiAssistantFeedbackResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiFeedbackApiAiAssistantFeedbackPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiFeedbackApiAiAssistantFeedbackPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiMemoryBanksMemoryBankLastConversationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]bool
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiSolutionApiAiAssistantSolutionPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiSolutionApiAiAssistantSolutionPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiSolutionApiAiAssistantSolutionPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiSourceApiAiAssistantSourcePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiSourceApiAiAssistantSourcePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiSourceApiAiAssistantSourcePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsAiAssistantAcceptResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAlertsApiAlertsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAlertsApiAlertsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAlertsApiAlertsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAlertConfigsApiAlertsConfigsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAlertConfigsApiAlertsConfigsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAlertConfigsApiAlertsConfigsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateAlertConfigApiAlertsConfigsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateAlertConfigApiAlertsConfigsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateAlertConfigApiAlertsConfigsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAlertConfigApiAlertsConfigsConfigIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAlertConfigApiAlertsConfigsConfigIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAlertConfigApiAlertsConfigsConfigIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OrganizationAlertPreferenceListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiAlertsOrganizationAlertPreferenceResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAlertDetailApiAlertsAlertIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAlertDetailApiAlertsAlertIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAlertDetailApiAlertsAlertIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type AddAlertCommentApiAlertsAlertIdCommentsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r AddAlertCommentApiAlertsAlertIdCommentsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AddAlertCommentApiAlertsAlertIdCommentsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ChangeAlertStatusApiAlertsAlertIdStatusPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ChangeAlertStatusApiAlertsAlertIdStatusPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ChangeAlertStatusApiAlertsAlertIdStatusPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SubscribeToAlertApiAlertsAlertIdSubscribePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r SubscribeToAlertApiAlertsAlertIdSubscribePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SubscribeToAlertApiAlertsAlertIdSubscribePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1559,6 +13775,29 @@ func (r GetContentDetailApiContentsSourceConnectionContentVersionGetResponse) St
 	return 0
 }
 
+type ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiContentsFileUploadResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1576,6 +13815,1167 @@ func (r ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddings
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiContentsFileUploadResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GovernanceAiGenerateApiGovernanceAiAssistantPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiGovernanceGovernanceAiAssistantResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GovernanceAiGenerateApiGovernanceAiAssistantPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GovernanceAiGenerateApiGovernanceAiAssistantPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]RoutersApiGovernanceGovernanceConversationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiGovernanceGovernanceAiAcceptResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListKnowledgeBasesApiKnowledgeBasesGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *KnowledgeBaseListResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListKnowledgeBasesApiKnowledgeBasesGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListKnowledgeBasesApiKnowledgeBasesGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateKnowledgeBaseApiKnowledgeBasesPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *KnowledgeBaseResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateKnowledgeBaseApiKnowledgeBasesPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateKnowledgeBaseApiKnowledgeBasesPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *KnowledgeBaseResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *KnowledgeBaseResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListMemoryBanksApiMemoryBanksGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MemoryBankListResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMemoryBanksApiMemoryBanksGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMemoryBanksApiMemoryBanksGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateMemoryBankApiMemoryBanksPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *MemoryBankResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateMemoryBankApiMemoryBanksPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateMemoryBankApiMemoryBanksPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiMemoryBanksMemoryBankLastConversationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]bool
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListTemplatesApiMemoryBanksTemplatesGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]map[string]interface{}
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTemplatesApiMemoryBanksTemplatesGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTemplatesApiMemoryBanksTemplatesGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CompactionTestResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MemoryBankResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MemoryBankResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]map[string]string
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CompactionTestResponseModel
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAlertsApiModelsAlertsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAlertsApiModelsAlertsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAlertsApiModelsAlertsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type MarkAllReadApiModelsAlertsMarkAllReadPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r MarkAllReadApiModelsAlertsMarkAllReadPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MarkAllReadApiModelsAlertsMarkAllReadPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type MarkReadApiModelsAlertsAlertIdReadPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r MarkReadApiModelsAlertsAlertIdReadPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MarkReadApiModelsAlertsAlertIdReadPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetRecommendationsApiModelsModelIdRecommendationsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRecommendationsApiModelsModelIdRecommendationsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRecommendationsApiModelsModelIdRecommendationsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SearchApiSearchGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r SearchApiSearchGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SearchApiSearchGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListSolutionsApiSolutionsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSolutionsApiSolutionsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSolutionsApiSolutionsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateSolutionApiSolutionsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSolutionApiSolutionsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSolutionApiSolutionsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteSolutionApiSolutionsSolutionIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteSolutionApiSolutionsSolutionIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteSolutionApiSolutionsSolutionIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSolutionApiSolutionsSolutionIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSolutionApiSolutionsSolutionIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSolutionApiSolutionsSolutionIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateSolutionApiSolutionsSolutionIdPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateSolutionApiSolutionsSolutionIdPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateSolutionApiSolutionsSolutionIdPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type LinkAgentsApiSolutionsSolutionIdAgentsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r LinkAgentsApiSolutionsSolutionIdAgentsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LinkAgentsApiSolutionsSolutionIdAgentsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsAiAssistantAcceptResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListConversationsApiSolutionsSolutionIdConversationsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]RoutersApiSolutionsSolutionConversationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListConversationsApiSolutionsSolutionIdConversationsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListConversationsApiSolutionsSolutionIdConversationsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *RoutersApiSolutionsSolutionConversationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSolutionsSolutionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateSourceApiSourcesPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *SourceResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSourceApiSourcesPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSourceApiSourcesPostResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1605,10 +15005,330 @@ func (r ListSourcesApiSourcesGetResponse) StatusCode() int {
 	return 0
 }
 
+type DeleteSourceApiSourcesSourceConnectionIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteSourceApiSourcesSourceConnectionIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteSourceApiSourcesSourceConnectionIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSourceApiSourcesSourceConnectionIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SourceResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSourceApiSourcesSourceConnectionIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSourceApiSourcesSourceConnectionIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSourcesFileUploadResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateSourceApiSourcesSourceConnectionIdPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SourceResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateSourceApiSourcesSourceConnectionIdPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateSourceApiSourcesSourceConnectionIdPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SourceEmbeddingMigrationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SourceEmbeddingMigrationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SourceEmbeddingMigrationResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExportListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *RoutersApiSourceExportsExportResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSourceExportsEstimateExportResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSourceExportsExportResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiSourceExportsExportResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *FileUploadResponse
+	JSON200      *RoutersApiSourcesFileUploadResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -1628,6 +15348,137 @@ func (r UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse) Status
 	return 0
 }
 
+// ListAgentsApiAgentsGetWithResponse request returning *ListAgentsApiAgentsGetResponse
+func (c *ClientWithResponses) ListAgentsApiAgentsGetWithResponse(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*ListAgentsApiAgentsGetResponse, error) {
+	rsp, err := c.ListAgentsApiAgentsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentsApiAgentsGetResponse(rsp)
+}
+
+// CreateAgentApiAgentsPostWithBodyWithResponse request with arbitrary body returning *CreateAgentApiAgentsPostResponse
+func (c *ClientWithResponses) CreateAgentApiAgentsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error) {
+	rsp, err := c.CreateAgentApiAgentsPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAgentApiAgentsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateAgentApiAgentsPostWithResponse(ctx context.Context, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error) {
+	rsp, err := c.CreateAgentApiAgentsPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAgentApiAgentsPostResponse(rsp)
+}
+
+// DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse request returning *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse
+func (c *ClientWithResponses) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error) {
+	rsp, err := c.DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx, criteriaId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse(rsp)
+}
+
+// GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse request returning *GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse
+func (c *ClientWithResponses) GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse, error) {
+	rsp, err := c.GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx, criteriaId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse(rsp)
+}
+
+// UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse request with arbitrary body returning *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse
+func (c *ClientWithResponses) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error) {
+	rsp, err := c.UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx, criteriaId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithResponse(ctx context.Context, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error) {
+	rsp, err := c.UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx, criteriaId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse(rsp)
+}
+
+// ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetWithResponse request returning *ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse
+func (c *ClientWithResponses) ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetWithResponse(ctx context.Context, criteriaId string, params *ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams, reqEditors ...RequestEditorFn) (*ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse, error) {
+	rsp, err := c.ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet(ctx, criteriaId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse(rsp)
+}
+
+// ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetWithResponse request returning *ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse
+func (c *ClientWithResponses) ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetWithResponse(ctx context.Context, criteriaId string, params *ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse, error) {
+	rsp, err := c.ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet(ctx, criteriaId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse(rsp)
+}
+
+// CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse request with arbitrary body returning *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse
+func (c *ClientWithResponses) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error) {
+	rsp, err := c.CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx, criteriaId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithResponse(ctx context.Context, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error) {
+	rsp, err := c.CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx, criteriaId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse(rsp)
+}
+
+// GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse request returning *GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse
+func (c *ClientWithResponses) GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse, error) {
+	rsp, err := c.GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx, criteriaId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse(rsp)
+}
+
+// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse request returning *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse
+func (c *ClientWithResponses) GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse, error) {
+	rsp, err := c.GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse(rsp)
+}
+
+// SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse request with arbitrary body returning *SearchAgentRunsApiAgentsRunsSearchPostResponse
+func (c *ClientWithResponses) SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
+	rsp, err := c.SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchAgentRunsApiAgentsRunsSearchPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) SearchAgentRunsApiAgentsRunsSearchPostWithResponse(ctx context.Context, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
+	rsp, err := c.SearchAgentRunsApiAgentsRunsSearchPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchAgentRunsApiAgentsRunsSearchPostResponse(rsp)
+}
+
 // DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse request returning *DeleteAgentRunApiAgentsRunsRunIdDeleteResponse
 func (c *ClientWithResponses) DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error) {
 	rsp, err := c.DeleteAgentRunApiAgentsRunsRunIdDelete(ctx, runId, reqEditors...)
@@ -1644,6 +15495,197 @@ func (c *ClientWithResponses) GetAgentRunApiAgentsRunsRunIdGetWithResponse(ctx c
 		return nil, err
 	}
 	return ParseGetAgentRunApiAgentsRunsRunIdGetResponse(rsp)
+}
+
+// DeleteAgentApiAgentsAgentIdDeleteWithResponse request returning *DeleteAgentApiAgentsAgentIdDeleteResponse
+func (c *ClientWithResponses) DeleteAgentApiAgentsAgentIdDeleteWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*DeleteAgentApiAgentsAgentIdDeleteResponse, error) {
+	rsp, err := c.DeleteAgentApiAgentsAgentIdDelete(ctx, agentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAgentApiAgentsAgentIdDeleteResponse(rsp)
+}
+
+// GetAgentMetadataApiAgentsAgentIdGetWithResponse request returning *GetAgentMetadataApiAgentsAgentIdGetResponse
+func (c *ClientWithResponses) GetAgentMetadataApiAgentsAgentIdGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*GetAgentMetadataApiAgentsAgentIdGetResponse, error) {
+	rsp, err := c.GetAgentMetadataApiAgentsAgentIdGet(ctx, agentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentMetadataApiAgentsAgentIdGetResponse(rsp)
+}
+
+// UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse request with arbitrary body returning *UpdateAgentApiAgentsAgentIdPutResponse
+func (c *ClientWithResponses) UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error) {
+	rsp, err := c.UpdateAgentApiAgentsAgentIdPutWithBody(ctx, agentId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentApiAgentsAgentIdPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateAgentApiAgentsAgentIdPutWithResponse(ctx context.Context, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error) {
+	rsp, err := c.UpdateAgentApiAgentsAgentIdPut(ctx, agentId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentApiAgentsAgentIdPutResponse(rsp)
+}
+
+// GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetWithResponse request returning *GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse
+func (c *ClientWithResponses) GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetWithResponse(ctx context.Context, agentId string, params *GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse, error) {
+	rsp, err := c.GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet(ctx, agentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse(rsp)
+}
+
+// GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse request with arbitrary body returning *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse
+func (c *ClientWithResponses) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error) {
+	rsp, err := c.GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithResponse(ctx context.Context, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error) {
+	rsp, err := c.GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx, agentId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse(rsp)
+}
+
+// GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse request with arbitrary body returning *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse
+func (c *ClientWithResponses) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error) {
+	rsp, err := c.GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithResponse(ctx context.Context, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error) {
+	rsp, err := c.GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx, agentId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse(rsp)
+}
+
+// MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse request with arbitrary body returning *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse
+func (c *ClientWithResponses) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, agentId string, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error) {
+	rsp, err := c.MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx, agentId, conversationId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithResponse(ctx context.Context, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error) {
+	rsp, err := c.MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx, agentId, conversationId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse(rsp)
+}
+
+// GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse request returning *GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse
+func (c *ClientWithResponses) GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error) {
+	rsp, err := c.GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx, agentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse(rsp)
+}
+
+// UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse request with arbitrary body returning *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse
+func (c *ClientWithResponses) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error) {
+	rsp, err := c.UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx, agentId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithResponse(ctx context.Context, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error) {
+	rsp, err := c.UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx, agentId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse(rsp)
+}
+
+// ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse request returning *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse
+func (c *ClientWithResponses) ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse, error) {
+	rsp, err := c.ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx, agentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse(rsp)
+}
+
+// CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse request with arbitrary body returning *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse
+func (c *ClientWithResponses) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error) {
+	rsp, err := c.CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithResponse(ctx context.Context, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error) {
+	rsp, err := c.CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx, agentId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse(rsp)
+}
+
+// TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse request with arbitrary body returning *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse
+func (c *ClientWithResponses) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error) {
+	rsp, err := c.TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithResponse(ctx context.Context, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error) {
+	rsp, err := c.TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx, agentId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse(rsp)
+}
+
+// ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetWithResponse request returning *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse
+func (c *ClientWithResponses) ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, params *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse, error) {
+	rsp, err := c.ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet(ctx, agentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse(rsp)
+}
+
+// ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetWithResponse request returning *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse
+func (c *ClientWithResponses) ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetWithResponse(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse, error) {
+	rsp, err := c.ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet(ctx, agentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse(rsp)
+}
+
+// ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse request returning *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse
+func (c *ClientWithResponses) ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse(ctx context.Context, agentId string, uploadId string, reqEditors ...RequestEditorFn) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error) {
+	rsp, err := c.ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx, agentId, uploadId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse(rsp)
 }
 
 // ListAgentRunsApiAgentsAgentIdRunsGetWithResponse request returning *ListAgentRunsApiAgentsAgentIdRunsGetResponse
@@ -1689,6 +15731,318 @@ func (c *ClientWithResponses) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWit
 	return ParseRunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse(rsp)
 }
 
+// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse request returning *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse
+func (c *ClientWithResponses) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error) {
+	rsp, err := c.ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx, agentId, runId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse(rsp)
+}
+
+// ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request returning *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse
+func (c *ClientWithResponses) ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error) {
+	rsp, err := c.ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx, agentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse(rsp)
+}
+
+// ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse request with arbitrary body returning *ApiAiFeedbackApiAiAssistantFeedbackPostResponse
+func (c *ClientWithResponses) ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error) {
+	rsp, err := c.ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiFeedbackApiAiAssistantFeedbackPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApiAiFeedbackApiAiAssistantFeedbackPostWithResponse(ctx context.Context, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error) {
+	rsp, err := c.ApiAiFeedbackApiAiAssistantFeedbackPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiFeedbackApiAiAssistantFeedbackPostResponse(rsp)
+}
+
+// ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse request with arbitrary body returning *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse
+func (c *ClientWithResponses) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error) {
+	rsp, err := c.ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error) {
+	rsp, err := c.ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse(rsp)
+}
+
+// ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse request with arbitrary body returning *ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse
+func (c *ClientWithResponses) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error) {
+	rsp, err := c.ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiMemoryBankApiAiAssistantMemoryBankPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithResponse(ctx context.Context, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error) {
+	rsp, err := c.ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiMemoryBankApiAiAssistantMemoryBankPostResponse(rsp)
+}
+
+// ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetWithResponse request returning *ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse
+func (c *ClientWithResponses) ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetWithResponse(ctx context.Context, params *ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse, error) {
+	rsp, err := c.ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse(rsp)
+}
+
+// ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse request with arbitrary body returning *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse
+func (c *ClientWithResponses) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error) {
+	rsp, err := c.ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx, conversationId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error) {
+	rsp, err := c.ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx, conversationId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse(rsp)
+}
+
+// ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse request with arbitrary body returning *ApiAiSolutionApiAiAssistantSolutionPostResponse
+func (c *ClientWithResponses) ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error) {
+	rsp, err := c.ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiSolutionApiAiAssistantSolutionPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApiAiSolutionApiAiAssistantSolutionPostWithResponse(ctx context.Context, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error) {
+	rsp, err := c.ApiAiSolutionApiAiAssistantSolutionPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiSolutionApiAiAssistantSolutionPostResponse(rsp)
+}
+
+// ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse request with arbitrary body returning *ApiAiSourceApiAiAssistantSourcePostResponse
+func (c *ClientWithResponses) ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error) {
+	rsp, err := c.ApiAiSourceApiAiAssistantSourcePostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiSourceApiAiAssistantSourcePostResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApiAiSourceApiAiAssistantSourcePostWithResponse(ctx context.Context, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error) {
+	rsp, err := c.ApiAiSourceApiAiAssistantSourcePost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiSourceApiAiAssistantSourcePostResponse(rsp)
+}
+
+// ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse request with arbitrary body returning *ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse
+func (c *ClientWithResponses) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx, conversationId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx, conversationId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse(rsp)
+}
+
+// ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse request returning *ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse
+func (c *ClientWithResponses) ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse, error) {
+	rsp, err := c.ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx, conversationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse(rsp)
+}
+
+// ListAlertsApiAlertsGetWithResponse request returning *ListAlertsApiAlertsGetResponse
+func (c *ClientWithResponses) ListAlertsApiAlertsGetWithResponse(ctx context.Context, params *ListAlertsApiAlertsGetParams, reqEditors ...RequestEditorFn) (*ListAlertsApiAlertsGetResponse, error) {
+	rsp, err := c.ListAlertsApiAlertsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAlertsApiAlertsGetResponse(rsp)
+}
+
+// ListAlertConfigsApiAlertsConfigsGetWithResponse request returning *ListAlertConfigsApiAlertsConfigsGetResponse
+func (c *ClientWithResponses) ListAlertConfigsApiAlertsConfigsGetWithResponse(ctx context.Context, params *ListAlertConfigsApiAlertsConfigsGetParams, reqEditors ...RequestEditorFn) (*ListAlertConfigsApiAlertsConfigsGetResponse, error) {
+	rsp, err := c.ListAlertConfigsApiAlertsConfigsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAlertConfigsApiAlertsConfigsGetResponse(rsp)
+}
+
+// CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse request with arbitrary body returning *CreateAlertConfigApiAlertsConfigsPostResponse
+func (c *ClientWithResponses) CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error) {
+	rsp, err := c.CreateAlertConfigApiAlertsConfigsPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAlertConfigApiAlertsConfigsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateAlertConfigApiAlertsConfigsPostWithResponse(ctx context.Context, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error) {
+	rsp, err := c.CreateAlertConfigApiAlertsConfigsPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAlertConfigApiAlertsConfigsPostResponse(rsp)
+}
+
+// DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse request returning *DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse
+func (c *ClientWithResponses) DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse, error) {
+	rsp, err := c.DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx, configId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse(rsp)
+}
+
+// GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse request returning *GetAlertConfigApiAlertsConfigsConfigIdGetResponse
+func (c *ClientWithResponses) GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*GetAlertConfigApiAlertsConfigsConfigIdGetResponse, error) {
+	rsp, err := c.GetAlertConfigApiAlertsConfigsConfigIdGet(ctx, configId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAlertConfigApiAlertsConfigsConfigIdGetResponse(rsp)
+}
+
+// UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse request with arbitrary body returning *UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse
+func (c *ClientWithResponses) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse(ctx context.Context, configId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error) {
+	rsp, err := c.UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx, configId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithResponse(ctx context.Context, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error) {
+	rsp, err := c.UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx, configId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse(rsp)
+}
+
+// ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetWithResponse request returning *ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse
+func (c *ClientWithResponses) ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetWithResponse(ctx context.Context, params *ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams, reqEditors ...RequestEditorFn) (*ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse, error) {
+	rsp, err := c.ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse(rsp)
+}
+
+// UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse request with arbitrary body returning *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse
+func (c *ClientWithResponses) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error) {
+	rsp, err := c.UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx, organizationId, alertType, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error) {
+	rsp, err := c.UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx, organizationId, alertType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse(rsp)
+}
+
+// GetAlertDetailApiAlertsAlertIdGetWithResponse request returning *GetAlertDetailApiAlertsAlertIdGetResponse
+func (c *ClientWithResponses) GetAlertDetailApiAlertsAlertIdGetWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*GetAlertDetailApiAlertsAlertIdGetResponse, error) {
+	rsp, err := c.GetAlertDetailApiAlertsAlertIdGet(ctx, alertId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAlertDetailApiAlertsAlertIdGetResponse(rsp)
+}
+
+// AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse request with arbitrary body returning *AddAlertCommentApiAlertsAlertIdCommentsPostResponse
+func (c *ClientWithResponses) AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error) {
+	rsp, err := c.AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx, alertId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddAlertCommentApiAlertsAlertIdCommentsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) AddAlertCommentApiAlertsAlertIdCommentsPostWithResponse(ctx context.Context, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error) {
+	rsp, err := c.AddAlertCommentApiAlertsAlertIdCommentsPost(ctx, alertId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddAlertCommentApiAlertsAlertIdCommentsPostResponse(rsp)
+}
+
+// ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse request with arbitrary body returning *ChangeAlertStatusApiAlertsAlertIdStatusPostResponse
+func (c *ClientWithResponses) ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error) {
+	rsp, err := c.ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx, alertId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseChangeAlertStatusApiAlertsAlertIdStatusPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) ChangeAlertStatusApiAlertsAlertIdStatusPostWithResponse(ctx context.Context, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error) {
+	rsp, err := c.ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx, alertId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseChangeAlertStatusApiAlertsAlertIdStatusPostResponse(rsp)
+}
+
+// SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse request returning *SubscribeToAlertApiAlertsAlertIdSubscribePostResponse
+func (c *ClientWithResponses) SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*SubscribeToAlertApiAlertsAlertIdSubscribePostResponse, error) {
+	rsp, err := c.SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx, alertId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSubscribeToAlertApiAlertsAlertIdSubscribePostResponse(rsp)
+}
+
+// UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse request returning *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse
+func (c *ClientWithResponses) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse, error) {
+	rsp, err := c.UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx, alertId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse(rsp)
+}
+
 // DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request returning *DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse
 func (c *ClientWithResponses) DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error) {
 	rsp, err := c.DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx, sourceConnectionContentVersion, reqEditors...)
@@ -1707,6 +16061,23 @@ func (c *ClientWithResponses) GetContentDetailApiContentsSourceConnectionContent
 	return ParseGetContentDetailApiContentsSourceConnectionContentVersionGetResponse(rsp)
 }
 
+// ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse request with arbitrary body returning *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse
+func (c *ClientWithResponses) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error) {
+	rsp, err := c.ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx, sourceConnectionContentVersion, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithResponse(ctx context.Context, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error) {
+	rsp, err := c.ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx, sourceConnectionContentVersion, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse(rsp)
+}
+
 // ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse request returning *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse
 func (c *ClientWithResponses) ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse, error) {
 	rsp, err := c.ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet(ctx, sourceConnectionContentVersion, params, reqEditors...)
@@ -1714,6 +16085,657 @@ func (c *ClientWithResponses) ListContentEmbeddingsApiContentsSourceConnectionCo
 		return nil, err
 	}
 	return ParseListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse(rsp)
+}
+
+// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse request with arbitrary body returning *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse
+func (c *ClientWithResponses) UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse, error) {
+	rsp, err := c.UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx, sourceConnectionContentVersion, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse(rsp)
+}
+
+// GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse request with arbitrary body returning *GovernanceAiGenerateApiGovernanceAiAssistantPostResponse
+func (c *ClientWithResponses) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error) {
+	rsp, err := c.GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGovernanceAiGenerateApiGovernanceAiAssistantPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) GovernanceAiGenerateApiGovernanceAiAssistantPostWithResponse(ctx context.Context, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error) {
+	rsp, err := c.GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGovernanceAiGenerateApiGovernanceAiAssistantPostResponse(rsp)
+}
+
+// ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetWithResponse request returning *ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse
+func (c *ClientWithResponses) ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetWithResponse(ctx context.Context, params *ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse, error) {
+	rsp, err := c.ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse(rsp)
+}
+
+// GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse request returning *GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse
+func (c *ClientWithResponses) GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx, conversationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse(rsp)
+}
+
+// GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse request returning *GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse
+func (c *ClientWithResponses) GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse, error) {
+	rsp, err := c.GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx, conversationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse(rsp)
+}
+
+// ListKnowledgeBasesApiKnowledgeBasesGetWithResponse request returning *ListKnowledgeBasesApiKnowledgeBasesGetResponse
+func (c *ClientWithResponses) ListKnowledgeBasesApiKnowledgeBasesGetWithResponse(ctx context.Context, params *ListKnowledgeBasesApiKnowledgeBasesGetParams, reqEditors ...RequestEditorFn) (*ListKnowledgeBasesApiKnowledgeBasesGetResponse, error) {
+	rsp, err := c.ListKnowledgeBasesApiKnowledgeBasesGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListKnowledgeBasesApiKnowledgeBasesGetResponse(rsp)
+}
+
+// CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse request with arbitrary body returning *CreateKnowledgeBaseApiKnowledgeBasesPostResponse
+func (c *ClientWithResponses) CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error) {
+	rsp, err := c.CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateKnowledgeBaseApiKnowledgeBasesPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateKnowledgeBaseApiKnowledgeBasesPostWithResponse(ctx context.Context, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error) {
+	rsp, err := c.CreateKnowledgeBaseApiKnowledgeBasesPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateKnowledgeBaseApiKnowledgeBasesPostResponse(rsp)
+}
+
+// DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse request returning *DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse
+func (c *ClientWithResponses) DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse, error) {
+	rsp, err := c.DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx, knowledgeBaseId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse(rsp)
+}
+
+// GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse request returning *GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse
+func (c *ClientWithResponses) GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse, error) {
+	rsp, err := c.GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx, knowledgeBaseId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse(rsp)
+}
+
+// UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse request with arbitrary body returning *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse
+func (c *ClientWithResponses) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse(ctx context.Context, knowledgeBaseId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error) {
+	rsp, err := c.UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx, knowledgeBaseId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse(ctx context.Context, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error) {
+	rsp, err := c.UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx, knowledgeBaseId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp)
+}
+
+// ListMemoryBanksApiMemoryBanksGetWithResponse request returning *ListMemoryBanksApiMemoryBanksGetResponse
+func (c *ClientWithResponses) ListMemoryBanksApiMemoryBanksGetWithResponse(ctx context.Context, params *ListMemoryBanksApiMemoryBanksGetParams, reqEditors ...RequestEditorFn) (*ListMemoryBanksApiMemoryBanksGetResponse, error) {
+	rsp, err := c.ListMemoryBanksApiMemoryBanksGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMemoryBanksApiMemoryBanksGetResponse(rsp)
+}
+
+// CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse request with arbitrary body returning *CreateMemoryBankApiMemoryBanksPostResponse
+func (c *ClientWithResponses) CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error) {
+	rsp, err := c.CreateMemoryBankApiMemoryBanksPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMemoryBankApiMemoryBanksPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateMemoryBankApiMemoryBanksPostWithResponse(ctx context.Context, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error) {
+	rsp, err := c.CreateMemoryBankApiMemoryBanksPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMemoryBankApiMemoryBanksPostResponse(rsp)
+}
+
+// MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse request with arbitrary body returning *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse
+func (c *ClientWithResponses) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error) {
+	rsp, err := c.MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithResponse(ctx context.Context, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error) {
+	rsp, err := c.MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse(rsp)
+}
+
+// MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetWithResponse request returning *MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse
+func (c *ClientWithResponses) MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetWithResponse(ctx context.Context, params *MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams, reqEditors ...RequestEditorFn) (*MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse, error) {
+	rsp, err := c.MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse(rsp)
+}
+
+// MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse request with arbitrary body returning *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse
+func (c *ClientWithResponses) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error) {
+	rsp, err := c.MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx, conversationId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error) {
+	rsp, err := c.MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx, conversationId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse(rsp)
+}
+
+// ListTemplatesApiMemoryBanksTemplatesGetWithResponse request returning *ListTemplatesApiMemoryBanksTemplatesGetResponse
+func (c *ClientWithResponses) ListTemplatesApiMemoryBanksTemplatesGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTemplatesApiMemoryBanksTemplatesGetResponse, error) {
+	rsp, err := c.ListTemplatesApiMemoryBanksTemplatesGet(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTemplatesApiMemoryBanksTemplatesGetResponse(rsp)
+}
+
+// TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse request with arbitrary body returning *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse
+func (c *ClientWithResponses) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error) {
+	rsp, err := c.TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithResponse(ctx context.Context, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error) {
+	rsp, err := c.TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse(rsp)
+}
+
+// DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse request returning *DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse
+func (c *ClientWithResponses) DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse, error) {
+	rsp, err := c.DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx, memoryBankId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse(rsp)
+}
+
+// GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse request returning *GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse
+func (c *ClientWithResponses) GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse, error) {
+	rsp, err := c.GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx, memoryBankId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMemoryBankApiMemoryBanksMemoryBankIdGetResponse(rsp)
+}
+
+// UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse request with arbitrary body returning *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse
+func (c *ClientWithResponses) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error) {
+	rsp, err := c.UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx, memoryBankId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithResponse(ctx context.Context, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error) {
+	rsp, err := c.UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx, memoryBankId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse(rsp)
+}
+
+// GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse request returning *GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse
+func (c *ClientWithResponses) GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse, error) {
+	rsp, err := c.GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx, memoryBankId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse(rsp)
+}
+
+// CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse request returning *CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse
+func (c *ClientWithResponses) CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse, error) {
+	rsp, err := c.CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx, memoryBankId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse(rsp)
+}
+
+// DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse request returning *DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse
+func (c *ClientWithResponses) DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse, error) {
+	rsp, err := c.DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx, memoryBankId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse(rsp)
+}
+
+// GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetWithResponse request returning *GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse
+func (c *ClientWithResponses) GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetWithResponse(ctx context.Context, memoryBankId string, params *GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams, reqEditors ...RequestEditorFn) (*GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse, error) {
+	rsp, err := c.GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet(ctx, memoryBankId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse(rsp)
+}
+
+// TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse request with arbitrary body returning *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse
+func (c *ClientWithResponses) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error) {
+	rsp, err := c.TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx, memoryBankId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithResponse(ctx context.Context, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error) {
+	rsp, err := c.TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx, memoryBankId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse(rsp)
+}
+
+// ListAlertsApiModelsAlertsGetWithResponse request returning *ListAlertsApiModelsAlertsGetResponse
+func (c *ClientWithResponses) ListAlertsApiModelsAlertsGetWithResponse(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*ListAlertsApiModelsAlertsGetResponse, error) {
+	rsp, err := c.ListAlertsApiModelsAlertsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAlertsApiModelsAlertsGetResponse(rsp)
+}
+
+// MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse request returning *MarkAllReadApiModelsAlertsMarkAllReadPostResponse
+func (c *ClientWithResponses) MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*MarkAllReadApiModelsAlertsMarkAllReadPostResponse, error) {
+	rsp, err := c.MarkAllReadApiModelsAlertsMarkAllReadPost(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMarkAllReadApiModelsAlertsMarkAllReadPostResponse(rsp)
+}
+
+// GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse request returning *GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse
+func (c *ClientWithResponses) GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse, error) {
+	rsp, err := c.GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse(rsp)
+}
+
+// MarkReadApiModelsAlertsAlertIdReadPatchWithResponse request returning *MarkReadApiModelsAlertsAlertIdReadPatchResponse
+func (c *ClientWithResponses) MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error) {
+	rsp, err := c.MarkReadApiModelsAlertsAlertIdReadPatch(ctx, alertId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse(rsp)
+}
+
+// GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse request returning *GetRecommendationsApiModelsModelIdRecommendationsGetResponse
+func (c *ClientWithResponses) GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse(ctx context.Context, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams, reqEditors ...RequestEditorFn) (*GetRecommendationsApiModelsModelIdRecommendationsGetResponse, error) {
+	rsp, err := c.GetRecommendationsApiModelsModelIdRecommendationsGet(ctx, modelId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRecommendationsApiModelsModelIdRecommendationsGetResponse(rsp)
+}
+
+// SearchApiSearchGetWithResponse request returning *SearchApiSearchGetResponse
+func (c *ClientWithResponses) SearchApiSearchGetWithResponse(ctx context.Context, params *SearchApiSearchGetParams, reqEditors ...RequestEditorFn) (*SearchApiSearchGetResponse, error) {
+	rsp, err := c.SearchApiSearchGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSearchApiSearchGetResponse(rsp)
+}
+
+// ListSolutionsApiSolutionsGetWithResponse request returning *ListSolutionsApiSolutionsGetResponse
+func (c *ClientWithResponses) ListSolutionsApiSolutionsGetWithResponse(ctx context.Context, params *ListSolutionsApiSolutionsGetParams, reqEditors ...RequestEditorFn) (*ListSolutionsApiSolutionsGetResponse, error) {
+	rsp, err := c.ListSolutionsApiSolutionsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSolutionsApiSolutionsGetResponse(rsp)
+}
+
+// CreateSolutionApiSolutionsPostWithBodyWithResponse request with arbitrary body returning *CreateSolutionApiSolutionsPostResponse
+func (c *ClientWithResponses) CreateSolutionApiSolutionsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error) {
+	rsp, err := c.CreateSolutionApiSolutionsPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSolutionApiSolutionsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateSolutionApiSolutionsPostWithResponse(ctx context.Context, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error) {
+	rsp, err := c.CreateSolutionApiSolutionsPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSolutionApiSolutionsPostResponse(rsp)
+}
+
+// DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse request returning *DeleteSolutionApiSolutionsSolutionIdDeleteResponse
+func (c *ClientWithResponses) DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSolutionApiSolutionsSolutionIdDeleteResponse, error) {
+	rsp, err := c.DeleteSolutionApiSolutionsSolutionIdDelete(ctx, solutionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteSolutionApiSolutionsSolutionIdDeleteResponse(rsp)
+}
+
+// GetSolutionApiSolutionsSolutionIdGetWithResponse request returning *GetSolutionApiSolutionsSolutionIdGetResponse
+func (c *ClientWithResponses) GetSolutionApiSolutionsSolutionIdGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSolutionApiSolutionsSolutionIdGetResponse, error) {
+	rsp, err := c.GetSolutionApiSolutionsSolutionIdGet(ctx, solutionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSolutionApiSolutionsSolutionIdGetResponse(rsp)
+}
+
+// UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse request with arbitrary body returning *UpdateSolutionApiSolutionsSolutionIdPatchResponse
+func (c *ClientWithResponses) UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error) {
+	rsp, err := c.UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateSolutionApiSolutionsSolutionIdPatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateSolutionApiSolutionsSolutionIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error) {
+	rsp, err := c.UpdateSolutionApiSolutionsSolutionIdPatch(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateSolutionApiSolutionsSolutionIdPatchResponse(rsp)
+}
+
+// UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse request with arbitrary body returning *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse
+func (c *ClientWithResponses) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error) {
+	rsp, err := c.UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse(rsp)
+}
+
+func (c *ClientWithResponses) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error) {
+	rsp, err := c.UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse(rsp)
+}
+
+// LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse request with arbitrary body returning *LinkAgentsApiSolutionsSolutionIdAgentsPostResponse
+func (c *ClientWithResponses) LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error) {
+	rsp, err := c.LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLinkAgentsApiSolutionsSolutionIdAgentsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) LinkAgentsApiSolutionsSolutionIdAgentsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error) {
+	rsp, err := c.LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLinkAgentsApiSolutionsSolutionIdAgentsPostResponse(rsp)
+}
+
+// AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse request with arbitrary body returning *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse
+func (c *ClientWithResponses) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error) {
+	rsp, err := c.AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse(rsp)
+}
+
+func (c *ClientWithResponses) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error) {
+	rsp, err := c.AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse(rsp)
+}
+
+// AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse request with arbitrary body returning *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse
+func (c *ClientWithResponses) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error) {
+	rsp, err := c.AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse(rsp)
+}
+
+func (c *ClientWithResponses) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error) {
+	rsp, err := c.AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse(rsp)
+}
+
+// AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse request with arbitrary body returning *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse
+func (c *ClientWithResponses) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error) {
+	rsp, err := c.AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse(rsp)
+}
+
+func (c *ClientWithResponses) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error) {
+	rsp, err := c.AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse(rsp)
+}
+
+// AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse request with arbitrary body returning *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse
+func (c *ClientWithResponses) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx, solutionId, conversationId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx, solutionId, conversationId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse(rsp)
+}
+
+// AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse request returning *AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse
+func (c *ClientWithResponses) AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse, error) {
+	rsp, err := c.AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx, solutionId, conversationId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse(rsp)
+}
+
+// ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse request returning *ListConversationsApiSolutionsSolutionIdConversationsGetResponse
+func (c *ClientWithResponses) ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListConversationsApiSolutionsSolutionIdConversationsGetResponse, error) {
+	rsp, err := c.ListConversationsApiSolutionsSolutionIdConversationsGet(ctx, solutionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListConversationsApiSolutionsSolutionIdConversationsGetResponse(rsp)
+}
+
+// AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse request with arbitrary body returning *AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse
+func (c *ClientWithResponses) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error) {
+	rsp, err := c.AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddConversationTurnApiSolutionsSolutionIdConversationsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error) {
+	rsp, err := c.AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddConversationTurnApiSolutionsSolutionIdConversationsPostResponse(rsp)
+}
+
+// MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse request with arbitrary body returning *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse
+func (c *ClientWithResponses) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error) {
+	rsp, err := c.MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx, solutionId, conversationId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error) {
+	rsp, err := c.MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx, solutionId, conversationId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse(rsp)
+}
+
+// UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse request with arbitrary body returning *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse
+func (c *ClientWithResponses) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error) {
+	rsp, err := c.UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse(rsp)
+}
+
+func (c *ClientWithResponses) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error) {
+	rsp, err := c.UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse(rsp)
+}
+
+// LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse request with arbitrary body returning *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse
+func (c *ClientWithResponses) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error) {
+	rsp, err := c.LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error) {
+	rsp, err := c.LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse(rsp)
+}
+
+// UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse request with arbitrary body returning *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse
+func (c *ClientWithResponses) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error) {
+	rsp, err := c.UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse(rsp)
+}
+
+func (c *ClientWithResponses) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error) {
+	rsp, err := c.UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse(rsp)
+}
+
+// LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse request with arbitrary body returning *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse
+func (c *ClientWithResponses) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error) {
+	rsp, err := c.LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error) {
+	rsp, err := c.LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx, solutionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse(rsp)
+}
+
+// CreateSourceApiSourcesPostWithBodyWithResponse request with arbitrary body returning *CreateSourceApiSourcesPostResponse
+func (c *ClientWithResponses) CreateSourceApiSourcesPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error) {
+	rsp, err := c.CreateSourceApiSourcesPostWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSourceApiSourcesPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateSourceApiSourcesPostWithResponse(ctx context.Context, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error) {
+	rsp, err := c.CreateSourceApiSourcesPost(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSourceApiSourcesPostResponse(rsp)
 }
 
 // ListSourcesApiSourcesGetWithResponse request returning *ListSourcesApiSourcesGetResponse
@@ -1725,6 +16747,172 @@ func (c *ClientWithResponses) ListSourcesApiSourcesGetWithResponse(ctx context.C
 	return ParseListSourcesApiSourcesGetResponse(rsp)
 }
 
+// DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse request returning *DeleteSourceApiSourcesSourceConnectionIdDeleteResponse
+func (c *ClientWithResponses) DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSourceApiSourcesSourceConnectionIdDeleteResponse, error) {
+	rsp, err := c.DeleteSourceApiSourcesSourceConnectionIdDelete(ctx, sourceConnectionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteSourceApiSourcesSourceConnectionIdDeleteResponse(rsp)
+}
+
+// GetSourceApiSourcesSourceConnectionIdGetWithResponse request returning *GetSourceApiSourcesSourceConnectionIdGetResponse
+func (c *ClientWithResponses) GetSourceApiSourcesSourceConnectionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceApiSourcesSourceConnectionIdGetResponse, error) {
+	rsp, err := c.GetSourceApiSourcesSourceConnectionIdGet(ctx, sourceConnectionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSourceApiSourcesSourceConnectionIdGetResponse(rsp)
+}
+
+// UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse request with arbitrary body returning *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse
+func (c *ClientWithResponses) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error) {
+	rsp, err := c.UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error) {
+	rsp, err := c.UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx, sourceConnectionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse(rsp)
+}
+
+// UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse request with arbitrary body returning *UpdateSourceApiSourcesSourceConnectionIdPutResponse
+func (c *ClientWithResponses) UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error) {
+	rsp, err := c.UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateSourceApiSourcesSourceConnectionIdPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateSourceApiSourcesSourceConnectionIdPutWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error) {
+	rsp, err := c.UpdateSourceApiSourcesSourceConnectionIdPut(ctx, sourceConnectionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateSourceApiSourcesSourceConnectionIdPutResponse(rsp)
+}
+
+// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse request returning *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse
+func (c *ClientWithResponses) GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error) {
+	rsp, err := c.GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx, sourceConnectionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse(rsp)
+}
+
+// StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse request with arbitrary body returning *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse
+func (c *ClientWithResponses) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error) {
+	rsp, err := c.StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error) {
+	rsp, err := c.StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx, sourceConnectionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse(rsp)
+}
+
+// CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse request returning *CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse
+func (c *ClientWithResponses) CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse, error) {
+	rsp, err := c.CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx, sourceConnectionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse(rsp)
+}
+
+// ListSourceExportsApiSourcesSourceConnectionIdExportsGetWithResponse request returning *ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse
+func (c *ClientWithResponses) ListSourceExportsApiSourcesSourceConnectionIdExportsGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams, reqEditors ...RequestEditorFn) (*ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse, error) {
+	rsp, err := c.ListSourceExportsApiSourcesSourceConnectionIdExportsGet(ctx, sourceConnectionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse(rsp)
+}
+
+// CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse request with arbitrary body returning *CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse
+func (c *ClientWithResponses) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error) {
+	rsp, err := c.CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error) {
+	rsp, err := c.CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx, sourceConnectionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse(rsp)
+}
+
+// EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse request with arbitrary body returning *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse
+func (c *ClientWithResponses) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error) {
+	rsp, err := c.EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse(rsp)
+}
+
+func (c *ClientWithResponses) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error) {
+	rsp, err := c.EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx, sourceConnectionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse(rsp)
+}
+
+// DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse request returning *DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse
+func (c *ClientWithResponses) DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse, error) {
+	rsp, err := c.DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx, sourceConnectionId, exportId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse(rsp)
+}
+
+// GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse request returning *GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse
+func (c *ClientWithResponses) GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse, error) {
+	rsp, err := c.GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx, sourceConnectionId, exportId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse(rsp)
+}
+
+// CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse request returning *CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse
+func (c *ClientWithResponses) CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse, error) {
+	rsp, err := c.CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx, sourceConnectionId, exportId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse(rsp)
+}
+
+// DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse request returning *DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse
+func (c *ClientWithResponses) DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse, error) {
+	rsp, err := c.DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx, sourceConnectionId, exportId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse(rsp)
+}
+
 // UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse request with arbitrary body returning *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse
 func (c *ClientWithResponses) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error) {
 	rsp, err := c.UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
@@ -1732,6 +16920,362 @@ func (c *ClientWithResponses) UploadFileToSourceApiSourcesSourceConnectionIdUplo
 		return nil, err
 	}
 	return ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse(rsp)
+}
+
+// ParseListAgentsApiAgentsGetResponse parses an HTTP response from a ListAgentsApiAgentsGetWithResponse call
+func ParseListAgentsApiAgentsGetResponse(rsp *http.Response) (*ListAgentsApiAgentsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentsApiAgentsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiAgentsAgentListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateAgentApiAgentsPostResponse parses an HTTP response from a CreateAgentApiAgentsPostWithResponse call
+func ParseCreateAgentApiAgentsPostResponse(rsp *http.Response) (*CreateAgentApiAgentsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateAgentApiAgentsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AgentSummaryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse parses an HTTP response from a DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse call
+func ParseDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse(rsp *http.Response) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse parses an HTTP response from a GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse call
+func ParseGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse(rsp *http.Response) (*GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EvaluationCriteriaResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse parses an HTTP response from a UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithResponse call
+func ParseUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse(rsp *http.Response) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EvaluationCriteriaResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse parses an HTTP response from a ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetWithResponse call
+func ParseListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse(rsp *http.Response) (*ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CompatibleRunListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse parses an HTTP response from a ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetWithResponse call
+func ParseListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse(rsp *http.Response) (*ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EvaluationResultListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse parses an HTTP response from a CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithResponse call
+func ParseCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse(rsp *http.Response) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest EvaluationResultResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse parses an HTTP response from a GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse call
+func ParseGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse(rsp *http.Response) (*GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EvaluationResultSummaryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse parses an HTTP response from a GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse call
+func ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse(rsp *http.Response) (*GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchAgentRunsApiAgentsRunsSearchPostResponse parses an HTTP response from a SearchAgentRunsApiAgentsRunsSearchPostWithResponse call
+func ParseSearchAgentRunsApiAgentsRunsSearchPostResponse(rsp *http.Response) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchAgentRunsApiAgentsRunsSearchPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentTraceSearchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseDeleteAgentRunApiAgentsRunsRunIdDeleteResponse parses an HTTP response from a DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse call
@@ -1783,6 +17327,494 @@ func ParseGetAgentRunApiAgentsRunsRunIdGetResponse(rsp *http.Response) (*GetAgen
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest AgentRunResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteAgentApiAgentsAgentIdDeleteResponse parses an HTTP response from a DeleteAgentApiAgentsAgentIdDeleteWithResponse call
+func ParseDeleteAgentApiAgentsAgentIdDeleteResponse(rsp *http.Response) (*DeleteAgentApiAgentsAgentIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteAgentApiAgentsAgentIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentMetadataApiAgentsAgentIdGetResponse parses an HTTP response from a GetAgentMetadataApiAgentsAgentIdGetWithResponse call
+func ParseGetAgentMetadataApiAgentsAgentIdGetResponse(rsp *http.Response) (*GetAgentMetadataApiAgentsAgentIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentMetadataApiAgentsAgentIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentSummaryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAgentApiAgentsAgentIdPutResponse parses an HTTP response from a UpdateAgentApiAgentsAgentIdPutWithResponse call
+func ParseUpdateAgentApiAgentsAgentIdPutResponse(rsp *http.Response) (*UpdateAgentApiAgentsAgentIdPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAgentApiAgentsAgentIdPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentSummaryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse parses an HTTP response from a GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetWithResponse call
+func ParseGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse(rsp *http.Response) (*GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AiConversationHistoryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse parses an HTTP response from a GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithResponse call
+func ParseGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse(rsp *http.Response) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GenerateAgentStepsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse parses an HTTP response from a GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithResponse call
+func ParseGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse(rsp *http.Response) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GenerateStepConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse parses an HTTP response from a MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithResponse call
+func ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse(rsp *http.Response) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]bool
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse parses an HTTP response from a GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse call
+func ParseGetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse(rsp *http.Response) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentDefinitionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse parses an HTTP response from a UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithResponse call
+func ParseUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse(rsp *http.Response) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentDefinitionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse parses an HTTP response from a ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse call
+func ParseListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse(rsp *http.Response) (*ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []EvaluationCriteriaResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse parses an HTTP response from a CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithResponse call
+func ParseCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse(rsp *http.Response) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest EvaluationCriteriaResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse parses an HTTP response from a TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithResponse call
+func ParseTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse(rsp *http.Response) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TestDraftEvaluationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse parses an HTTP response from a ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetWithResponse call
+func ParseListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse(rsp *http.Response) (*ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EvaluationResultWithCriteriaListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse parses an HTTP response from a ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetWithResponse call
+func ParseListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse(rsp *http.Response) (*ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EvaluationRunSummaryListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse parses an HTTP response from a ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse call
+func ParseApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse(rsp *http.Response) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UploadAgentInputApiResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1902,6 +17934,784 @@ func ParseRunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse(rsp *http.Resp
 	return response, nil
 }
 
+// ParseListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse parses an HTTP response from a ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse call
+func ParseListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse(rsp *http.Response) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []EvaluationResultWithCriteriaResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse parses an HTTP response from a ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse call
+func ParseApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse(rsp *http.Response) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest UploadAgentInputApiResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiFeedbackApiAiAssistantFeedbackPostResponse parses an HTTP response from a ApiAiFeedbackApiAiAssistantFeedbackPostWithResponse call
+func ParseApiAiFeedbackApiAiAssistantFeedbackPostResponse(rsp *http.Response) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiFeedbackApiAiAssistantFeedbackPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AiAssistantFeedbackResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse parses an HTTP response from a ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithResponse call
+func ParseApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse(rsp *http.Response) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiMemoryBankApiAiAssistantMemoryBankPostResponse parses an HTTP response from a ApiAiMemoryBankApiAiAssistantMemoryBankPostWithResponse call
+func ParseApiAiMemoryBankApiAiAssistantMemoryBankPostResponse(rsp *http.Response) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse parses an HTTP response from a ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetWithResponse call
+func ParseApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse(rsp *http.Response) (*ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiMemoryBanksMemoryBankLastConversationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse parses an HTTP response from a ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithResponse call
+func ParseApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse(rsp *http.Response) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]bool
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiSolutionApiAiAssistantSolutionPostResponse parses an HTTP response from a ApiAiSolutionApiAiAssistantSolutionPostWithResponse call
+func ParseApiAiSolutionApiAiAssistantSolutionPostResponse(rsp *http.Response) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiSolutionApiAiAssistantSolutionPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiSourceApiAiAssistantSourcePostResponse parses an HTTP response from a ApiAiSourceApiAiAssistantSourcePostWithResponse call
+func ParseApiAiSourceApiAiAssistantSourcePostResponse(rsp *http.Response) (*ApiAiSourceApiAiAssistantSourcePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiSourceApiAiAssistantSourcePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse parses an HTTP response from a ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithResponse call
+func ParseApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse(rsp *http.Response) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsAiAssistantAcceptResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse parses an HTTP response from a ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse call
+func ParseApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse(rsp *http.Response) (*ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAlertsApiAlertsGetResponse parses an HTTP response from a ListAlertsApiAlertsGetWithResponse call
+func ParseListAlertsApiAlertsGetResponse(rsp *http.Response) (*ListAlertsApiAlertsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAlertsApiAlertsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAlertConfigsApiAlertsConfigsGetResponse parses an HTTP response from a ListAlertConfigsApiAlertsConfigsGetWithResponse call
+func ParseListAlertConfigsApiAlertsConfigsGetResponse(rsp *http.Response) (*ListAlertConfigsApiAlertsConfigsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAlertConfigsApiAlertsConfigsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateAlertConfigApiAlertsConfigsPostResponse parses an HTTP response from a CreateAlertConfigApiAlertsConfigsPostWithResponse call
+func ParseCreateAlertConfigApiAlertsConfigsPostResponse(rsp *http.Response) (*CreateAlertConfigApiAlertsConfigsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateAlertConfigApiAlertsConfigsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse parses an HTTP response from a DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse call
+func ParseDeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse(rsp *http.Response) (*DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAlertConfigApiAlertsConfigsConfigIdGetResponse parses an HTTP response from a GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse call
+func ParseGetAlertConfigApiAlertsConfigsConfigIdGetResponse(rsp *http.Response) (*GetAlertConfigApiAlertsConfigsConfigIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAlertConfigApiAlertsConfigsConfigIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse parses an HTTP response from a UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithResponse call
+func ParseUpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse(rsp *http.Response) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse parses an HTTP response from a ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetWithResponse call
+func ParseListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse(rsp *http.Response) (*ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrganizationAlertPreferenceListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse parses an HTTP response from a UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithResponse call
+func ParseUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse(rsp *http.Response) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiAlertsOrganizationAlertPreferenceResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAlertDetailApiAlertsAlertIdGetResponse parses an HTTP response from a GetAlertDetailApiAlertsAlertIdGetWithResponse call
+func ParseGetAlertDetailApiAlertsAlertIdGetResponse(rsp *http.Response) (*GetAlertDetailApiAlertsAlertIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAlertDetailApiAlertsAlertIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAddAlertCommentApiAlertsAlertIdCommentsPostResponse parses an HTTP response from a AddAlertCommentApiAlertsAlertIdCommentsPostWithResponse call
+func ParseAddAlertCommentApiAlertsAlertIdCommentsPostResponse(rsp *http.Response) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AddAlertCommentApiAlertsAlertIdCommentsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseChangeAlertStatusApiAlertsAlertIdStatusPostResponse parses an HTTP response from a ChangeAlertStatusApiAlertsAlertIdStatusPostWithResponse call
+func ParseChangeAlertStatusApiAlertsAlertIdStatusPostResponse(rsp *http.Response) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ChangeAlertStatusApiAlertsAlertIdStatusPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSubscribeToAlertApiAlertsAlertIdSubscribePostResponse parses an HTTP response from a SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse call
+func ParseSubscribeToAlertApiAlertsAlertIdSubscribePostResponse(rsp *http.Response) (*SubscribeToAlertApiAlertsAlertIdSubscribePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SubscribeToAlertApiAlertsAlertIdSubscribePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse parses an HTTP response from a UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse call
+func ParseUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse(rsp *http.Response) (*UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDeleteContentApiContentsSourceConnectionContentVersionDeleteResponse parses an HTTP response from a DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse call
 func ParseDeleteContentApiContentsSourceConnectionContentVersionDeleteResponse(rsp *http.Response) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -1961,6 +18771,39 @@ func ParseGetContentDetailApiContentsSourceConnectionContentVersionGetResponse(r
 	return response, nil
 }
 
+// ParseReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse parses an HTTP response from a ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithResponse call
+func ParseReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse(rsp *http.Response) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiContentsFileUploadResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse parses an HTTP response from a ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse call
 func ParseListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse(rsp *http.Response) (*ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -1981,6 +18824,1602 @@ func ParseListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddin
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse parses an HTTP response from a UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithResponse call
+func ParseUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse(rsp *http.Response) (*UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiContentsFileUploadResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGovernanceAiGenerateApiGovernanceAiAssistantPostResponse parses an HTTP response from a GovernanceAiGenerateApiGovernanceAiAssistantPostWithResponse call
+func ParseGovernanceAiGenerateApiGovernanceAiAssistantPostResponse(rsp *http.Response) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GovernanceAiGenerateApiGovernanceAiAssistantPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiGovernanceGovernanceAiAssistantResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse parses an HTTP response from a ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetWithResponse call
+func ParseListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse(rsp *http.Response) (*ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []RoutersApiGovernanceGovernanceConversationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse parses an HTTP response from a GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse call
+func ParseGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse(rsp *http.Response) (*GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiGovernanceGovernanceAiAcceptResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse parses an HTTP response from a GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse call
+func ParseGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse(rsp *http.Response) (*GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListKnowledgeBasesApiKnowledgeBasesGetResponse parses an HTTP response from a ListKnowledgeBasesApiKnowledgeBasesGetWithResponse call
+func ParseListKnowledgeBasesApiKnowledgeBasesGetResponse(rsp *http.Response) (*ListKnowledgeBasesApiKnowledgeBasesGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListKnowledgeBasesApiKnowledgeBasesGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgeBaseListResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateKnowledgeBaseApiKnowledgeBasesPostResponse parses an HTTP response from a CreateKnowledgeBaseApiKnowledgeBasesPostWithResponse call
+func ParseCreateKnowledgeBaseApiKnowledgeBasesPostResponse(rsp *http.Response) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateKnowledgeBaseApiKnowledgeBasesPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest KnowledgeBaseResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse parses an HTTP response from a DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse call
+func ParseDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse(rsp *http.Response) (*DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse parses an HTTP response from a GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse call
+func ParseGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse(rsp *http.Response) (*GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgeBaseResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse parses an HTTP response from a UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse call
+func ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp *http.Response) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgeBaseResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMemoryBanksApiMemoryBanksGetResponse parses an HTTP response from a ListMemoryBanksApiMemoryBanksGetWithResponse call
+func ParseListMemoryBanksApiMemoryBanksGetResponse(rsp *http.Response) (*ListMemoryBanksApiMemoryBanksGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMemoryBanksApiMemoryBanksGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MemoryBankListResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateMemoryBankApiMemoryBanksPostResponse parses an HTTP response from a CreateMemoryBankApiMemoryBanksPostWithResponse call
+func ParseCreateMemoryBankApiMemoryBanksPostResponse(rsp *http.Response) (*CreateMemoryBankApiMemoryBanksPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateMemoryBankApiMemoryBanksPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest MemoryBankResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse parses an HTTP response from a MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithResponse call
+func ParseMemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse(rsp *http.Response) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse parses an HTTP response from a MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetWithResponse call
+func ParseMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse(rsp *http.Response) (*MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiMemoryBanksMemoryBankLastConversationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse parses an HTTP response from a MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithResponse call
+func ParseMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse(rsp *http.Response) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]bool
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListTemplatesApiMemoryBanksTemplatesGetResponse parses an HTTP response from a ListTemplatesApiMemoryBanksTemplatesGetWithResponse call
+func ParseListTemplatesApiMemoryBanksTemplatesGetResponse(rsp *http.Response) (*ListTemplatesApiMemoryBanksTemplatesGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTemplatesApiMemoryBanksTemplatesGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse parses an HTTP response from a TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithResponse call
+func ParseTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse(rsp *http.Response) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CompactionTestResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse parses an HTTP response from a DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse call
+func ParseDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse(rsp *http.Response) (*DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMemoryBankApiMemoryBanksMemoryBankIdGetResponse parses an HTTP response from a GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse call
+func ParseGetMemoryBankApiMemoryBanksMemoryBankIdGetResponse(rsp *http.Response) (*GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MemoryBankResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse parses an HTTP response from a UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithResponse call
+func ParseUpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse(rsp *http.Response) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MemoryBankResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse parses an HTTP response from a GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse call
+func ParseGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse(rsp *http.Response) (*GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []map[string]string
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse parses an HTTP response from a CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse call
+func ParseCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse(rsp *http.Response) (*CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse parses an HTTP response from a DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse call
+func ParseDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse(rsp *http.Response) (*DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse parses an HTTP response from a GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetWithResponse call
+func ParseGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse(rsp *http.Response) (*GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse parses an HTTP response from a TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithResponse call
+func ParseTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse(rsp *http.Response) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CompactionTestResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAlertsApiModelsAlertsGetResponse parses an HTTP response from a ListAlertsApiModelsAlertsGetWithResponse call
+func ParseListAlertsApiModelsAlertsGetResponse(rsp *http.Response) (*ListAlertsApiModelsAlertsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAlertsApiModelsAlertsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMarkAllReadApiModelsAlertsMarkAllReadPostResponse parses an HTTP response from a MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse call
+func ParseMarkAllReadApiModelsAlertsMarkAllReadPostResponse(rsp *http.Response) (*MarkAllReadApiModelsAlertsMarkAllReadPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MarkAllReadApiModelsAlertsMarkAllReadPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse parses an HTTP response from a GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse call
+func ParseGetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse(rsp *http.Response) (*GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse parses an HTTP response from a MarkReadApiModelsAlertsAlertIdReadPatchWithResponse call
+func ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse(rsp *http.Response) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MarkReadApiModelsAlertsAlertIdReadPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRecommendationsApiModelsModelIdRecommendationsGetResponse parses an HTTP response from a GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse call
+func ParseGetRecommendationsApiModelsModelIdRecommendationsGetResponse(rsp *http.Response) (*GetRecommendationsApiModelsModelIdRecommendationsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRecommendationsApiModelsModelIdRecommendationsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSearchApiSearchGetResponse parses an HTTP response from a SearchApiSearchGetWithResponse call
+func ParseSearchApiSearchGetResponse(rsp *http.Response) (*SearchApiSearchGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SearchApiSearchGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSolutionsApiSolutionsGetResponse parses an HTTP response from a ListSolutionsApiSolutionsGetWithResponse call
+func ParseListSolutionsApiSolutionsGetResponse(rsp *http.Response) (*ListSolutionsApiSolutionsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSolutionsApiSolutionsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSolutionApiSolutionsPostResponse parses an HTTP response from a CreateSolutionApiSolutionsPostWithResponse call
+func ParseCreateSolutionApiSolutionsPostResponse(rsp *http.Response) (*CreateSolutionApiSolutionsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSolutionApiSolutionsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteSolutionApiSolutionsSolutionIdDeleteResponse parses an HTTP response from a DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse call
+func ParseDeleteSolutionApiSolutionsSolutionIdDeleteResponse(rsp *http.Response) (*DeleteSolutionApiSolutionsSolutionIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteSolutionApiSolutionsSolutionIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSolutionApiSolutionsSolutionIdGetResponse parses an HTTP response from a GetSolutionApiSolutionsSolutionIdGetWithResponse call
+func ParseGetSolutionApiSolutionsSolutionIdGetResponse(rsp *http.Response) (*GetSolutionApiSolutionsSolutionIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSolutionApiSolutionsSolutionIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateSolutionApiSolutionsSolutionIdPatchResponse parses an HTTP response from a UpdateSolutionApiSolutionsSolutionIdPatchWithResponse call
+func ParseUpdateSolutionApiSolutionsSolutionIdPatchResponse(rsp *http.Response) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateSolutionApiSolutionsSolutionIdPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse parses an HTTP response from a UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithResponse call
+func ParseUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse(rsp *http.Response) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLinkAgentsApiSolutionsSolutionIdAgentsPostResponse parses an HTTP response from a LinkAgentsApiSolutionsSolutionIdAgentsPostWithResponse call
+func ParseLinkAgentsApiSolutionsSolutionIdAgentsPostResponse(rsp *http.Response) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LinkAgentsApiSolutionsSolutionIdAgentsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse parses an HTTP response from a AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithResponse call
+func ParseAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse(rsp *http.Response) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse parses an HTTP response from a AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithResponse call
+func ParseAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse(rsp *http.Response) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse parses an HTTP response from a AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithResponse call
+func ParseAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse(rsp *http.Response) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse parses an HTTP response from a AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithResponse call
+func ParseAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse(rsp *http.Response) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsAiAssistantAcceptResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse parses an HTTP response from a AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse call
+func ParseAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse(rsp *http.Response) (*AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListConversationsApiSolutionsSolutionIdConversationsGetResponse parses an HTTP response from a ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse call
+func ParseListConversationsApiSolutionsSolutionIdConversationsGetResponse(rsp *http.Response) (*ListConversationsApiSolutionsSolutionIdConversationsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListConversationsApiSolutionsSolutionIdConversationsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []RoutersApiSolutionsSolutionConversationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAddConversationTurnApiSolutionsSolutionIdConversationsPostResponse parses an HTTP response from a AddConversationTurnApiSolutionsSolutionIdConversationsPostWithResponse call
+func ParseAddConversationTurnApiSolutionsSolutionIdConversationsPostResponse(rsp *http.Response) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RoutersApiSolutionsSolutionConversationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse parses an HTTP response from a MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithResponse call
+func ParseMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse(rsp *http.Response) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse parses an HTTP response from a UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithResponse call
+func ParseUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse(rsp *http.Response) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse parses an HTTP response from a LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithResponse call
+func ParseLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse(rsp *http.Response) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse parses an HTTP response from a UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithResponse call
+func ParseUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse(rsp *http.Response) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse parses an HTTP response from a LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithResponse call
+func ParseLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse(rsp *http.Response) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSolutionsSolutionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSourceApiSourcesPostResponse parses an HTTP response from a CreateSourceApiSourcesPostWithResponse call
+func ParseCreateSourceApiSourcesPostResponse(rsp *http.Response) (*CreateSourceApiSourcesPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSourceApiSourcesPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest SourceResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest HTTPValidationError
@@ -2027,6 +20466,454 @@ func ParseListSourcesApiSourcesGetResponse(rsp *http.Response) (*ListSourcesApiS
 	return response, nil
 }
 
+// ParseDeleteSourceApiSourcesSourceConnectionIdDeleteResponse parses an HTTP response from a DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse call
+func ParseDeleteSourceApiSourcesSourceConnectionIdDeleteResponse(rsp *http.Response) (*DeleteSourceApiSourcesSourceConnectionIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteSourceApiSourcesSourceConnectionIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSourceApiSourcesSourceConnectionIdGetResponse parses an HTTP response from a GetSourceApiSourcesSourceConnectionIdGetWithResponse call
+func ParseGetSourceApiSourcesSourceConnectionIdGetResponse(rsp *http.Response) (*GetSourceApiSourcesSourceConnectionIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSourceApiSourcesSourceConnectionIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SourceResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse parses an HTTP response from a UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithResponse call
+func ParseUploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse(rsp *http.Response) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSourcesFileUploadResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateSourceApiSourcesSourceConnectionIdPutResponse parses an HTTP response from a UpdateSourceApiSourcesSourceConnectionIdPutWithResponse call
+func ParseUpdateSourceApiSourcesSourceConnectionIdPutResponse(rsp *http.Response) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateSourceApiSourcesSourceConnectionIdPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SourceResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse parses an HTTP response from a GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse call
+func ParseGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse(rsp *http.Response) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SourceEmbeddingMigrationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse parses an HTTP response from a StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithResponse call
+func ParseStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse(rsp *http.Response) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SourceEmbeddingMigrationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse parses an HTTP response from a CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse call
+func ParseCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse(rsp *http.Response) (*CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SourceEmbeddingMigrationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse parses an HTTP response from a ListSourceExportsApiSourcesSourceConnectionIdExportsGetWithResponse call
+func ParseListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse(rsp *http.Response) (*ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExportListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse parses an HTTP response from a CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithResponse call
+func ParseCreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse(rsp *http.Response) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest RoutersApiSourceExportsExportResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse parses an HTTP response from a EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithResponse call
+func ParseEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse(rsp *http.Response) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSourceExportsEstimateExportResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse parses an HTTP response from a DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse call
+func ParseDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse(rsp *http.Response) (*DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse parses an HTTP response from a GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse call
+func ParseGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse(rsp *http.Response) (*GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSourceExportsExportResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse parses an HTTP response from a CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse call
+func ParseCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse(rsp *http.Response) (*CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiSourceExportsExportResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse parses an HTTP response from a DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse call
+func ParseDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse(rsp *http.Response) (*DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse parses an HTTP response from a UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithResponse call
 func ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse(rsp *http.Response) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2042,7 +20929,7 @@ func ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse(rsp *
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest FileUploadResponse
+		var dest RoutersApiSourcesFileUploadResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

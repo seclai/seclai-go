@@ -74,6 +74,11 @@ func fix(node any) {
 			// continue walking the transformed node
 		}
 
+		// In OpenAPI 3.1, exclusiveMinimum/exclusiveMaximum are numbers.
+		// In 3.0, they must be booleans combined with minimum/maximum.
+		transformExclusiveBound(v, "exclusiveMinimum", "minimum")
+		transformExclusiveBound(v, "exclusiveMaximum", "maximum")
+
 		for _, child := range v {
 			fix(child)
 		}
@@ -172,4 +177,19 @@ func isNullSchema(schema map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// transformExclusiveBound converts OpenAPI 3.1 numeric exclusiveMinimum/exclusiveMaximum
+// into the OpenAPI 3.0 boolean form with a companion minimum/maximum field.
+func transformExclusiveBound(obj map[string]any, exclusiveKey, boundKey string) {
+	val, ok := obj[exclusiveKey]
+	if !ok {
+		return
+	}
+	num, ok := val.(float64)
+	if !ok {
+		return // already a bool (3.0 style) — leave as-is
+	}
+	obj[boundKey] = num
+	obj[exclusiveKey] = true
 }
