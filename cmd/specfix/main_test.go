@@ -120,3 +120,67 @@ func TestFix_TransformsNullableTypeArray(t *testing.T) {
 		t.Fatalf("expected nullable true")
 	}
 }
+
+func TestFix_TransformsExclusiveBounds(t *testing.T) {
+	doc := map[string]any{
+		"openapi": "3.1.0",
+		"info":    map[string]any{"title": "x", "version": "0"},
+		"components": map[string]any{
+			"schemas": map[string]any{
+				"Example": map[string]any{
+					"type":             "number",
+					"exclusiveMinimum": float64(0),
+					"exclusiveMaximum": float64(100),
+				},
+			},
+		},
+	}
+	fix(doc)
+
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	ex := schemas["Example"].(map[string]any)
+
+	// exclusiveMinimum (number) → minimum + exclusiveMinimum (bool)
+	if got, ok := ex["minimum"].(float64); !ok || got != 0 {
+		t.Fatalf("expected minimum 0, got %v", ex["minimum"])
+	}
+	if got, ok := ex["exclusiveMinimum"].(bool); !ok || !got {
+		t.Fatalf("expected exclusiveMinimum true, got %v", ex["exclusiveMinimum"])
+	}
+
+	// exclusiveMaximum (number) → maximum + exclusiveMaximum (bool)
+	if got, ok := ex["maximum"].(float64); !ok || got != 100 {
+		t.Fatalf("expected maximum 100, got %v", ex["maximum"])
+	}
+	if got, ok := ex["exclusiveMaximum"].(bool); !ok || !got {
+		t.Fatalf("expected exclusiveMaximum true, got %v", ex["exclusiveMaximum"])
+	}
+}
+
+func TestFix_LeavesExclusiveBoundBoolAlone(t *testing.T) {
+	doc := map[string]any{
+		"openapi": "3.1.0",
+		"info":    map[string]any{"title": "x", "version": "0"},
+		"components": map[string]any{
+			"schemas": map[string]any{
+				"Example": map[string]any{
+					"type":             "integer",
+					"minimum":          float64(0),
+					"exclusiveMinimum": true,
+				},
+			},
+		},
+	}
+	fix(doc)
+
+	schemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	ex := schemas["Example"].(map[string]any)
+
+	// Already boolean — should be unchanged
+	if got, ok := ex["exclusiveMinimum"].(bool); !ok || !got {
+		t.Fatalf("expected exclusiveMinimum to remain true, got %v", ex["exclusiveMinimum"])
+	}
+	if got, ok := ex["minimum"].(float64); !ok || got != 0 {
+		t.Fatalf("expected minimum to remain 0, got %v", ex["minimum"])
+	}
+}
