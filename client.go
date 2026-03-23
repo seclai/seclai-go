@@ -89,7 +89,10 @@ func NewClient(opts Options) (*Client, error) {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	defHeaders := opts.DefaultHeaders
+	defHeaders := make(map[string]string, len(opts.DefaultHeaders))
+	for k, v := range opts.DefaultHeaders {
+		defHeaders[k] = v
+	}
 
 	gen, err := generated.NewClientWithResponses(parsed.String(),
 		generated.WithHTTPClient(hc),
@@ -885,6 +888,9 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 		getOpts = &GetAgentRunOptions{IncludeStepOutputs: true}
 	}
 
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
 	for {
 		switch run.Status {
 		case "completed", "failed":
@@ -894,7 +900,7 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 		select {
 		case <-ctx.Done():
 			return run, ctx.Err()
-		case <-time.After(interval):
+		case <-ticker.C:
 		}
 
 		run, err = c.GetAgentRun(ctx, run.RunId, getOpts)
@@ -1034,6 +1040,9 @@ func (c *Client) UploadInlineTextToSource(ctx context.Context, sourceConnectionI
 
 // UploadFileToContent replaces the file backing an existing content version.
 func (c *Client) UploadFileToContent(ctx context.Context, contentVersionID string, req UploadFileRequest) (*ContentFileUploadResponse, error) {
+	if strings.TrimSpace(contentVersionID) == "" {
+		return nil, &ConfigurationError{Message: "contentVersionID must not be blank"}
+	}
 	raw, err := c.doUpload(ctx, fmt.Sprintf("/contents/%s/upload", url.PathEscape(contentVersionID)), req)
 	if err != nil {
 		return nil, err
@@ -1666,7 +1675,7 @@ func (c *Client) ChangeAlertStatus(ctx context.Context, alertID string, body Cha
 }
 
 // AddAlertComment adds a comment to an alert.
-func (c *Client) AddAlertComment(ctx context.Context, alertID string, body map[string]any) (json.RawMessage, error) {
+func (c *Client) AddAlertComment(ctx context.Context, alertID string, body AddCommentRequest) (json.RawMessage, error) {
 	var out json.RawMessage
 	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/comments", url.PathEscape(alertID)), nil, body, nil, &out); err != nil {
 		return nil, err
@@ -1747,7 +1756,7 @@ func (c *Client) ListOrganizationAlertPreferences(ctx context.Context) (*Organiz
 }
 
 // UpdateOrganizationAlertPreference updates an organization alert preference.
-func (c *Client) UpdateOrganizationAlertPreference(ctx context.Context, organizationID, alertType string, body map[string]any) (json.RawMessage, error) {
+func (c *Client) UpdateOrganizationAlertPreference(ctx context.Context, organizationID, alertType string, body UpdateOrganizationAlertPreferenceRequest) (json.RawMessage, error) {
 	var out json.RawMessage
 	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/alerts/organization-preferences/%s/%s", url.PathEscape(organizationID), url.PathEscape(alertType)), nil, body, nil, &out); err != nil {
 		return nil, err

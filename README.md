@@ -1,6 +1,6 @@
 # Seclai Go SDK
 
-The official Go SDK for the [Seclai](https://seclai.com) API. Provides full typed coverage of all API endpoints, file uploads, SSE streaming, polling helpers, and automatic pagination.
+The official Go SDK for the [Seclai](https://seclai.com) API. Provides typed wrappers for the Seclai API, file uploads, SSE streaming, polling helpers, and pagination support.
 
 Requires Go 1.22+.
 
@@ -45,7 +45,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("run:", run.Id, "status:", run.Status)
+	fmt.Println("run:", run.RunId, "status:", run.Status)
 }
 ```
 
@@ -57,7 +57,7 @@ func main() {
 | `BaseURL` | `SECLAI_API_URL` | `https://seclai.com` |
 | `APIKeyHeader` | — | `x-api-key` |
 | `DefaultHeaders` | — | `nil` |
-| `HTTPClient` | — | `http.DefaultClient` |
+| `HTTPClient` | — | `&http.Client{Timeout: 30s}` |
 
 ```go
 client, err := seclai.NewClient(seclai.Options{
