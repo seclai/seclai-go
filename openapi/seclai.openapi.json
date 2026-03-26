@@ -1,5 +1,17 @@
 {
   "components": {
+    "parameters": {
+      "X-Account-Id": {
+        "description": "Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication \u2014 the key's account is always used.",
+        "in": "header",
+        "name": "X-Account-Id",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      }
+    },
     "schemas": {
       "AddConversationTurnRequest": {
         "properties": {
@@ -710,6 +722,62 @@
         "title": "AgentTraceSearchResponse",
         "type": "object"
       },
+      "AiAssistantAcceptResponse": {
+        "description": "Response from accepting and executing a plan.",
+        "properties": {
+          "conversation_id": {
+            "description": "Conversation ID.",
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error message if failed.",
+            "title": "Error"
+          },
+          "executed_actions": {
+            "description": "Results of each executed action.",
+            "items": {
+              "$ref": "#/components/schemas/ExecutedActionResponse"
+            },
+            "title": "Executed Actions",
+            "type": "array"
+          },
+          "solution_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Solution ID when a new solution was auto-created.",
+            "title": "Solution Id"
+          },
+          "success": {
+            "default": true,
+            "description": "Whether execution succeeded.",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "executed_actions"
+        ],
+        "title": "AiAssistantAcceptResponse",
+        "type": "object"
+      },
       "AiAssistantFeedbackResponse": {
         "description": "Response after submitting feedback.",
         "properties": {
@@ -754,6 +822,57 @@
           "user_input"
         ],
         "title": "AiAssistantGenerateRequest",
+        "type": "object"
+      },
+      "AiAssistantGenerateResponse": {
+        "description": "Response from an AI assistant generate endpoint.",
+        "properties": {
+          "conversation_id": {
+            "description": "Conversation ID for accept/decline.",
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "example_prompts": {
+            "description": "Example natural-language prompts that demonstrate the capabilities of this AI assistant.",
+            "items": {
+              "$ref": "#/components/schemas/ExamplePrompt"
+            },
+            "title": "Example Prompts",
+            "type": "array"
+          },
+          "note": {
+            "description": "AI-generated note about the plan.",
+            "title": "Note",
+            "type": "string"
+          },
+          "proposed_actions": {
+            "description": "List of proposed actions.",
+            "items": {
+              "$ref": "#/components/schemas/ProposedActionResponse"
+            },
+            "title": "Proposed Actions",
+            "type": "array"
+          },
+          "requires_delete_confirmation": {
+            "default": false,
+            "description": "Whether destructive actions require explicit confirmation.",
+            "title": "Requires Delete Confirmation",
+            "type": "boolean"
+          },
+          "success": {
+            "default": false,
+            "description": "Whether plan generation succeeded.",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "note",
+          "proposed_actions"
+        ],
+        "title": "AiAssistantGenerateResponse",
         "type": "object"
       },
       "AiConversationHistoryResponse": {
@@ -863,6 +982,57 @@
           "step_id"
         ],
         "title": "AiConversationTurnResponse",
+        "type": "object"
+      },
+      "AppliedActionResponse": {
+        "description": "Result of a single executed governance action.",
+        "properties": {
+          "action_type": {
+            "description": "Type of action that was executed.",
+            "title": "Action Type",
+            "type": "string"
+          },
+          "description": {
+            "description": "Human-readable description of the executed action.",
+            "title": "Description",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error message if this action failed, or null.",
+            "title": "Error"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ID of the policy that was created or modified, or null.",
+            "title": "Policy Id"
+          },
+          "success": {
+            "description": "Whether this individual action succeeded.",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action_type",
+          "description",
+          "success"
+        ],
+        "title": "AppliedActionResponse",
         "type": "object"
       },
       "Body_upload_file_to_content_api_contents__source_connection_content_version__upload_post": {
@@ -2408,6 +2578,69 @@
         },
         "type": "object"
       },
+      "ExecutedActionResponse": {
+        "description": "A single executed action result.",
+        "properties": {
+          "action_type": {
+            "description": "Type of the executed action.",
+            "title": "Action Type",
+            "type": "string"
+          },
+          "description": {
+            "description": "Human-readable description.",
+            "title": "Description",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error message if failed.",
+            "title": "Error"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ID of the affected resource.",
+            "title": "Resource Id"
+          },
+          "resource_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Type of the affected resource.",
+            "title": "Resource Type"
+          },
+          "success": {
+            "default": true,
+            "description": "Whether the action succeeded.",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action_type",
+          "description"
+        ],
+        "title": "ExecutedActionResponse",
+        "type": "object"
+      },
       "ExportFormat": {
         "description": "Supported export file formats.",
         "enum": [
@@ -2667,6 +2900,104 @@
           "success"
         ],
         "title": "GenerateStepConfigResponse",
+        "type": "object"
+      },
+      "GovernanceAiAcceptResponse": {
+        "description": "Response from accepting a governance AI assistant plan.",
+        "properties": {
+          "actions_applied": {
+            "description": "Results of each action that was executed.",
+            "items": {
+              "$ref": "#/components/schemas/AppliedActionResponse"
+            },
+            "title": "Actions Applied",
+            "type": "array"
+          },
+          "conversation_id": {
+            "description": "Conversation ID that was accepted.",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overall error message if the plan failed, or null.",
+            "title": "Error"
+          },
+          "success": {
+            "description": "Whether all actions were applied successfully.",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "actions_applied",
+          "success"
+        ],
+        "title": "GovernanceAiAcceptResponse",
+        "type": "object"
+      },
+      "GovernanceAiAssistantResponse": {
+        "description": "Response from the governance AI assistant generate endpoint.",
+        "properties": {
+          "conversation_id": {
+            "description": "Conversation ID to accept or decline this plan.",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "example_prompts": {
+            "description": "Example natural-language prompts that demonstrate the capabilities of the governance AI assistant.",
+            "items": {
+              "$ref": "#/components/schemas/ExamplePrompt"
+            },
+            "title": "Example Prompts",
+            "type": "array"
+          },
+          "note": {
+            "description": "AI-generated summary of the proposed changes.",
+            "title": "Note",
+            "type": "string"
+          },
+          "prompt_call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Prompt call ID for credit tracking, or null.",
+            "title": "Prompt Call Id"
+          },
+          "proposed_actions": {
+            "description": "Ordered list of policy actions the AI proposes to execute.",
+            "items": {
+              "$ref": "#/components/schemas/ProposedPolicyActionResponse"
+            },
+            "title": "Proposed Actions",
+            "type": "array"
+          },
+          "success": {
+            "description": "Whether the plan was generated successfully.",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "note",
+          "proposed_actions",
+          "success"
+        ],
+        "title": "GovernanceAiAssistantResponse",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -2979,6 +3310,163 @@
         "title": "MarkConversationTurnRequest",
         "type": "object"
       },
+      "MemoryBankAiAssistantResponse": {
+        "description": "Response from the memory bank AI assistant.",
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryBankConfigResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proposed configuration, or null."
+          },
+          "conversation_id": {
+            "description": "Conversation ID for follow-up.",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "example_prompts": {
+            "description": "Example natural-language prompts that demonstrate the capabilities of the memory bank AI assistant.",
+            "items": {
+              "$ref": "#/components/schemas/ExamplePrompt"
+            },
+            "title": "Example Prompts",
+            "type": "array"
+          },
+          "note": {
+            "description": "AI-generated explanation.",
+            "title": "Note",
+            "type": "string"
+          },
+          "prompt_call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Prompt call ID for credit tracking.",
+            "title": "Prompt Call Id"
+          },
+          "success": {
+            "default": false,
+            "description": "Whether generation succeeded.",
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "note"
+        ],
+        "title": "MemoryBankAiAssistantResponse",
+        "type": "object"
+      },
+      "MemoryBankConfigResponse": {
+        "description": "Suggested memory bank configuration from the AI assistant.",
+        "properties": {
+          "compaction_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Suggested compaction prompt.",
+            "title": "Compaction Prompt"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Suggested description.",
+            "title": "Description"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Max age in days.",
+            "title": "Max Age Days"
+          },
+          "max_size_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Max size in tokens.",
+            "title": "Max Size Tokens"
+          },
+          "max_turns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Max conversation turns.",
+            "title": "Max Turns"
+          },
+          "mode": {
+            "description": "Memory bank mode.",
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "description": "Suggested name.",
+            "title": "Name",
+            "type": "string"
+          },
+          "retention_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Retention in days.",
+            "title": "Retention Days"
+          },
+          "type": {
+            "description": "Memory bank type: conversation or general.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "mode"
+        ],
+        "title": "MemoryBankConfigResponse",
+        "type": "object"
+      },
       "MemoryBankListResponseModel": {
         "description": "Paginated list of memory banks.",
         "properties": {
@@ -3271,6 +3759,68 @@
         ],
         "title": "PromptModelAutoUpgradeStrategy",
         "type": "string"
+      },
+      "ProposedActionResponse": {
+        "description": "A single proposed action.",
+        "properties": {
+          "action_type": {
+            "description": "Type of the proposed action.",
+            "title": "Action Type",
+            "type": "string"
+          },
+          "description": {
+            "description": "Human-readable description of the action.",
+            "title": "Description",
+            "type": "string"
+          },
+          "is_destructive": {
+            "default": false,
+            "description": "Whether the action is destructive.",
+            "title": "Is Destructive",
+            "type": "boolean"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Parameters for the action.",
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "action_type",
+          "params",
+          "description"
+        ],
+        "title": "ProposedActionResponse",
+        "type": "object"
+      },
+      "ProposedPolicyActionResponse": {
+        "description": "A single proposed governance policy action.",
+        "properties": {
+          "action_type": {
+            "description": "Type of action: create, update, delete, enable, or disable.",
+            "title": "Action Type",
+            "type": "string"
+          },
+          "description": {
+            "description": "Human-readable description of what this action will do.",
+            "title": "Description",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Parameters for the action (e.g. policy_document_id, thresholds).",
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "action_type",
+          "description",
+          "params"
+        ],
+        "title": "ProposedPolicyActionResponse",
+        "type": "object"
       },
       "SolutionSourceConnectionResponse": {
         "properties": {
@@ -5442,99 +5992,6 @@
         "title": "FileUploadResponse",
         "type": "object"
       },
-      "routers__api__governance__AppliedActionResponse": {
-        "description": "Result of a single executed governance action.",
-        "properties": {
-          "action_type": {
-            "description": "Type of action that was executed.",
-            "title": "Action Type",
-            "type": "string"
-          },
-          "description": {
-            "description": "Human-readable description of the executed action.",
-            "title": "Description",
-            "type": "string"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Error message if this action failed, or null.",
-            "title": "Error"
-          },
-          "policy_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "ID of the policy that was created or modified, or null.",
-            "title": "Policy Id"
-          },
-          "success": {
-            "description": "Whether this individual action succeeded.",
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "action_type",
-          "description",
-          "success"
-        ],
-        "title": "AppliedActionResponse",
-        "type": "object"
-      },
-      "routers__api__governance__GovernanceAiAcceptResponse": {
-        "description": "Response from accepting a governance AI assistant plan.",
-        "properties": {
-          "actions_applied": {
-            "description": "Results of each action that was executed.",
-            "items": {
-              "$ref": "#/components/schemas/routers__api__governance__AppliedActionResponse"
-            },
-            "title": "Actions Applied",
-            "type": "array"
-          },
-          "conversation_id": {
-            "description": "Conversation ID that was accepted.",
-            "title": "Conversation Id",
-            "type": "string"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Overall error message if the plan failed, or null.",
-            "title": "Error"
-          },
-          "success": {
-            "description": "Whether all actions were applied successfully.",
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "conversation_id",
-          "actions_applied",
-          "success"
-        ],
-        "title": "GovernanceAiAcceptResponse",
-        "type": "object"
-      },
       "routers__api__governance__GovernanceAiAssistantRequest": {
         "description": "Request body for the governance AI assistant.",
         "properties": {
@@ -5548,62 +6005,6 @@
           "user_input"
         ],
         "title": "GovernanceAiAssistantRequest",
-        "type": "object"
-      },
-      "routers__api__governance__GovernanceAiAssistantResponse": {
-        "description": "Response from the governance AI assistant generate endpoint.",
-        "properties": {
-          "conversation_id": {
-            "description": "Conversation ID to accept or decline this plan.",
-            "title": "Conversation Id",
-            "type": "string"
-          },
-          "example_prompts": {
-            "description": "Example natural-language prompts that demonstrate the capabilities of the governance AI assistant.",
-            "items": {
-              "$ref": "#/components/schemas/ExamplePrompt"
-            },
-            "title": "Example Prompts",
-            "type": "array"
-          },
-          "note": {
-            "description": "AI-generated summary of the proposed changes.",
-            "title": "Note",
-            "type": "string"
-          },
-          "prompt_call_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Prompt call ID for credit tracking, or null.",
-            "title": "Prompt Call Id"
-          },
-          "proposed_actions": {
-            "description": "Ordered list of policy actions the AI proposes to execute.",
-            "items": {
-              "$ref": "#/components/schemas/routers__api__governance__ProposedPolicyActionResponse"
-            },
-            "title": "Proposed Actions",
-            "type": "array"
-          },
-          "success": {
-            "description": "Whether the plan was generated successfully.",
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "conversation_id",
-          "note",
-          "proposed_actions",
-          "success"
-        ],
-        "title": "GovernanceAiAssistantResponse",
         "type": "object"
       },
       "routers__api__governance__GovernanceConversationResponse": {
@@ -5673,34 +6074,6 @@
         "title": "GovernanceConversationResponse",
         "type": "object"
       },
-      "routers__api__governance__ProposedPolicyActionResponse": {
-        "description": "A single proposed governance policy action.",
-        "properties": {
-          "action_type": {
-            "description": "Type of action: create, update, delete, enable, or disable.",
-            "title": "Action Type",
-            "type": "string"
-          },
-          "description": {
-            "description": "Human-readable description of what this action will do.",
-            "title": "Description",
-            "type": "string"
-          },
-          "params": {
-            "additionalProperties": true,
-            "description": "Parameters for the action (e.g. policy_document_id, thresholds).",
-            "title": "Params",
-            "type": "object"
-          }
-        },
-        "required": [
-          "action_type",
-          "description",
-          "params"
-        ],
-        "title": "ProposedPolicyActionResponse",
-        "type": "object"
-      },
       "routers__api__memory_banks__MemoryBankAcceptRequest": {
         "description": "Accept or decline a memory bank AI suggestion.",
         "properties": {
@@ -5754,163 +6127,6 @@
           "user_input"
         ],
         "title": "MemoryBankAiAssistantRequest",
-        "type": "object"
-      },
-      "routers__api__memory_banks__MemoryBankAiAssistantResponse": {
-        "description": "Response from the memory bank AI assistant.",
-        "properties": {
-          "config": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/routers__api__memory_banks__MemoryBankConfigResponse"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Proposed configuration, or null."
-          },
-          "conversation_id": {
-            "description": "Conversation ID for follow-up.",
-            "title": "Conversation Id",
-            "type": "string"
-          },
-          "example_prompts": {
-            "description": "Example natural-language prompts that demonstrate the capabilities of the memory bank AI assistant.",
-            "items": {
-              "$ref": "#/components/schemas/ExamplePrompt"
-            },
-            "title": "Example Prompts",
-            "type": "array"
-          },
-          "note": {
-            "description": "AI-generated explanation.",
-            "title": "Note",
-            "type": "string"
-          },
-          "prompt_call_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Prompt call ID for credit tracking.",
-            "title": "Prompt Call Id"
-          },
-          "success": {
-            "default": false,
-            "description": "Whether generation succeeded.",
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "conversation_id",
-          "note"
-        ],
-        "title": "MemoryBankAiAssistantResponse",
-        "type": "object"
-      },
-      "routers__api__memory_banks__MemoryBankConfigResponse": {
-        "description": "Suggested memory bank configuration from the AI assistant.",
-        "properties": {
-          "compaction_prompt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Suggested compaction prompt.",
-            "title": "Compaction Prompt"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Suggested description.",
-            "title": "Description"
-          },
-          "max_age_days": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Max age in days.",
-            "title": "Max Age Days"
-          },
-          "max_size_tokens": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Max size in tokens.",
-            "title": "Max Size Tokens"
-          },
-          "max_turns": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Max conversation turns.",
-            "title": "Max Turns"
-          },
-          "mode": {
-            "description": "Memory bank mode.",
-            "title": "Mode",
-            "type": "string"
-          },
-          "name": {
-            "description": "Suggested name.",
-            "title": "Name",
-            "type": "string"
-          },
-          "retention_days": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Retention in days.",
-            "title": "Retention Days"
-          },
-          "type": {
-            "description": "Memory bank type: conversation or general.",
-            "title": "Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "type",
-          "mode"
-        ],
-        "title": "MemoryBankConfigResponse",
         "type": "object"
       },
       "routers__api__memory_banks__MemoryBankConversationTurnResponse": {
@@ -6063,210 +6279,6 @@
           }
         },
         "title": "AiAssistantAcceptRequest",
-        "type": "object"
-      },
-      "routers__api__solutions__AiAssistantAcceptResponse": {
-        "description": "Response from accepting and executing a plan.",
-        "properties": {
-          "conversation_id": {
-            "description": "Conversation ID.",
-            "format": "uuid",
-            "title": "Conversation Id",
-            "type": "string"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Error message if failed.",
-            "title": "Error"
-          },
-          "executed_actions": {
-            "description": "Results of each executed action.",
-            "items": {
-              "$ref": "#/components/schemas/routers__api__solutions__ExecutedActionResponse"
-            },
-            "title": "Executed Actions",
-            "type": "array"
-          },
-          "solution_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Solution ID when a new solution was auto-created.",
-            "title": "Solution Id"
-          },
-          "success": {
-            "default": true,
-            "description": "Whether execution succeeded.",
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "conversation_id",
-          "executed_actions"
-        ],
-        "title": "AiAssistantAcceptResponse",
-        "type": "object"
-      },
-      "routers__api__solutions__AiAssistantGenerateResponse": {
-        "description": "Response from an AI assistant generate endpoint.",
-        "properties": {
-          "conversation_id": {
-            "description": "Conversation ID for accept/decline.",
-            "format": "uuid",
-            "title": "Conversation Id",
-            "type": "string"
-          },
-          "example_prompts": {
-            "description": "Example natural-language prompts that demonstrate the capabilities of this AI assistant.",
-            "items": {
-              "$ref": "#/components/schemas/ExamplePrompt"
-            },
-            "title": "Example Prompts",
-            "type": "array"
-          },
-          "note": {
-            "description": "AI-generated note about the plan.",
-            "title": "Note",
-            "type": "string"
-          },
-          "proposed_actions": {
-            "description": "List of proposed actions.",
-            "items": {
-              "$ref": "#/components/schemas/routers__api__solutions__ProposedActionResponse"
-            },
-            "title": "Proposed Actions",
-            "type": "array"
-          },
-          "requires_delete_confirmation": {
-            "default": false,
-            "description": "Whether destructive actions require explicit confirmation.",
-            "title": "Requires Delete Confirmation",
-            "type": "boolean"
-          },
-          "success": {
-            "default": false,
-            "description": "Whether plan generation succeeded.",
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "conversation_id",
-          "note",
-          "proposed_actions"
-        ],
-        "title": "AiAssistantGenerateResponse",
-        "type": "object"
-      },
-      "routers__api__solutions__ExecutedActionResponse": {
-        "description": "A single executed action result.",
-        "properties": {
-          "action_type": {
-            "description": "Type of the executed action.",
-            "title": "Action Type",
-            "type": "string"
-          },
-          "description": {
-            "description": "Human-readable description.",
-            "title": "Description",
-            "type": "string"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Error message if failed.",
-            "title": "Error"
-          },
-          "resource_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "ID of the affected resource.",
-            "title": "Resource Id"
-          },
-          "resource_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Type of the affected resource.",
-            "title": "Resource Type"
-          },
-          "success": {
-            "default": true,
-            "description": "Whether the action succeeded.",
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "action_type",
-          "description"
-        ],
-        "title": "ExecutedActionResponse",
-        "type": "object"
-      },
-      "routers__api__solutions__ProposedActionResponse": {
-        "description": "A single proposed action.",
-        "properties": {
-          "action_type": {
-            "description": "Type of the proposed action.",
-            "title": "Action Type",
-            "type": "string"
-          },
-          "description": {
-            "description": "Human-readable description of the action.",
-            "title": "Description",
-            "type": "string"
-          },
-          "is_destructive": {
-            "default": false,
-            "description": "Whether the action is destructive.",
-            "title": "Is Destructive",
-            "type": "boolean"
-          },
-          "params": {
-            "additionalProperties": true,
-            "description": "Parameters for the action.",
-            "title": "Params",
-            "type": "object"
-          }
-        },
-        "required": [
-          "action_type",
-          "params",
-          "description"
-        ],
-        "title": "ProposedActionResponse",
         "type": "object"
       },
       "routers__api__solutions__SolutionAgentResponse": {
@@ -7041,6 +7053,20 @@
         "title": "NonManualEvaluationSummaryResponse",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "description": "API key issued from the Seclai dashboard.",
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      },
+      "BearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "OAuth2 access token from AWS Cognito.",
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
@@ -7081,6 +7107,9 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7113,6 +7142,11 @@
       "post": {
         "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nAuth & scoping:\n- Requires `X-API-Key`. Agent is created in the API key's account.",
         "operationId": "create_agent_api_agents_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -7167,6 +7201,9 @@
               "title": "Criteria Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7201,6 +7238,9 @@
               "title": "Criteria Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7242,6 +7282,9 @@
               "title": "Criteria Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -7335,6 +7378,9 @@
               ],
               "title": "Started After"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7459,6 +7505,9 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7500,6 +7549,9 @@
               "title": "Criteria Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -7553,6 +7605,9 @@
               "title": "Criteria Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7631,6 +7686,9 @@
               ],
               "title": "End Date"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7665,6 +7723,11 @@
       "post": {
         "description": "Search agent traces using semantic similarity.\n\nFinds step-run outputs that are most semantically similar to the query.\nResults include the matching text, agent/step metadata, and a similarity score.\n\nAgent traces are automatically indexed when runs complete. The first 7 days of storage are free; extended retention is billed.\n\nAuth & scoping:\n- Requires `X-API-Key`. Searches only within your account's traces.",
         "operationId": "search_agent_runs_api_agents_runs_search_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -7716,6 +7779,9 @@
               "title": "Run Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7769,6 +7835,9 @@
               "title": "Include Step Outputs",
               "type": "boolean"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7812,6 +7881,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7846,6 +7918,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -7887,6 +7962,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -7996,6 +8074,9 @@
               "title": "Offset",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -8039,6 +8120,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -8092,6 +8176,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -8154,6 +8241,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -8211,6 +8301,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -8252,6 +8345,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -8305,6 +8401,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -8350,6 +8449,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -8403,6 +8505,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -8553,6 +8658,9 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -8683,6 +8791,9 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -8735,6 +8846,9 @@
               "title": "Upload Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -8823,6 +8937,9 @@
               "description": "Filter runs by status",
               "title": "Status"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -8864,6 +8981,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -8917,6 +9037,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -8983,6 +9106,9 @@
               "title": "Run Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9030,6 +9156,9 @@
               "title": "Agent Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9064,6 +9193,11 @@
       "post": {
         "description": "Submit thumbs-up/down feedback on any AI assistant interaction. Negative feedback with a comment is analyzed for concerning issues.\n\nAuth: requires ``X-API-Key``.",
         "operationId": "api_ai_feedback_api_ai_assistant_feedback_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -9106,6 +9240,11 @@
       "post": {
         "description": "Generate a knowledge base creation/modification plan without requiring an existing solution. May also propose prerequisite source creation actions.\n\nAuth: requires ``X-API-Key``.",
         "operationId": "api_ai_knowledge_base_api_ai_assistant_knowledge_base_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -9121,7 +9260,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateResponse"
+                  "$ref": "#/components/schemas/AiAssistantGenerateResponse"
                 }
               }
             },
@@ -9148,6 +9287,11 @@
       "post": {
         "description": "Generate a memory bank configuration suggestion via the AI assistant. The AI proposes name, type, mode, compaction prompt, and retention settings.\n\nAuth: requires ``X-API-Key``.",
         "operationId": "api_ai_memory_bank_api_ai_assistant_memory_bank_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -9163,7 +9307,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__memory_banks__MemoryBankAiAssistantResponse"
+                  "$ref": "#/components/schemas/MemoryBankAiAssistantResponse"
                 }
               }
             },
@@ -9217,6 +9361,9 @@
               "title": "Offset",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9261,6 +9408,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -9309,6 +9459,11 @@
       "post": {
         "description": "Generate a complete solution plan covering sources, knowledge bases, and agents without requiring an existing solution. Supports SSE streaming when ``Accept: text/event-stream`` is set.\n\nAuth: requires ``X-API-Key``.",
         "operationId": "api_ai_solution_api_ai_assistant_solution_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -9324,7 +9479,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateResponse"
+                  "$ref": "#/components/schemas/AiAssistantGenerateResponse"
                 }
               }
             },
@@ -9351,6 +9506,11 @@
       "post": {
         "description": "Generate a content source creation/modification plan without requiring an existing solution. The AI proposes actions for the user to review before any changes are made.\n\nAuth: requires ``X-API-Key``.",
         "operationId": "api_ai_source_api_ai_assistant_source_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -9366,7 +9526,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateResponse"
+                  "$ref": "#/components/schemas/AiAssistantGenerateResponse"
                 }
               }
             },
@@ -9403,6 +9563,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -9420,7 +9583,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__solutions__AiAssistantAcceptResponse"
+                  "$ref": "#/components/schemas/AiAssistantAcceptResponse"
                 }
               }
             },
@@ -9457,6 +9620,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9603,6 +9769,9 @@
               "description": "To (ISO 8601)",
               "title": "Time To"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9693,6 +9862,9 @@
               "description": "Set to 'source' to list account-level source alert configs",
               "title": "Scope"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9727,6 +9899,11 @@
       "post": {
         "description": "Create a new alert configuration.\n\nAgent alert types: run_failed, consecutive_failures, error_rate_spike, run_burst, slow_run, credits_low_threshold, credits_runout_prediction, credits_usage_spike, non_manual_eval_failed, non_manual_eval_flagged, governance_flagged, governance_blocked, model_newer_available, model_deprecated, model_sunset.\nSource alert types: pull_failed, consecutive_pull_failures, pull_error_rate_spike.\n\nDistribution types: owner, owner_admins, selected_members. Organization accounts are normalized to owner_admins.\n\nAuth & scoping:\n- Requires `X-API-Key` with user association.",
         "operationId": "create_alert_config_api_alerts_configs_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -9780,6 +9957,9 @@
               "title": "Config Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9814,6 +9994,9 @@
               "title": "Config Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9857,6 +10040,9 @@
               "title": "Config Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -9934,6 +10120,9 @@
               "title": "Include Defaults",
               "type": "boolean"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -9987,6 +10176,9 @@
               "title": "Alert Type",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -10040,6 +10232,9 @@
               "title": "Alert Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10085,6 +10280,9 @@
               "title": "Alert Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -10140,6 +10338,9 @@
               "title": "Alert Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -10195,6 +10396,9 @@
               "title": "Alert Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10240,6 +10444,9 @@
               "title": "Alert Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10285,6 +10492,9 @@
               "title": "Source Connection Content Version",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10339,6 +10549,9 @@
               "title": "End",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10380,6 +10593,9 @@
               "title": "Source Connection Content Version",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -10453,6 +10669,9 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10496,6 +10715,9 @@
               "title": "Source Connection Content Version",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -10540,6 +10762,11 @@
       "post": {
         "description": "Send a natural-language request to the governance AI assistant to generate a plan of policy changes. Returns a conversation with proposed actions that can be accepted or declined.\n\nAuth: requires `X-API-Key` with governance access.",
         "operationId": "governance_ai_generate_api_governance_ai_assistant_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -10555,7 +10782,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__governance__GovernanceAiAssistantResponse"
+                  "$ref": "#/components/schemas/GovernanceAiAssistantResponse"
                 }
               }
             },
@@ -10602,6 +10829,9 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10653,6 +10883,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10660,7 +10893,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__governance__GovernanceAiAcceptResponse"
+                  "$ref": "#/components/schemas/GovernanceAiAcceptResponse"
                 }
               }
             },
@@ -10703,6 +10936,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10787,6 +11023,9 @@
               "title": "Order",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10819,6 +11058,11 @@
       "post": {
         "description": "Create a new knowledge base.\n\nAt least one `source_id` is required. The source connections must belong to the same account.",
         "operationId": "create_knowledge_base_api_knowledge_bases_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -10873,6 +11117,9 @@
               "title": "Knowledge Base Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10907,6 +11154,9 @@
               "title": "Knowledge Base Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -10948,6 +11198,9 @@
               "title": "Knowledge Base Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -11061,6 +11314,9 @@
               "description": "Filter by bank type: conversation or general.",
               "title": "Type"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11093,6 +11349,11 @@
       "post": {
         "description": "Create a new memory bank.\n\nModes: `fast_and_cheap` (256-dim), `balanced` (512-dim), `slow_and_thorough` (1024-dim), or `custom` (supply your own embedding params).",
         "operationId": "create_memory_bank_api_memory_banks_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -11135,6 +11396,11 @@
       "post": {
         "description": "Generate a memory bank configuration suggestion via the AI assistant. The AI proposes name, type, mode, compaction prompt, and retention settings based on the user's description.\n\nAuth: requires `X-API-Key`.",
         "operationId": "memory_bank_ai_generate_api_memory_banks_ai_assistant_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -11150,7 +11416,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__memory_banks__MemoryBankAiAssistantResponse"
+                  "$ref": "#/components/schemas/MemoryBankAiAssistantResponse"
                 }
               }
             },
@@ -11207,6 +11473,9 @@
               "title": "Offset",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11251,6 +11520,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -11299,6 +11571,11 @@
       "get": {
         "description": "Return pre-built template configurations for common memory bank use cases.\n\nEach template includes a name, description, suggested use case, and full default settings that can be used directly with the create endpoint.",
         "operationId": "list_templates_api_memory_banks_templates_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -11326,6 +11603,11 @@
       "post": {
         "description": "Test a compaction prompt by running the summarizer and evaluating the result with an LLM-as-judge. Returns original entries, compaction summary, surviving entries, and a structured quality evaluation with verdict, score, and reasoning.",
         "operationId": "test_compaction_prompt_standalone_api_memory_banks_test_compaction_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -11377,6 +11659,9 @@
               "title": "Memory Bank Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11411,6 +11696,9 @@
               "title": "Memory Bank Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11452,6 +11740,9 @@
               "title": "Memory Bank Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -11505,6 +11796,9 @@
               "title": "Memory Bank Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11555,6 +11849,9 @@
               "title": "Memory Bank Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11600,6 +11897,9 @@
               "title": "Memory Bank Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11682,6 +11982,9 @@
               ],
               "title": "End Date"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11727,6 +12030,9 @@
               "title": "Memory Bank Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -11828,6 +12134,9 @@
               "title": "Offset",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -11864,6 +12173,11 @@
       "post": {
         "description": "Mark all model lifecycle alerts as read for the account.\n\nAuth & scoping:\n- Requires `X-API-Key`. Scoped to the API key's account.",
         "operationId": "mark_all_read_api_models_alerts_mark_all_read_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -11879,6 +12193,11 @@
       "get": {
         "description": "Get the count of unread model lifecycle alerts.\n\nUseful for badge indicators in UIs and dashboards.\n\nAuth & scoping:\n- Requires `X-API-Key`. Count is scoped to the API key's account.",
         "operationId": "get_alert_unread_count_api_models_alerts_unread_count_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -11913,6 +12232,9 @@
               "title": "Alert Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -12039,6 +12361,9 @@
               "description": "Minimum output token limit.",
               "title": "Min Output Tokens"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -12120,6 +12445,9 @@
               "description": "Optional entity type filter (e.g. 'agent', 'knowledge_base')",
               "title": "Entity Type"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -12226,6 +12554,9 @@
               "description": "Filter by solution name (case-insensitive partial match)",
               "title": "Search"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -12258,6 +12589,11 @@
       "post": {
         "description": "Create a new solution for the API key's account.\n\nA *solution* groups agents, knowledge bases, and content sources into a cohesive unit. Provide a `name` and optional `description` in the request body. Requires `X-API-Key`.",
         "operationId": "create_solution_api_solutions_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -12310,6 +12646,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -12345,6 +12684,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -12387,6 +12729,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12441,6 +12786,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12493,6 +12841,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12547,6 +12898,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12564,7 +12918,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateResponse"
+                  "$ref": "#/components/schemas/AiAssistantGenerateResponse"
                 }
               }
             },
@@ -12601,6 +12955,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12618,7 +12975,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateResponse"
+                  "$ref": "#/components/schemas/AiAssistantGenerateResponse"
                 }
               }
             },
@@ -12655,6 +13012,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12672,7 +13032,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateResponse"
+                  "$ref": "#/components/schemas/AiAssistantGenerateResponse"
                 }
               }
             },
@@ -12719,6 +13079,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12736,7 +13099,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/routers__api__solutions__AiAssistantAcceptResponse"
+                  "$ref": "#/components/schemas/AiAssistantAcceptResponse"
                 }
               }
             },
@@ -12783,6 +13146,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -12820,6 +13186,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -12866,6 +13235,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12930,6 +13302,9 @@
               "title": "Conversation Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -12977,6 +13352,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13029,6 +13407,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13083,6 +13464,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13135,6 +13519,9 @@
               "title": "Solution Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13179,6 +13566,11 @@
       "post": {
         "description": "Create a new content source.\n\nSource types: `rss`, `website`, `file_uploads`, `custom_index`.\n\nFor RSS and website sources, provide the URL. For file upload and custom index sources, the URL is created automatically.",
         "operationId": "create_source_api_sources_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -13294,6 +13686,9 @@
               "description": "List sources for the given account. Defaults to the api key's account.",
               "title": "Account Id"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -13338,6 +13733,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -13373,6 +13771,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -13415,6 +13816,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13467,6 +13871,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13521,6 +13928,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -13571,6 +13981,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13628,6 +14041,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -13695,6 +14111,9 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -13737,6 +14156,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13791,6 +14213,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -13855,6 +14280,9 @@
               "title": "Export Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -13900,6 +14328,9 @@
               "title": "Export Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -13954,6 +14385,9 @@
               "title": "Export Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -14008,6 +14442,9 @@
               "title": "Export Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "responses": {
@@ -14049,6 +14486,9 @@
               "title": "Source Connection Id",
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
           }
         ],
         "requestBody": {
@@ -14089,5 +14529,13 @@
         ]
       }
     }
-  }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    },
+    {
+      "BearerAuth": []
+    }
+  ]
 }
