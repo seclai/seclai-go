@@ -20,7 +20,7 @@
 //
 // Credentials are resolved via a chain (first match wins):
 //
-//  1. Explicit ApiKey option
+//  1. Explicit APIKey option
 //  2. Explicit AccessToken option (static string)
 //  3. Explicit AccessTokenProvider option (function called per request)
 //  4. SECLAI_API_KEY environment variable
@@ -29,7 +29,7 @@
 // API key authentication:
 //
 //	client, _ := seclai.NewClient(seclai.Options{
-//	    ApiKey: "sk-...",
+//	    APIKey: "sk-...",
 //	})
 //
 // Bearer token with a static access token:

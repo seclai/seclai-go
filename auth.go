@@ -244,6 +244,8 @@ func WriteSsoCache(configDir string, profile *SsoProfile, entry *SsoCacheEntry) 
 	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
 		return err
 	}
+	// Remove destination first for Windows compatibility (os.Rename fails if dest exists).
+	os.Remove(cachePath)
 	if err := os.Rename(tmpFile, cachePath); err != nil {
 		os.Remove(tmpFile) // clean up orphaned temp file
 		return err
@@ -480,10 +482,13 @@ func resolveSsoToken(ctx context.Context, state *authState) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if cached != nil && IsTokenValid(cached) {
+	if cached == nil {
+		return "", &ConfigurationError{Message: "No cached SSO token found. Run `seclai auth login` to authenticate via SSO."}
+	}
+	if IsTokenValid(cached) {
 		return cached.AccessToken, nil
 	}
-	if cached != nil && cached.RefreshToken != "" && state.autoRefresh {
+	if cached.RefreshToken != "" && state.autoRefresh {
 		state.refreshMu.Lock()
 		defer state.refreshMu.Unlock()
 		// Re-check after acquiring lock — another goroutine may have refreshed

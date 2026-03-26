@@ -80,7 +80,7 @@ type Client struct {
 
 // NewClient constructs a new Client.
 //
-// Returns ConfigurationError if the API key is missing or if the base URL is invalid.
+// Returns ConfigurationError if credentials are missing or if the base URL is invalid.
 func NewClient(opts Options) (*Client, error) {
 	state, err := resolveCredentialChain(opts)
 	if err != nil {
