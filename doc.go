@@ -18,11 +18,46 @@
 //
 // # Authentication
 //
-// The SDK uses API key authentication via the x-api-key header.
-// By default, the client reads configuration from environment variables:
+// Credentials are resolved via a chain (first match wins):
 //
-//   - SECLAI_API_KEY (required)
-//   - SECLAI_API_URL (optional; defaults to https://seclai.com)
+//  1. Explicit APIKey option
+//  2. Explicit AccessToken option (static string)
+//  3. Explicit AccessTokenProvider option (function called per request)
+//  4. SECLAI_API_KEY environment variable
+//  5. SSO profile from ~/.seclai/config + cached tokens in ~/.seclai/sso/cache/
+//
+// API key authentication:
+//
+//	client, _ := seclai.NewClient(seclai.Options{
+//	    APIKey: "sk-...",
+//	})
+//
+// Bearer token with a static access token:
+//
+//	client, _ := seclai.NewClient(seclai.Options{
+//	    AccessToken: "eyJhbGciOi...",
+//	})
+//
+// Bearer token with a provider function (called per request):
+//
+//	client, _ := seclai.NewClient(seclai.Options{
+//	    AccessTokenProvider: func(ctx context.Context) (string, error) {
+//	        return getTokenFromVault(ctx)
+//	    },
+//	})
+//
+// SSO profile (reads ~/.seclai/config, auto-refreshes cached tokens):
+//
+//	client, _ := seclai.NewClient(seclai.Options{
+//	    Profile: "my-profile",
+//	})
+//
+// Environment variables:
+//
+//   - SECLAI_API_KEY: API key for x-api-key header authentication
+//   - SECLAI_API_URL: base URL (defaults to https://seclai.com)
+//   - SECLAI_PROFILE: SSO profile name (defaults to "default")
+//   - SECLAI_CONFIG_DIR: config directory (defaults to ~/.seclai)
 //
 // # Usage
 //
