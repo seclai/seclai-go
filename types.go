@@ -395,3 +395,11 @@ type AiAssistantFeedbackRequest = generated.RoutersApiAiAssistantAiAssistantFeed
 
 // AiAssistantFeedbackResponse is the response from submitting AI assistant feedback.
 type AiAssistantFeedbackResponse = generated.AiAssistantFeedbackResponse
+
+// ── Identity ────────────────────────────────────────────────────────────────
+
+// MeResponse is the response from the GET /me identity endpoint.
+type MeResponse = generated.MeResponse
+
+// OrganizationInfoResponse is an organization entry inside MeResponse.
+type OrganizationInfoResponse = generated.OrganizationInfoResponse

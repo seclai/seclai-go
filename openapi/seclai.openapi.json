@@ -7125,7 +7125,7 @@
   "paths": {
     "/agents": {
       "get": {
-        "description": "List agents for the account with pagination.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). All resources are scoped to the authenticated account.",
+        "description": "List agents for the account with pagination.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "list_agents_api_agents_get",
         "parameters": [
           {
@@ -7187,7 +7187,7 @@
         ]
       },
       "post": {
-        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Agent is created in the authenticated account.",
+        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
         "operationId": "create_agent_api_agents_post",
         "parameters": [
           {
@@ -7768,7 +7768,7 @@
     },
     "/agents/runs/search": {
       "post": {
-        "description": "Search agent traces using semantic similarity.\n\nFinds step-run outputs that are most semantically similar to the query.\nResults include the matching text, agent/step metadata, and a similarity score.\n\nAgent traces are automatically indexed when runs complete. The first 7 days of storage are free; extended retention is billed.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Searches only within your account's traces.",
+        "description": "Search agent traces using semantic similarity.\n\nFinds step-run outputs that are most semantically similar to the query.\nResults include the matching text, agent/step metadata, and a similarity score.\n\nAgent traces are automatically indexed when runs complete. The first 7 days of storage are free; extended retention is billed.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Searches only within your account's traces.",
         "operationId": "search_agent_runs_api_agents_runs_search_post",
         "parameters": [
           {
@@ -7815,7 +7815,7 @@
     },
     "/agents/runs/{run_id}": {
       "delete": {
-        "description": "Cancel a running agent run.\n\nIf the run is already in a terminal state (`completed` or `failed`), cancellation will be rejected.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only cancel runs belonging to your account.",
+        "description": "Cancel a running agent run.\n\nIf the run is already in a terminal state (`completed` or `failed`), cancellation will be rejected.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only cancel runs belonging to your account.",
         "operationId": "delete_agent_run_api_agents_runs__run_id__delete",
         "parameters": [
           {
@@ -7859,7 +7859,7 @@
         ]
       },
       "get": {
-        "description": "Fetch the latest snapshot for an agent run created by `POST /agents/{agent_id}/runs` or `POST /agents/{agent_id}/runs/stream`.\n\nThe response includes `status`, `error_count`, and `output` once the run completes. Use `include_step_outputs=true` to include per-step outputs, timing, durations, and credits.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only access runs belonging to your account.",
+        "description": "Fetch the latest snapshot for an agent run created by `POST /agents/{agent_id}/runs` or `POST /agents/{agent_id}/runs/stream`.\n\nThe response includes `status`, `error_count`, and `output` once the run completes. Use `include_step_outputs=true` to include per-step outputs, timing, durations, and credits.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access runs belonging to your account.",
         "operationId": "get_agent_run_api_agents_runs__run_id__get",
         "parameters": [
           {
@@ -7917,7 +7917,7 @@
     },
     "/agents/{agent_id}": {
       "delete": {
-        "description": "Soft-delete an agent. The agent will no longer appear in listings or be accessible via the API.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only delete agents belonging to your account.",
+        "description": "Soft-delete an agent. The agent will no longer appear in listings or be accessible via the API.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only delete agents belonging to your account.",
         "operationId": "delete_agent_api_agents__agent_id__delete",
         "parameters": [
           {
@@ -7954,7 +7954,7 @@
         ]
       },
       "get": {
-        "description": "Fetch an agent's metadata (name, description, trigger type, timestamps).\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only access agents belonging to your account.",
+        "description": "Fetch an agent's metadata (name, description, trigger type, timestamps).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
         "operationId": "get_agent_metadata_api_agents__agent_id__get",
         "parameters": [
           {
@@ -7998,7 +7998,7 @@
         ]
       },
       "put": {
-        "description": "Update an agent's name, description, evaluation settings, and model lifecycle settings.\n\nEvaluation settings: `evaluation_mode` ('output_expectation', 'eval_and_retry', 'sample_and_flag'), `default_evaluation_tier` ('fast', 'balanced', 'thorough'), `max_retries`, `retry_on_failure`, `sampling_config`.\n\nModel lifecycle settings: `prompt_model_auto_upgrade_strategy` ('none', 'early_adopter', 'middle_of_road', 'cautious_adopter'), `prompt_model_auto_rollback_enabled`, `prompt_model_auto_rollback_triggers` (list of 'agent_eval_fail', 'governance_flag', 'governance_block', 'agent_run_failed').\n\nAt least one field must be provided.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only update agents belonging to your account.",
+        "description": "Update an agent's name, description, evaluation settings, and model lifecycle settings.\n\nEvaluation settings: `evaluation_mode` ('output_expectation', 'eval_and_retry', 'sample_and_flag'), `default_evaluation_tier` ('fast', 'balanced', 'thorough'), `max_retries`, `retry_on_failure`, `sampling_config`.\n\nModel lifecycle settings: `prompt_model_auto_upgrade_strategy` ('none', 'early_adopter', 'middle_of_road', 'cautious_adopter'), `prompt_model_auto_rollback_enabled`, `prompt_model_auto_rollback_triggers` (list of 'agent_eval_fail', 'governance_flag', 'governance_block', 'agent_run_failed').\n\nAt least one field must be provided.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
         "operationId": "update_agent_api_agents__agent_id__put",
         "parameters": [
           {
@@ -8054,7 +8054,7 @@
     },
     "/agents/{agent_id}/ai-assistant/conversations": {
       "get": {
-        "description": "Fetch the AI assistant conversation history for a specific step of an agent.\n\nReturns past conversation turns (user inputs, AI responses, accept/decline status) ordered oldest first. Use `step_type` to filter by step type, and optionally `step_id` to narrow to a specific step instance.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Only agents belonging to your account can be queried.",
+        "description": "Fetch the AI assistant conversation history for a specific step of an agent.\n\nReturns past conversation turns (user inputs, AI responses, accept/decline status) ordered oldest first. Use `step_type` to filter by step type, and optionally `step_id` to narrow to a specific step instance.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Only agents belonging to your account can be queried.",
         "operationId": "get_ai_conversation_history_api_agents__agent_id__ai_assistant_conversations_get",
         "parameters": [
           {
@@ -8156,7 +8156,7 @@
     },
     "/agents/{agent_id}/ai-assistant/generate-steps": {
       "post": {
-        "description": "Use the AI assistant to generate a full agent step workflow from a natural language description.\n\nProvide a description of what the agent should do, along with optional context (current steps, trigger type). The AI produces a complete set of agent steps.\nUse mode 'generate_full' for new workflows or 'modify_workflow' to refine existing ones.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Only agents belonging to your account can be used.",
+        "description": "Use the AI assistant to generate a full agent step workflow from a natural language description.\n\nProvide a description of what the agent should do, along with optional context (current steps, trigger type). The AI produces a complete set of agent steps.\nUse mode 'generate_full' for new workflows or 'modify_workflow' to refine existing ones.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Only agents belonging to your account can be used.",
         "operationId": "generate_agent_steps_api_agents__agent_id__ai_assistant_generate_steps_post",
         "parameters": [
           {
@@ -8212,7 +8212,7 @@
     },
     "/agents/{agent_id}/ai-assistant/step-config": {
       "post": {
-        "description": "Use the AI assistant to generate or refine a single step's configuration.\n\nProvide the step type, a natural language instruction, and optionally the current configuration. The AI will produce a proposed configuration along with an explanation. The suggestion is stored as a conversation turn that can be accepted or declined separately via the mark endpoint.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Only agents belonging to your account can be used.",
+        "description": "Use the AI assistant to generate or refine a single step's configuration.\n\nProvide the step type, a natural language instruction, and optionally the current configuration. The AI will produce a proposed configuration along with an explanation. The suggestion is stored as a conversation turn that can be accepted or declined separately via the mark endpoint.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Only agents belonging to your account can be used.",
         "operationId": "generate_step_config_api_agents__agent_id__ai_assistant_step_config_post",
         "parameters": [
           {
@@ -8268,7 +8268,7 @@
     },
     "/agents/{agent_id}/ai-assistant/{conversation_id}": {
       "patch": {
-        "description": "Accept or decline a proposed AI assistant configuration for a conversation turn.\n\nThis only updates the tracking status on the conversation record. To actually apply the proposed configuration, use the agent definition update endpoint separately.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). The conversation must belong to one of your agents.",
+        "description": "Accept or decline a proposed AI assistant configuration for a conversation turn.\n\nThis only updates the tracking status on the conversation record. To actually apply the proposed configuration, use the agent definition update endpoint separately.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The conversation must belong to one of your agents.",
         "operationId": "mark_ai_suggestion_api_agents__agent_id__ai_assistant__conversation_id__patch",
         "parameters": [
           {
@@ -8337,7 +8337,7 @@
     },
     "/agents/{agent_id}/definition": {
       "get": {
-        "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `transform`: Reshape data with a Liquid template\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `insight`: Progressively read and analyze large input\n- `extract_json` / `extract_html` / `extract_xml`: Extract structured data\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `combinator`: Combine multiple inputs\n- `text`: Static text literal\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only access agents belonging to your account.",
+        "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `transform`: Reshape data with a Liquid template\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `insight`: Progressively read and analyze large input\n- `extract_json` / `extract_html` / `extract_xml`: Extract structured data\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `combinator`: Combine multiple inputs\n- `text`: Static text literal\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
         "operationId": "get_agent_definition_api_agents__agent_id__definition_get",
         "parameters": [
           {
@@ -8381,7 +8381,7 @@
         ]
       },
       "put": {
-        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `transform`, `gate`, `retry`, `evaluate_step`, `insight`, `extract_json`, `extract_html`, `extract_xml`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `combinator`, and `text`. Non-composite step types (`display_result`, `join`, `retry`, `evaluate_step`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only update agents belonging to your account.",
+        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `transform`, `gate`, `retry`, `evaluate_step`, `insight`, `extract_json`, `extract_html`, `extract_xml`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `combinator`, and `text`. Non-composite step types (`display_result`, `join`, `retry`, `evaluate_step`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
         "operationId": "update_agent_definition_api_agents__agent_id__definition_put",
         "parameters": [
           {
@@ -8873,7 +8873,7 @@
     },
     "/agents/{agent_id}/input-uploads/{upload_id}": {
       "get": {
-        "description": "Poll the processing status of a file upload created via `POST /agents/{agent_id}/upload-input`.\n\nPossible `status` values: `processing`, `ready`, `failed`.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). All resources are scoped to the authenticated account.",
+        "description": "Poll the processing status of a file upload created via `POST /agents/{agent_id}/upload-input`.\n\nPossible `status` values: `processing`, `ready`, `failed`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "api_get_agent_input_upload_status_api_agents__agent_id__input_uploads__upload_id__get",
         "parameters": [
           {
@@ -8928,7 +8928,7 @@
     },
     "/agents/{agent_id}/runs": {
       "get": {
-        "description": "List runs for a specific agent (most recent first), with pagination.\n\nTypical use cases:\n- Build a traces UI for an agent.\n- Debug recent executions and inspect terminal statuses.\n\nNotes:\n- This endpoint returns a summary list. Fetch full details with `GET /agents/runs/{run_id}`.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only list runs for agents in your account.",
+        "description": "List runs for a specific agent (most recent first), with pagination.\n\nTypical use cases:\n- Build a traces UI for an agent.\n- Debug recent executions and inspect terminal statuses.\n\nNotes:\n- This endpoint returns a summary list. Fetch full details with `GET /agents/runs/{run_id}`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only list runs for agents in your account.",
         "operationId": "list_agent_runs_api_agents__agent_id__runs_get",
         "parameters": [
           {
@@ -9017,7 +9017,7 @@
         ]
       },
       "post": {
-        "description": "Start an agent run.\n\nAn *agent* is an automated workflow that can monitor content from your sources, process it with AI, and trigger actions. This endpoint creates a new run and returns a `run_id` you can poll to retrieve status and output.\n\nWhen to use:\n- Use this endpoint for request/response style integrations where polling is acceptable.\n- Use `POST /agents/{agent_id}/runs/stream` if you need real-time progress via SSE.\n\nKey fields:\n- `input`: text input for agents with a `dynamic_input` trigger.\n- `input_upload_id`: alternatively, reference a file previously uploaded via `POST /agents/{agent_id}/upload-input` (mutually exclusive with `input`).\n- `priority`: set true for latency-sensitive, user-facing work.\n- `metadata`: a JSON object that becomes available to agent steps for string substitution.\n\nAfter starting:\n- Poll `GET /agents/runs/{run_id}` until `status` is `completed` or `failed`.\n- Use `include_step_outputs=true` to include per-step outputs, timing, and credits.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). All resources are scoped to the authenticated account.",
+        "description": "Start an agent run.\n\nAn *agent* is an automated workflow that can monitor content from your sources, process it with AI, and trigger actions. This endpoint creates a new run and returns a `run_id` you can poll to retrieve status and output.\n\nWhen to use:\n- Use this endpoint for request/response style integrations where polling is acceptable.\n- Use `POST /agents/{agent_id}/runs/stream` if you need real-time progress via SSE.\n\nKey fields:\n- `input`: text input for agents with a `dynamic_input` trigger.\n- `input_upload_id`: alternatively, reference a file previously uploaded via `POST /agents/{agent_id}/upload-input` (mutually exclusive with `input`).\n- `priority`: set true for latency-sensitive, user-facing work.\n- `metadata`: a JSON object that becomes available to agent steps for string substitution.\n\nAfter starting:\n- Poll `GET /agents/runs/{run_id}` until `status` is `completed` or `failed`.\n- Use `include_step_outputs=true` to include per-step outputs, timing, and credits.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "run_agent_api_agents__agent_id__runs_post",
         "parameters": [
           {
@@ -9073,7 +9073,7 @@
     },
     "/agents/{agent_id}/runs/stream": {
       "post": {
-        "description": "Start a **priority** agent run and stream run events using Server-Sent Events (SSE).\n\nThis is the best option for interactive UIs where you want progress updates as the run executes.\n\nHow it works:\n- The first `init` event contains an `AgentRunResponse` snapshot, including the `run_id`.\n- Subsequent events are forwarded from the run event stream (status changes, step events, etc).\n- The final `done` event contains the terminal snapshot (including `output` and `credits` when available).\n\nInput options (for `dynamic_input` triggers):\n- `input`: text input passed directly.\n- `input_upload_id`: reference a file uploaded via `POST /agents/{agent_id}/upload-input` (mutually exclusive with `input`).\n\nClient guidance:\n- Keep the connection open and handle keepalive comments.\n- On `timeout` or `error`, the payload includes `run_id` so clients can resume by polling `GET /agents/runs/{run_id}`.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). All resources are scoped to the authenticated account.",
+        "description": "Start a **priority** agent run and stream run events using Server-Sent Events (SSE).\n\nThis is the best option for interactive UIs where you want progress updates as the run executes.\n\nHow it works:\n- The first `init` event contains an `AgentRunResponse` snapshot, including the `run_id`.\n- Subsequent events are forwarded from the run event stream (status changes, step events, etc).\n- The final `done` event contains the terminal snapshot (including `output` and `credits` when available).\n\nInput options (for `dynamic_input` triggers):\n- `input`: text input passed directly.\n- `input_upload_id`: reference a file uploaded via `POST /agents/{agent_id}/upload-input` (mutually exclusive with `input`).\n\nClient guidance:\n- Keep the connection open and handle keepalive comments.\n- On `timeout` or `error`, the payload includes `run_id` so clients can resume by polling `GET /agents/runs/{run_id}`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "run_streaming_agent_api_agents__agent_id__runs_stream_post",
         "parameters": [
           {
@@ -9192,7 +9192,7 @@
     },
     "/agents/{agent_id}/upload-input": {
       "post": {
-        "description": "Upload a file to use as input for a `dynamic_input` agent run.\n\nSupports the same file types as content source uploads: text, PDF, DOCX, audio, video, images, etc.  Text and document files are processed synchronously; audio/video are submitted for asynchronous transcription.\n\n**Size limit:** 200 MB per file.\n\n**Supported extensions:** txt, html, md, csv, xml, json, pdf, msg, docx, doc, pptx, ppt, xlsx, xls, zip, epub, png, jpg, gif, bmp, tiff, webp, mp3, wav, m4a, flac, ogg, mp4, mov, avi.\n\nAfter uploading, poll `GET /agents/{agent_id}/input-uploads/{upload_id}` until `status` is `ready`, then pass `input_upload_id` to `POST /agents/{agent_id}/runs`.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). All resources are scoped to the authenticated account.",
+        "description": "Upload a file to use as input for a `dynamic_input` agent run.\n\nSupports the same file types as content source uploads: text, PDF, DOCX, audio, video, images, etc.  Text and document files are processed synchronously; audio/video are submitted for asynchronous transcription.\n\n**Size limit:** 200 MB per file.\n\n**Supported extensions:** txt, html, md, csv, xml, json, pdf, msg, docx, doc, pptx, ppt, xlsx, xls, zip, epub, png, jpg, gif, bmp, tiff, webp, mp3, wav, m4a, flac, ogg, mp4, mov, avi.\n\nAfter uploading, poll `GET /agents/{agent_id}/input-uploads/{upload_id}` until `status` is `ready`, then pass `input_upload_id` to `POST /agents/{agent_id}/runs`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "api_upload_agent_input_api_agents__agent_id__upload_input_post",
         "parameters": [
           {
@@ -9238,7 +9238,7 @@
     },
     "/ai-assistant/feedback": {
       "post": {
-        "description": "Submit thumbs-up/down feedback on any AI assistant interaction. Negative feedback with a comment is analyzed for concerning issues.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Submit thumbs-up/down feedback on any AI assistant interaction. Negative feedback with a comment is analyzed for concerning issues.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_feedback_api_ai_assistant_feedback_post",
         "parameters": [
           {
@@ -9285,7 +9285,7 @@
     },
     "/ai-assistant/knowledge-base": {
       "post": {
-        "description": "Generate a knowledge base creation/modification plan without requiring an existing solution. May also propose prerequisite source creation actions.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Generate a knowledge base creation/modification plan without requiring an existing solution. May also propose prerequisite source creation actions.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_knowledge_base_api_ai_assistant_knowledge_base_post",
         "parameters": [
           {
@@ -9332,7 +9332,7 @@
     },
     "/ai-assistant/memory-bank": {
       "post": {
-        "description": "Generate a memory bank configuration suggestion via the AI assistant. The AI proposes name, type, mode, compaction prompt, and retention settings.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Generate a memory bank configuration suggestion via the AI assistant. The AI proposes name, type, mode, compaction prompt, and retention settings.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_memory_bank_api_ai_assistant_memory_bank_post",
         "parameters": [
           {
@@ -9379,7 +9379,7 @@
     },
     "/ai-assistant/memory-bank/last-conversation": {
       "get": {
-        "description": "Fetch the most recent memory bank AI assistant conversation turns for the authenticated user. Returns turns in oldest-first order with a total count for pagination via limit/offset query parameters.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Fetch the most recent memory bank AI assistant conversation turns for the authenticated user. Returns turns in oldest-first order with a total count for pagination via limit/offset query parameters.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_memory_bank_history_api_ai_assistant_memory_bank_last_conversation_get",
         "parameters": [
           {
@@ -9443,7 +9443,7 @@
     },
     "/ai-assistant/memory-bank/{conversation_id}": {
       "patch": {
-        "description": "Update the acceptance status of a memory bank AI assistant conversation turn. Set ``accepted`` to true to accept the proposed configuration, or false to decline it. The accepted status is recorded for audit purposes.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Update the acceptance status of a memory bank AI assistant conversation turn. Set ``accepted`` to true to accept the proposed configuration, or false to decline it. The accepted status is recorded for audit purposes.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_memory_bank_accept_api_ai_assistant_memory_bank__conversation_id__patch",
         "parameters": [
           {
@@ -9504,7 +9504,7 @@
     },
     "/ai-assistant/solution": {
       "post": {
-        "description": "Generate a complete solution plan covering sources, knowledge bases, and agents without requiring an existing solution. Supports SSE streaming when ``Accept: text/event-stream`` is set.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Generate a complete solution plan covering sources, knowledge bases, and agents without requiring an existing solution. Supports SSE streaming when ``Accept: text/event-stream`` is set.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_solution_api_ai_assistant_solution_post",
         "parameters": [
           {
@@ -9551,7 +9551,7 @@
     },
     "/ai-assistant/source": {
       "post": {
-        "description": "Generate a content source creation/modification plan without requiring an existing solution. The AI proposes actions for the user to review before any changes are made.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Generate a content source creation/modification plan without requiring an existing solution. The AI proposes actions for the user to review before any changes are made.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_source_api_ai_assistant_source_post",
         "parameters": [
           {
@@ -9598,7 +9598,7 @@
     },
     "/ai-assistant/{conversation_id}/accept": {
       "post": {
-        "description": "Accept and execute a previously proposed standalone plan. If the plan contains destructive actions (deletions), ``confirm_deletions`` must be set to true.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Accept and execute a previously proposed standalone plan. If the plan contains destructive actions (deletions), ``confirm_deletions`` must be set to true.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_accept_api_ai_assistant__conversation_id__accept_post",
         "parameters": [
           {
@@ -9655,7 +9655,7 @@
     },
     "/ai-assistant/{conversation_id}/decline": {
       "post": {
-        "description": "Decline a previously proposed standalone plan. No resources are modified. The conversation is marked as declined.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Decline a previously proposed standalone plan. No resources are modified. The conversation is marked as declined.\n\nAuth: requires ``X-API-Key`` header or OAuth Bearer token.",
         "operationId": "api_ai_decline_api_ai_assistant__conversation_id__decline_post",
         "parameters": [
           {
@@ -9695,7 +9695,7 @@
     },
     "/alerts": {
       "get": {
-        "description": "List alerts for the account with optional filters.\n\nFilters:\n- `status`: triggered, acknowledged, resolved, dismissed\n- `agent_id`: filter by agent\n- `source_connection_id`: filter by source\n- `time_from` / `time_to`: ISO 8601 date range\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association. Results are scoped to the authenticated account.",
+        "description": "List alerts for the account with optional filters.\n\nFilters:\n- `status`: triggered, acknowledged, resolved, dismissed\n- `agent_id`: filter by agent\n- `source_connection_id`: filter by source\n- `time_from` / `time_to`: ISO 8601 date range\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Results are scoped to the caller's account.",
         "operationId": "list_alerts_api_alerts_get",
         "parameters": [
           {
@@ -9853,7 +9853,7 @@
     },
     "/alerts/configs": {
       "get": {
-        "description": "List alert configurations.\n\nFilters:\n- `agent_id`: list configs for a specific agent\n- `source_connection_id`: list configs for a specific source\n- Neither: list account-level agent alert configs\n- `scope=source`: list account-level source alert configs\n\nCredits alerts (`credits_low_threshold`, `credits_runout_prediction`, `credits_usage_spike`) are account-level alert configs. They are evaluated by the credits alert sweep and default-enabled configs may be auto-created for active accounts at runtime.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "List alert configurations.\n\nFilters:\n- `agent_id`: list configs for a specific agent\n- `source_connection_id`: list configs for a specific source\n- Neither: list account-level agent alert configs\n- `scope=source`: list account-level source alert configs\n\nCredits alerts (`credits_low_threshold`, `credits_runout_prediction`, `credits_usage_spike`) are account-level alert configs. They are evaluated by the credits alert sweep and default-enabled configs may be auto-created for active accounts at runtime.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "list_alert_configs_api_alerts_configs_get",
         "parameters": [
           {
@@ -9944,7 +9944,7 @@
         ]
       },
       "post": {
-        "description": "Create a new alert configuration.\n\nAgent alert types: run_failed, consecutive_failures, error_rate_spike, run_burst, slow_run, credits_low_threshold, credits_runout_prediction, credits_usage_spike, non_manual_eval_failed, non_manual_eval_flagged, governance_flagged, governance_blocked, model_newer_available, model_deprecated, model_sunset.\nSource alert types: pull_failed, consecutive_pull_failures, pull_error_rate_spike.\n\nDistribution types: owner, owner_admins, selected_members. Organization accounts are normalized to owner_admins.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Create a new alert configuration.\n\nAgent alert types: run_failed, consecutive_failures, error_rate_spike, run_burst, slow_run, credits_low_threshold, credits_runout_prediction, credits_usage_spike, non_manual_eval_failed, non_manual_eval_flagged, governance_flagged, governance_blocked, model_newer_available, model_deprecated, model_sunset.\nSource alert types: pull_failed, consecutive_pull_failures, pull_error_rate_spike.\n\nDistribution types: owner, owner_admins, selected_members. Organization accounts are normalized to owner_admins.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "create_alert_config_api_alerts_configs_post",
         "parameters": [
           {
@@ -9993,7 +9993,7 @@
     },
     "/alerts/configs/{config_id}": {
       "delete": {
-        "description": "Delete an alert configuration. This permanently removes the config and stops any future alerts of this type from being triggered.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Delete an alert configuration. This permanently removes the config and stops any future alerts of this type from being triggered.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "delete_alert_config_api_alerts_configs__config_id__delete",
         "parameters": [
           {
@@ -10030,7 +10030,7 @@
         ]
       },
       "get": {
-        "description": "Get a specific alert configuration by ID.\n\nReturns all fields including type, enabled state, threshold, cooldown, distribution type, and recipient list.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Get a specific alert configuration by ID.\n\nReturns all fields including type, enabled state, threshold, cooldown, distribution type, and recipient list.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "get_alert_config_api_alerts_configs__config_id__get",
         "parameters": [
           {
@@ -10076,7 +10076,7 @@
         ]
       },
       "patch": {
-        "description": "Update an alert configuration. Only provided fields are updated.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Update an alert configuration. Only provided fields are updated.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "update_alert_config_api_alerts_configs__config_id__patch",
         "parameters": [
           {
@@ -10134,7 +10134,7 @@
     },
     "/alerts/organization-preferences/list": {
       "get": {
-        "description": "List per-organization alert delivery preferences for the API key's associated user.\n\nBy default, only explicit override rows are returned. Set `include_defaults=true` to return the effective subscribed state for every alert type in every organization the user can manage.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.\n- Only organizations where the user is an owner or administrator are included.",
+        "description": "List per-organization alert delivery preferences for the authenticated user.\n\nBy default, only explicit override rows are returned. Set `include_defaults=true` to return the effective subscribed state for every alert type in every organization the user can manage.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- Only organizations where the user is an owner or administrator are included.",
         "operationId": "list_organization_preferences_api_alerts_organization_preferences_list_get",
         "parameters": [
           {
@@ -10202,7 +10202,7 @@
     },
     "/alerts/organization-preferences/{organization_id}/{alert_type}": {
       "patch": {
-        "description": "Update the API key user's personal delivery preference for one alert type in one organization.\n\nSetting `subscribed=false` stores an explicit opt-out override. Setting `subscribed=true` removes the override and restores the default subscribed behavior.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.\n- Only owners and administrators can update preferences for an organization.",
+        "description": "Update the authenticated user's personal delivery preference for one alert type in one organization.\n\nSetting `subscribed=false` stores an explicit opt-out override. Setting `subscribed=true` removes the override and restores the default subscribed behavior.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- Only owners and administrators can update preferences for an organization.",
         "operationId": "update_organization_preference_api_alerts_organization_preferences__organization_id___alert_type__patch",
         "parameters": [
           {
@@ -10268,7 +10268,7 @@
     },
     "/alerts/{alert_id}": {
       "get": {
-        "description": "Get full alert detail including history, comments, and subscribers.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Get full alert detail including history, comments, and subscribers.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "get_alert_detail_api_alerts__alert_id__get",
         "parameters": [
           {
@@ -10316,7 +10316,7 @@
     },
     "/alerts/{alert_id}/comments": {
       "post": {
-        "description": "Add a comment to an alert. Comments are visible to all subscribers and are included in the alert detail response.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Add a comment to an alert. Comments are visible to all subscribers and are included in the alert detail response.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "add_alert_comment_api_alerts__alert_id__comments_post",
         "parameters": [
           {
@@ -10374,7 +10374,7 @@
     },
     "/alerts/{alert_id}/status": {
       "post": {
-        "description": "Change the status of an alert. Valid statuses: triggered, acknowledged, resolved, dismissed.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Change the status of an alert. Valid statuses: triggered, acknowledged, resolved, dismissed.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "change_alert_status_api_alerts__alert_id__status_post",
         "parameters": [
           {
@@ -10432,7 +10432,7 @@
     },
     "/alerts/{alert_id}/subscribe": {
       "post": {
-        "description": "Subscribe the current user to an alert. Subscribed users receive email notifications when the alert status changes or new comments are added.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Subscribe the current user to an alert. Subscribed users receive email notifications when the alert status changes or new comments are added.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "subscribe_to_alert_api_alerts__alert_id__subscribe_post",
         "parameters": [
           {
@@ -10480,7 +10480,7 @@
     },
     "/alerts/{alert_id}/unsubscribe": {
       "post": {
-        "description": "Unsubscribe the current user from an alert. The user will no longer receive email notifications for status changes or new comments on this alert.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token) with user association.",
+        "description": "Unsubscribe the current user from an alert. The user will no longer receive email notifications for status changes or new comments on this alert.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "unsubscribe_from_alert_api_alerts__alert_id__unsubscribe_post",
         "parameters": [
           {
@@ -10528,7 +10528,7 @@
     },
     "/contents/{source_connection_content_version}": {
       "delete": {
-        "description": "Delete a content item (a `SourceConnectionContentVersion`).\n\nUse this to remove an uploaded or indexed item from your account. Deleting content can affect agents and knowledge base workflows that reference this item.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only delete content belonging to your account.",
+        "description": "Delete a content item (a `SourceConnectionContentVersion`).\n\nUse this to remove an uploaded or indexed item from your account. Deleting content can affect agents and knowledge base workflows that reference this item.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only delete content belonging to your account.",
         "operationId": "delete_content_api_contents__source_connection_content_version__delete",
         "parameters": [
           {
@@ -10565,7 +10565,7 @@
         ]
       },
       "get": {
-        "description": "Get detailed information about a specific content item (a `SourceConnectionContentVersion`).\n\nThis is useful when you want to:\n- Inspect the extracted text for debugging or review.\n- Display content details in a UI.\n\nText range:\n- `start` and `end` control the character range returned in `text_content` so clients can page through large documents.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only access content belonging to your account.",
+        "description": "Get detailed information about a specific content item (a `SourceConnectionContentVersion`).\n\nThis is useful when you want to:\n- Inspect the extracted text for debugging or review.\n- Display content details in a UI.\n\nText range:\n- `start` and `end` control the character range returned in `text_content` so clients can page through large documents.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access content belonging to your account.",
         "operationId": "get_content_detail_api_contents__source_connection_content_version__get",
         "parameters": [
           {
@@ -10685,7 +10685,7 @@
     },
     "/contents/{source_connection_content_version}/embeddings": {
       "get": {
-        "description": "List the embeddings (chunk vectors) for a content item, with pagination.\n\nEmbeddings are used for semantic search and retrieval in knowledge base workflows. This endpoint is primarily useful for debugging chunking, indexing, and vector contents.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only access embeddings for content belonging to your account.",
+        "description": "List the embeddings (chunk vectors) for a content item, with pagination.\n\nEmbeddings are used for semantic search and retrieval in knowledge base workflows. This endpoint is primarily useful for debugging chunking, indexing, and vector contents.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access embeddings for content belonging to your account.",
         "operationId": "list_content_embeddings_api_contents__source_connection_content_version__embeddings_get",
         "parameters": [
           {
@@ -10751,7 +10751,7 @@
     },
     "/contents/{source_connection_content_version}/upload": {
       "post": {
-        "description": "Upload a new file and replace the content backing an existing `SourceConnectionContentVersion`.\n\nThis behaves like a source file upload, but it targets an existing content version ID. This is useful when you want to correct or update an uploaded document while keeping references stable.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/msword`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only replace content belonging to your account.",
+        "description": "Upload a new file and replace the content backing an existing `SourceConnectionContentVersion`.\n\nThis behaves like a source file upload, but it targets an existing content version ID. This is useful when you want to correct or update an uploaded document while keeping references stable.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/msword`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only replace content belonging to your account.",
         "operationId": "upload_file_to_content_api_contents__source_connection_content_version__upload_post",
         "parameters": [
           {
@@ -10807,7 +10807,7 @@
     },
     "/governance/ai-assistant": {
       "post": {
-        "description": "Send a natural-language request to the governance AI assistant to generate a plan of policy changes. Returns a conversation with proposed actions that can be accepted or declined.\n\nAuth: requires authentication (API key or bearer token) with governance access.",
+        "description": "Send a natural-language request to the governance AI assistant to generate a plan of policy changes. Returns a conversation with proposed actions that can be accepted or declined.\n\nAuth: requires `X-API-Key` header or OAuth Bearer token with governance access.",
         "operationId": "governance_ai_generate_api_governance_ai_assistant_post",
         "parameters": [
           {
@@ -10860,7 +10860,7 @@
     },
     "/governance/ai-assistant/conversations": {
       "get": {
-        "description": "Return recent governance AI assistant conversations for the account, ordered by most recent first.\n\nAuth: requires authentication (API key or bearer token) with governance access.",
+        "description": "Return recent governance AI assistant conversations for the account, ordered by most recent first.\n\nAuth: requires `X-API-Key` header or OAuth Bearer token with governance access.",
         "operationId": "list_governance_ai_conversations_api_governance_ai_assistant_conversations_get",
         "parameters": [
           {
@@ -10918,7 +10918,7 @@
     },
     "/governance/ai-assistant/{conversation_id}/accept": {
       "post": {
-        "description": "Execute the proposed policy changes from a governance AI assistant conversation. Each action is applied in order and results are returned.\n\nAuth: requires authentication (API key or bearer token) with governance access.",
+        "description": "Execute the proposed policy changes from a governance AI assistant conversation. Each action is applied in order and results are returned.\n\nAuth: requires `X-API-Key` header or OAuth Bearer token with governance access.",
         "operationId": "governance_ai_accept_api_governance_ai_assistant__conversation_id__accept_post",
         "parameters": [
           {
@@ -10971,7 +10971,7 @@
     },
     "/governance/ai-assistant/{conversation_id}/decline": {
       "post": {
-        "description": "Reject a previously proposed governance AI assistant plan without applying any changes. The conversation is marked as declined and no policy modifications are made.\n\nAuth: requires authentication (API key or bearer token) with governance access.",
+        "description": "Reject a previously proposed governance AI assistant plan without applying any changes. The conversation is marked as declined and no policy modifications are made.\n\nAuth: requires `X-API-Key` header or OAuth Bearer token with governance access.",
         "operationId": "governance_ai_decline_api_governance_ai_assistant__conversation_id__decline_post",
         "parameters": [
           {
@@ -11017,7 +11017,7 @@
     },
     "/knowledge_bases": {
       "get": {
-        "description": "List knowledge bases for the account.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). All resources are scoped to the authenticated account.",
+        "description": "List knowledge bases for the account.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "list_knowledge_bases_api_knowledge_bases_get",
         "parameters": [
           {
@@ -11190,7 +11190,7 @@
         ]
       },
       "get": {
-        "description": "Fetch a knowledge base by ID.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only access knowledge bases belonging to your account.",
+        "description": "Fetch a knowledge base by ID.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access knowledge bases belonging to your account.",
         "operationId": "get_knowledge_base_api_knowledge_bases__knowledge_base_id__get",
         "parameters": [
           {
@@ -11234,7 +11234,7 @@
         ]
       },
       "put": {
-        "description": "Update a knowledge base's configuration. Only provided fields are changed; omitted fields are left unchanged.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only update knowledge bases belonging to your account.",
+        "description": "Update a knowledge base's configuration. Only provided fields are changed; omitted fields are left unchanged.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update knowledge bases belonging to your account.",
         "operationId": "update_knowledge_base_api_knowledge_bases__knowledge_base_id__put",
         "parameters": [
           {
@@ -11290,8 +11290,13 @@
     },
     "/me": {
       "get": {
-        "description": "Returns the authenticated user's personal account ID and a list of organizations they belong to. Each organization entry includes the organization's own id, name, and account_id. Useful for CLI tooling that needs to let the user pick an organization context.",
+        "description": "Returns the authenticated user's personal account ID and a list of organisations they belong to.  Each organisation entry includes the organisation's own id, display name, and account_id.  Useful for CLI tooling that needs to let the user pick an org context.",
         "operationId": "get_me_api_me_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -11312,7 +11317,7 @@
     },
     "/memory_banks": {
       "get": {
-        "description": "List memory banks for the account.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). All resources are scoped to the authenticated account.",
+        "description": "List memory banks for the account.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "list_memory_banks_api_memory_banks_get",
         "parameters": [
           {
@@ -11463,7 +11468,7 @@
     },
     "/memory_banks/ai-assistant": {
       "post": {
-        "description": "Generate a memory bank configuration suggestion via the AI assistant. The AI proposes name, type, mode, compaction prompt, and retention settings based on the user's description.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Generate a memory bank configuration suggestion via the AI assistant. The AI proposes name, type, mode, compaction prompt, and retention settings based on the user's description.\n\nAuth: requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "memory_bank_ai_generate_api_memory_banks_ai_assistant_post",
         "parameters": [
           {
@@ -11513,7 +11518,7 @@
     },
     "/memory_banks/ai-assistant/last-conversation": {
       "get": {
-        "description": "Fetch the most recent memory bank AI assistant conversation turns for the current user. Supports pagination via limit/offset.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Fetch the most recent memory bank AI assistant conversation turns for the current user. Supports pagination via limit/offset.\n\nAuth: requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "memory_bank_ai_last_conversation_api_memory_banks_ai_assistant_last_conversation_get",
         "parameters": [
           {
@@ -11577,7 +11582,7 @@
     },
     "/memory_banks/ai-assistant/{conversation_id}": {
       "patch": {
-        "description": "Update the acceptance status of a memory bank AI assistant conversation turn. Set ``accepted`` to true to accept the proposed configuration, or false to decline it. The accepted status is recorded for audit purposes.\n\nAuth: requires authentication (API key or bearer token).",
+        "description": "Update the acceptance status of a memory bank AI assistant conversation turn. Set ``accepted`` to true to accept the proposed configuration, or false to decline it. The accepted status is recorded for audit purposes.\n\nAuth: requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "memory_bank_ai_accept_api_memory_banks_ai_assistant__conversation_id__patch",
         "parameters": [
           {
@@ -11754,7 +11759,7 @@
         ]
       },
       "get": {
-        "description": "Fetch a memory bank by ID.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only access memory banks belonging to your account.",
+        "description": "Fetch a memory bank by ID.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access memory banks belonging to your account.",
         "operationId": "get_memory_bank_api_memory_banks__memory_bank_id__get",
         "parameters": [
           {
@@ -12144,7 +12149,7 @@
     },
     "/models/alerts": {
       "get": {
-        "description": "List model lifecycle alerts for the account.\n\nReturns in-app notifications about model deprecations, sunsets, and newer model availability. Supports filtering by agent, unread-only, and pagination.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Alerts are scoped to the authenticated account.",
+        "description": "List model lifecycle alerts for the account.\n\nReturns in-app notifications about model deprecations, sunsets, and newer model availability. Supports filtering by agent, unread-only, and pagination.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Alerts are scoped to the caller's account.",
         "operationId": "list_alerts_api_models_alerts_get",
         "parameters": [
           {
@@ -12240,7 +12245,7 @@
     },
     "/models/alerts/mark-all-read": {
       "post": {
-        "description": "Mark all model lifecycle alerts as read for the account.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Scoped to the authenticated account.",
+        "description": "Mark all model lifecycle alerts as read for the account.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Scoped to the caller's account.",
         "operationId": "mark_all_read_api_models_alerts_mark_all_read_post",
         "parameters": [
           {
@@ -12260,7 +12265,7 @@
     },
     "/models/alerts/unread-count": {
       "get": {
-        "description": "Get the count of unread model lifecycle alerts.\n\nUseful for badge indicators in UIs and dashboards.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Count is scoped to the authenticated account.",
+        "description": "Get the count of unread model lifecycle alerts.\n\nUseful for badge indicators in UIs and dashboards.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Count is scoped to the caller's account.",
         "operationId": "get_alert_unread_count_api_models_alerts_unread_count_get",
         "parameters": [
           {
@@ -12289,7 +12294,7 @@
     },
     "/models/alerts/{alert_id}/read": {
       "patch": {
-        "description": "Mark a single model lifecycle alert as read (dismissed).\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). The alert must belong to the authenticated account.",
+        "description": "Mark a single model lifecycle alert as read (dismissed).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The alert must belong to the caller's account.",
         "operationId": "mark_read_api_models_alerts__alert_id__read_patch",
         "parameters": [
           {
@@ -12329,7 +12334,7 @@
     },
     "/models/{model_id}/recommendations": {
       "get": {
-        "description": "Get replacement/upgrade recommendations for a model.\n\nReturns a designated successor (if any), same-family upgrades, and cross-provider/cross-family alternatives.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token).",
+        "description": "Get replacement/upgrade recommendations for a model.\n\nReturns a designated successor (if any), same-family upgrades, and cross-provider/cross-family alternatives.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "get_recommendations_api_models__model_id__recommendations_get",
         "parameters": [
           {
@@ -12551,7 +12556,7 @@
     },
     "/solutions": {
       "get": {
-        "description": "List solutions for your account.\n\nA *solution* groups agents, knowledge bases, and content sources into a cohesive unit. Use solutions to organise related resources and leverage AI assistants for automated setup.\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/updated_at/name) and `order` (asc/desc).\n- Filtering: `search` to filter by solution name (case-insensitive partial match).\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Results are scoped to the authenticated account.",
+        "description": "List solutions for your account.\n\nA *solution* groups agents, knowledge bases, and content sources into a cohesive unit. Use solutions to organise related resources and leverage AI assistants for automated setup.\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/updated_at/name) and `order` (asc/desc).\n- Filtering: `search` to filter by solution name (case-insensitive partial match).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Results are scoped to the caller's account.",
         "operationId": "list_solutions_api_solutions_get",
         "parameters": [
           {
@@ -12656,7 +12661,7 @@
         ]
       },
       "post": {
-        "description": "Create a new solution for the authenticated account.\n\nA *solution* groups agents, knowledge bases, and content sources into a cohesive unit. Provide a `name` and optional `description` in the request body. Requires authentication (API key or bearer token).",
+        "description": "Create a new solution for the caller's account.\n\nA *solution* groups agents, knowledge bases, and content sources into a cohesive unit. Provide a `name` and optional `description` in the request body.",
         "operationId": "create_solution_api_solutions_post",
         "parameters": [
           {
@@ -12703,7 +12708,7 @@
     },
     "/solutions/{solution_id}": {
       "delete": {
-        "description": "Delete a solution by its ID.\n\nThis permanently removes the solution and all its resource associations (agent links, knowledge base links, source connection links). The underlying resources themselves are not deleted. Requires authentication (API key or bearer token).",
+        "description": "Delete a solution by its ID.\n\nThis permanently removes the solution and all its resource associations (agent links, knowledge base links, source connection links). The underlying resources themselves are not deleted.",
         "operationId": "delete_solution_api_solutions__solution_id__delete",
         "parameters": [
           {
@@ -12741,7 +12746,7 @@
         ]
       },
       "get": {
-        "description": "Retrieve a solution by its ID, including all linked agents, knowledge bases, and source connections.\n\nReturns the full solution detail with nested resource information. Requires authentication (API key or bearer token).",
+        "description": "Retrieve a solution by its ID, including all linked agents, knowledge bases, and source connections.\n\nReturns the full solution detail with nested resource information.",
         "operationId": "get_solution_api_solutions__solution_id__get",
         "parameters": [
           {
@@ -12786,7 +12791,7 @@
         ]
       },
       "patch": {
-        "description": "Update an existing solution's name or description.\n\nPass the fields you wish to change in the request body. Fields not included remain unchanged. Requires authentication (API key or bearer token).",
+        "description": "Update an existing solution's name or description.\n\nPass the fields you wish to change in the request body. Fields not included remain unchanged.",
         "operationId": "update_solution_api_solutions__solution_id__patch",
         "parameters": [
           {
@@ -12843,7 +12848,7 @@
     },
     "/solutions/{solution_id}/agents": {
       "delete": {
-        "description": "Unlink one or more agents from a solution by their IDs.\n\nPass a JSON body with an `ids` array of agent UUIDs to remove. Agents not currently linked are silently ignored. Returns the updated solution with remaining linked resources. Requires authentication (API key or bearer token).",
+        "description": "Unlink one or more agents from a solution by their IDs.\n\nPass a JSON body with an `ids` array of agent UUIDs to remove. Agents not currently linked are silently ignored. Returns the updated solution with remaining linked resources.",
         "operationId": "unlink_agents_api_solutions__solution_id__agents_delete",
         "parameters": [
           {
@@ -12898,7 +12903,7 @@
         ]
       },
       "post": {
-        "description": "Link one or more agents to a solution by their IDs.\n\nPass a JSON body with an `ids` array of agent UUIDs. Already-linked agents are silently ignored. Returns the updated solution with all linked resources. Requires authentication (API key or bearer token).",
+        "description": "Link one or more agents to a solution by their IDs.\n\nPass a JSON body with an `ids` array of agent UUIDs. Already-linked agents are silently ignored. Returns the updated solution with all linked resources.",
         "operationId": "link_agents_api_solutions__solution_id__agents_post",
         "parameters": [
           {
@@ -12955,7 +12960,7 @@
     },
     "/solutions/{solution_id}/ai-assistant/generate": {
       "post": {
-        "description": "Generate a comprehensive solution management plan via the solution AI assistant.\n\nThis is the most powerful assistant \u2014 it can propose changes across sources, knowledge bases, and agents. Describe your goal in natural language and the assistant will create a multi-step plan. Review the proposed actions and use the accept or decline endpoint. Requires authentication (API key or bearer token).\n\nSupports SSE streaming when `Accept: text/event-stream` is set.",
+        "description": "Generate a comprehensive solution management plan via the solution AI assistant.\n\nThis is the most powerful assistant \u2014 it can propose changes across sources, knowledge bases, and agents. Describe your goal in natural language and the assistant will create a multi-step plan. Review the proposed actions and use the accept or decline endpoint.\n\nSupports SSE streaming when `Accept: text/event-stream` is set.",
         "operationId": "ai_assistant_generate_api_solutions__solution_id__ai_assistant_generate_post",
         "parameters": [
           {
@@ -13012,7 +13017,7 @@
     },
     "/solutions/{solution_id}/ai-assistant/knowledge-base": {
       "post": {
-        "description": "Generate a knowledge base plan via the KB AI assistant.\n\nDescribe what knowledge bases you need in natural language and the assistant will propose a plan with create, update, or delete actions. The assistant may also propose creating new sources if needed. Review the proposed actions and use the accept or decline endpoint. Requires authentication (API key or bearer token).",
+        "description": "Generate a knowledge base plan via the KB AI assistant.\n\nDescribe what knowledge bases you need in natural language and the assistant will propose a plan with create, update, or delete actions. The assistant may also propose creating new sources if needed. Review the proposed actions and use the accept or decline endpoint.",
         "operationId": "ai_assistant_knowledge_base_api_solutions__solution_id__ai_assistant_knowledge_base_post",
         "parameters": [
           {
@@ -13069,7 +13074,7 @@
     },
     "/solutions/{solution_id}/ai-assistant/source": {
       "post": {
-        "description": "Generate a content source plan via the source AI assistant.\n\nDescribe what sources you need in natural language and the assistant will propose a plan with create, update, or delete actions. Review the proposed actions and use the accept or decline endpoint to execute or discard the plan. Requires authentication (API key or bearer token).",
+        "description": "Generate a content source plan via the source AI assistant.\n\nDescribe what sources you need in natural language and the assistant will propose a plan with create, update, or delete actions. Review the proposed actions and use the accept or decline endpoint to execute or discard the plan.",
         "operationId": "ai_assistant_source_api_solutions__solution_id__ai_assistant_source_post",
         "parameters": [
           {
@@ -13126,7 +13131,7 @@
     },
     "/solutions/{solution_id}/ai-assistant/{conversation_id}/accept": {
       "post": {
-        "description": "Accept and execute a proposed plan generated by one of the AI assistant endpoints.\n\nExecutes all proposed actions in the plan and returns the results of each action. If the plan contains destructive actions (e.g. deletions), you must set `confirm_deletions` to `true` in the request body. Returns a summary of executed actions with success/failure status. Requires authentication (API key or bearer token).",
+        "description": "Accept and execute a proposed plan generated by one of the AI assistant endpoints.\n\nExecutes all proposed actions in the plan and returns the results of each action. If the plan contains destructive actions (e.g. deletions), you must set `confirm_deletions` to `true` in the request body. Returns a summary of executed actions with success/failure status.",
         "operationId": "ai_assistant_accept_api_solutions__solution_id__ai_assistant__conversation_id__accept_post",
         "parameters": [
           {
@@ -13193,7 +13198,7 @@
     },
     "/solutions/{solution_id}/ai-assistant/{conversation_id}/decline": {
       "post": {
-        "description": "Decline a proposed plan generated by one of the AI assistant endpoints.\n\nMarks the conversation as declined without executing any actions. The conversation history is preserved for reference. You can generate a new plan afterwards if needed. Requires authentication (API key or bearer token).",
+        "description": "Decline a proposed plan generated by one of the AI assistant endpoints.\n\nMarks the conversation as declined without executing any actions. The conversation history is preserved for reference. You can generate a new plan afterwards if needed.",
         "operationId": "ai_assistant_decline_api_solutions__solution_id__ai_assistant__conversation_id__decline_post",
         "parameters": [
           {
@@ -13243,7 +13248,7 @@
     },
     "/solutions/{solution_id}/conversations": {
       "get": {
-        "description": "List AI assistant conversation history for a solution.\n\nReturns all conversation turns for the given solution, including user inputs, AI responses, proposed actions, and acceptance status. Requires authentication (API key or bearer token).",
+        "description": "List AI assistant conversation history for a solution.\n\nReturns all conversation turns for the given solution, including user inputs, AI responses, proposed actions, and acceptance status.",
         "operationId": "list_conversations_api_solutions__solution_id__conversations_get",
         "parameters": [
           {
@@ -13292,7 +13297,7 @@
         ]
       },
       "post": {
-        "description": "Add a conversation turn to a solution's AI assistant history.\n\nRecords a user input and optional AI response and actions taken. This is typically called internally by AI assistant endpoints, but can also be used to manually log interactions. Requires authentication (API key or bearer token).",
+        "description": "Add a conversation turn to a solution's AI assistant history.\n\nRecords a user input and optional AI response and actions taken. This is typically called internally by AI assistant endpoints, but can also be used to manually log interactions.",
         "operationId": "add_conversation_turn_api_solutions__solution_id__conversations_post",
         "parameters": [
           {
@@ -13349,7 +13354,7 @@
     },
     "/solutions/{solution_id}/conversations/{conversation_id}": {
       "patch": {
-        "description": "Mark a conversation turn as accepted or declined.\n\nUpdates the `accepted` field on an existing conversation turn. Use this after reviewing a proposed plan to record whether it was accepted or declined by the user. Requires authentication (API key or bearer token).",
+        "description": "Mark a conversation turn as accepted or declined.\n\nUpdates the `accepted` field on an existing conversation turn. Use this after reviewing a proposed plan to record whether it was accepted or declined by the user.",
         "operationId": "mark_conversation_turn_api_solutions__solution_id__conversations__conversation_id__patch",
         "parameters": [
           {
@@ -13409,7 +13414,7 @@
     },
     "/solutions/{solution_id}/knowledge-bases": {
       "delete": {
-        "description": "Unlink one or more knowledge bases from a solution by their IDs.\n\nPass a JSON body with an `ids` array of knowledge base UUIDs to remove. Knowledge bases not currently linked are silently ignored. Returns the updated solution. Requires authentication (API key or bearer token).",
+        "description": "Unlink one or more knowledge bases from a solution by their IDs.\n\nPass a JSON body with an `ids` array of knowledge base UUIDs to remove. Knowledge bases not currently linked are silently ignored. Returns the updated solution.",
         "operationId": "unlink_knowledge_bases_api_solutions__solution_id__knowledge_bases_delete",
         "parameters": [
           {
@@ -13464,7 +13469,7 @@
         ]
       },
       "post": {
-        "description": "Link one or more knowledge bases to a solution by their IDs.\n\nPass a JSON body with an `ids` array of knowledge base UUIDs. Already-linked knowledge bases are silently ignored. Returns the updated solution with all linked resources. Requires authentication (API key or bearer token).",
+        "description": "Link one or more knowledge bases to a solution by their IDs.\n\nPass a JSON body with an `ids` array of knowledge base UUIDs. Already-linked knowledge bases are silently ignored. Returns the updated solution with all linked resources.",
         "operationId": "link_knowledge_bases_api_solutions__solution_id__knowledge_bases_post",
         "parameters": [
           {
@@ -13521,7 +13526,7 @@
     },
     "/solutions/{solution_id}/source-connections": {
       "delete": {
-        "description": "Unlink one or more source connections from a solution by their IDs.\n\nPass a JSON body with an `ids` array of source connection UUIDs to remove. Sources not currently linked are silently ignored. Returns the updated solution. Requires authentication (API key or bearer token).",
+        "description": "Unlink one or more source connections from a solution by their IDs.\n\nPass a JSON body with an `ids` array of source connection UUIDs to remove. Sources not currently linked are silently ignored. Returns the updated solution.",
         "operationId": "unlink_source_connections_api_solutions__solution_id__source_connections_delete",
         "parameters": [
           {
@@ -13576,7 +13581,7 @@
         ]
       },
       "post": {
-        "description": "Link one or more source connections to a solution by their IDs.\n\nPass a JSON body with an `ids` array of source connection UUIDs. Already-linked sources are silently ignored. Returns the updated solution with all linked resources. Requires authentication (API key or bearer token).",
+        "description": "Link one or more source connections to a solution by their IDs.\n\nPass a JSON body with an `ids` array of source connection UUIDs. Already-linked sources are silently ignored. Returns the updated solution with all linked resources.",
         "operationId": "link_source_connections_api_solutions__solution_id__source_connections_post",
         "parameters": [
           {
@@ -13683,7 +13688,7 @@
     },
     "/sources/": {
       "get": {
-        "description": "List content sources for your account.\n\nA *source* is where Seclai pulls or receives content from (for example RSS feeds, websites, file uploads, or custom indexes). Sources are the inputs that power your agents and knowledge base workflows.\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/updated_at/name) and `order` (asc/desc).\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). Results are scoped to the authenticated account.\n- The optional `account_id` query param is only allowed when it matches the authenticated account.",
+        "description": "List content sources for your account.\n\nA *source* is where Seclai pulls or receives content from (for example RSS feeds, websites, file uploads, or custom indexes). Sources are the inputs that power your agents and knowledge base workflows.\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/updated_at/name) and `order` (asc/desc).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Results are scoped to the caller's account.\n- The optional `account_id` query param is only allowed when it matches the caller's account.",
         "operationId": "list_sources_api_sources__get",
         "parameters": [
           {
@@ -13739,7 +13744,7 @@
             }
           },
           {
-            "description": "List sources for the given account. Defaults to the api key's account.",
+            "description": "List sources for the given account. Defaults to the caller's account.",
             "in": "query",
             "name": "account_id",
             "required": false,
@@ -13752,7 +13757,7 @@
                   "type": "null"
                 }
               ],
-              "description": "List sources for the given account. Defaults to the api key's account.",
+              "description": "List sources for the given account. Defaults to the caller's account.",
               "title": "Account Id"
             }
           },
@@ -13828,7 +13833,7 @@
         ]
       },
       "get": {
-        "description": "Fetch a content source by ID.\n\nAuth & scoping:\n- Requires authentication (API key or bearer token). You can only access sources belonging to your account.",
+        "description": "Fetch a content source by ID.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access sources belonging to your account.",
         "operationId": "get_source_api_sources__source_connection_id__get",
         "parameters": [
           {

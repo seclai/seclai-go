@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -80,6 +81,15 @@ const (
 	expiryBuffer = 30 * time.Second
 )
 
+// DefaultSsoDomain is the production Cognito domain. Override with SECLAI_SSO_DOMAIN or config file.
+const DefaultSsoDomain = "auth.seclai.com"
+
+// DefaultSsoClientID is the production Cognito app client ID. Override with SECLAI_SSO_CLIENT_ID or config file.
+const DefaultSsoClientID = "4bgf8v9qmc5puivbaqon9n5lmr"
+
+// DefaultSsoRegion is the default AWS region. Override with SECLAI_SSO_REGION or config file.
+const DefaultSsoRegion = "us-west-2"
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 // CacheFileName computes the SHA-1 hex of "domain|clientId".
@@ -148,12 +158,20 @@ func ParseIni(r io.Reader) map[string]map[string]string {
 // ── Profile resolution ──────────────────────────────────────────────────────
 
 // LoadSsoProfile reads the config file and resolves a profile.
+// Always returns a valid profile — missing config values fall back to
+// environment variable overrides (SECLAI_SSO_DOMAIN, SECLAI_SSO_CLIENT_ID,
+// SECLAI_SSO_REGION), then built-in production defaults.
 func LoadSsoProfile(configDir, profileName string) (*SsoProfile, error) {
 	configPath := filepath.Join(configDir, ssoConfigFile)
 	f, err := os.Open(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			// No config file — return profile with defaults
+			return &SsoProfile{
+				SsoDomain:  envOrDefault("SECLAI_SSO_DOMAIN", "", DefaultSsoDomain),
+				SsoClientID: envOrDefault("SECLAI_SSO_CLIENT_ID", "", DefaultSsoClientID),
+				SsoRegion:  envOrDefault("SECLAI_SSO_REGION", "", DefaultSsoRegion),
+			}, nil
 		}
 		return nil, err
 	}
@@ -172,27 +190,27 @@ func LoadSsoProfile(configDir, profileName string) (*SsoProfile, error) {
 	} else {
 		section = sections[profileName]
 		if section == nil {
-			return nil, nil
+			log.Printf("seclai: SSO profile %q not found in config; using defaults", profileName)
+			section = defaultSection
+		} else {
+			// Inherit from default
+			merged := make(map[string]string)
+			for k, v := range defaultSection {
+				merged[k] = v
+			}
+			for k, v := range section {
+				merged[k] = v
+			}
+			section = merged
 		}
-		// Inherit from default
-		merged := make(map[string]string)
-		for k, v := range defaultSection {
-			merged[k] = v
-		}
-		for k, v := range section {
-			merged[k] = v
-		}
-		section = merged
 	}
 
 	accountID := section["sso_account_id"]
-	region := section["sso_region"]
-	clientID := section["sso_client_id"]
-	domain := section["sso_domain"]
 
-	if accountID == "" || region == "" || clientID == "" || domain == "" {
-		return nil, nil
-	}
+	// Apply env var overrides, then built-in defaults
+	domain := envOrDefault("SECLAI_SSO_DOMAIN", section["sso_domain"], DefaultSsoDomain)
+	clientID := envOrDefault("SECLAI_SSO_CLIENT_ID", section["sso_client_id"], DefaultSsoClientID)
+	region := envOrDefault("SECLAI_SSO_REGION", section["sso_region"], DefaultSsoRegion)
 
 	return &SsoProfile{
 		SsoAccountID: accountID,
@@ -200,6 +218,17 @@ func LoadSsoProfile(configDir, profileName string) (*SsoProfile, error) {
 		SsoClientID:  clientID,
 		SsoDomain:    domain,
 	}, nil
+}
+
+// envOrDefault returns the env var value if set, else configVal if non-empty, else fallback.
+func envOrDefault(envKey, configVal, fallback string) string {
+	if v := os.Getenv(envKey); v != "" {
+		return v
+	}
+	if configVal != "" {
+		return configVal
+	}
+	return fallback
 }
 
 // ── Cache I/O ───────────────────────────────────────────────────────────────
@@ -511,5 +540,5 @@ func resolveSsoToken(ctx context.Context, state *authState) (string, error) {
 			return refreshed.AccessToken, nil
 		}
 	}
-	return "", &ConfigurationError{Message: "SSO token expired. Run `seclai auth login` to re-authenticate."}
+	return "", &ConfigurationError{Message: "SSO token is missing or has expired. Run `seclai auth login` to authenticate."}
 }

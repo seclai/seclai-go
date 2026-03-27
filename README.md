@@ -104,20 +104,23 @@ client, _ := seclai.NewClient(seclai.Options{})
 #### SSO authentication
 
 SSO is the default fallback when no explicit credentials are provided. The SDK
-includes built-in production SSO defaults, so no configuration is needed:
+includes built-in production SSO defaults, so a single `auth login` is enough:
 
 ```bash
 npx @seclai/cli auth login    # authenticate via browser — works immediately
 ```
 
-To customize SSO settings (e.g. for a staging environment), use `seclai configure sso`
-or set environment variables:
+To customize SSO settings (e.g. for a staging environment), create a profile
+with `seclai configure sso` or set environment variables:
 
 | Variable | Description | Default |
 |---|---|---|
 | `SECLAI_SSO_DOMAIN` | Cognito domain | `auth.seclai.com` |
 | `SECLAI_SSO_CLIENT_ID` | Cognito app client ID | `4bgf8v9qmc5puivbaqon9n5lmr` |
 | `SECLAI_SSO_REGION` | AWS region | `us-west-2` |
+
+Environment variables take precedence over config file values, which take
+precedence over built-in defaults.
 
 ## API documentation
 
