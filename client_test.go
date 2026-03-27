@@ -21,16 +21,15 @@ func TestNewClient_UsesEnvAPIKey(t *testing.T) {
 	}
 }
 
-func TestNewClient_MissingCredentials(t *testing.T) {
+func TestNewClient_FallsBackToSSO(t *testing.T) {
 	t.Setenv("SECLAI_API_KEY", "")
-	t.Setenv("SECLAI_CONFIG_DIR", "/nonexistent-seclai-dir")
-	_, err := NewClient(Options{})
-	if err == nil {
-		t.Fatalf("expected error for missing credentials")
+	t.Setenv("SECLAI_CONFIG_DIR", t.TempDir())
+	c, err := NewClient(Options{})
+	if err != nil {
+		t.Fatalf("expected SSO fallback, got error: %v", err)
 	}
-	var ce *ConfigurationError
-	if !isConfigError(err, &ce) {
-		t.Fatalf("expected ConfigurationError, got %T: %v", err, err)
+	if c == nil {
+		t.Fatal("expected non-nil client")
 	}
 }
 
@@ -209,5 +208,45 @@ func TestIsTokenValid(t *testing.T) {
 	}
 	if IsTokenValid(&SsoCacheEntry{ExpiresAt: nearExpiry}) {
 		t.Error("token expiring within 30s buffer should be invalid")
+	}
+}
+
+func TestLoadSsoProfile_BuiltInDefaults(t *testing.T) {
+	dir := t.TempDir()
+	profile, err := LoadSsoProfile(dir, "default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile == nil {
+		t.Fatal("expected non-nil profile with built-in defaults")
+	}
+	if profile.SsoDomain != DefaultSsoDomain {
+		t.Errorf("expected domain %q, got %q", DefaultSsoDomain, profile.SsoDomain)
+	}
+	if profile.SsoClientID != DefaultSsoClientID {
+		t.Errorf("expected client ID %q, got %q", DefaultSsoClientID, profile.SsoClientID)
+	}
+	if profile.SsoRegion != DefaultSsoRegion {
+		t.Errorf("expected region %q, got %q", DefaultSsoRegion, profile.SsoRegion)
+	}
+}
+
+func TestLoadSsoProfile_EnvVarOverride(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SECLAI_SSO_DOMAIN", "auth.staging.example.com")
+	t.Setenv("SECLAI_SSO_CLIENT_ID", "staging-client")
+	t.Setenv("SECLAI_SSO_REGION", "eu-west-1")
+	profile, err := LoadSsoProfile(dir, "default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.SsoDomain != "auth.staging.example.com" {
+		t.Errorf("expected domain from env, got %q", profile.SsoDomain)
+	}
+	if profile.SsoClientID != "staging-client" {
+		t.Errorf("expected client ID from env, got %q", profile.SsoClientID)
+	}
+	if profile.SsoRegion != "eu-west-1" {
+		t.Errorf("expected region from env, got %q", profile.SsoRegion)
 	}
 }

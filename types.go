@@ -201,7 +201,7 @@ type UpdateMemoryBankBody = generated.UpdateMemoryBankBody
 type MemoryBankAiAssistantRequest = generated.RoutersApiMemoryBanksMemoryBankAiAssistantRequest
 
 // MemoryBankAiAssistantResponse is the response from the memory bank AI assistant.
-type MemoryBankAiAssistantResponse = generated.RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+type MemoryBankAiAssistantResponse = generated.MemoryBankAiAssistantResponse
 
 // MemoryBankAcceptRequest is the request body for accepting a memory bank AI suggestion.
 type MemoryBankAcceptRequest = generated.RoutersApiMemoryBanksMemoryBankAcceptRequest
@@ -225,7 +225,7 @@ type CompactionEvaluationModel = generated.CompactionEvaluationModel
 type MemoryBankConversationTurnResponse = generated.RoutersApiMemoryBanksMemoryBankConversationTurnResponse
 
 // MemoryBankConfigResponse is the suggested memory bank configuration from the AI assistant.
-type MemoryBankConfigResponse = generated.RoutersApiMemoryBanksMemoryBankConfigResponse
+type MemoryBankConfigResponse = generated.MemoryBankConfigResponse
 
 // ── Sources ─────────────────────────────────────────────────────────────────
 
@@ -331,19 +331,19 @@ type MarkConversationTurnRequest = generated.MarkConversationTurnRequest
 type AiAssistantGenerateRequest = generated.AiAssistantGenerateRequest
 
 // AiAssistantGenerateResponse is the AI assistant generated plan response.
-type AiAssistantGenerateResponse = generated.RoutersApiSolutionsAiAssistantGenerateResponse
+type AiAssistantGenerateResponse = generated.AiAssistantGenerateResponse
 
 // AiAssistantAcceptRequest is the request body for accepting an AI assistant plan.
 type AiAssistantAcceptRequest = generated.RoutersApiSolutionsAiAssistantAcceptRequest
 
 // AiAssistantAcceptResponse is the response from accepting an AI assistant plan.
-type AiAssistantAcceptResponse = generated.RoutersApiSolutionsAiAssistantAcceptResponse
+type AiAssistantAcceptResponse = generated.AiAssistantAcceptResponse
 
 // ProposedActionResponse is a proposed action in a solution AI plan.
-type ProposedActionResponse = generated.RoutersApiSolutionsProposedActionResponse
+type ProposedActionResponse = generated.ProposedActionResponse
 
 // ExecutedActionResponse is an executed action result in a solution AI plan.
-type ExecutedActionResponse = generated.RoutersApiSolutionsExecutedActionResponse
+type ExecutedActionResponse = generated.ExecutedActionResponse
 
 // ── Governance ──────────────────────────────────────────────────────────────
 
@@ -351,19 +351,19 @@ type ExecutedActionResponse = generated.RoutersApiSolutionsExecutedActionRespons
 type GovernanceAiAssistantRequest = generated.RoutersApiGovernanceGovernanceAiAssistantRequest
 
 // GovernanceAiAssistantResponse is the governance AI assistant response.
-type GovernanceAiAssistantResponse = generated.RoutersApiGovernanceGovernanceAiAssistantResponse
+type GovernanceAiAssistantResponse = generated.GovernanceAiAssistantResponse
 
 // GovernanceConversationResponse is a governance AI conversation turn.
 type GovernanceConversationResponse = generated.RoutersApiGovernanceGovernanceConversationResponse
 
 // GovernanceAiAcceptResponse is the response from accepting a governance AI plan.
-type GovernanceAiAcceptResponse = generated.RoutersApiGovernanceGovernanceAiAcceptResponse
+type GovernanceAiAcceptResponse = generated.GovernanceAiAcceptResponse
 
 // GovernanceProposedPolicyActionResponse is a single proposed governance policy action.
-type GovernanceProposedPolicyActionResponse = generated.RoutersApiGovernanceProposedPolicyActionResponse
+type GovernanceProposedPolicyActionResponse = generated.ProposedPolicyActionResponse
 
 // GovernanceAppliedActionResponse is the result of a single executed governance action.
-type GovernanceAppliedActionResponse = generated.RoutersApiGovernanceAppliedActionResponse
+type GovernanceAppliedActionResponse = generated.AppliedActionResponse
 
 // ── Alerts ──────────────────────────────────────────────────────────────────
 
@@ -395,3 +395,11 @@ type AiAssistantFeedbackRequest = generated.RoutersApiAiAssistantAiAssistantFeed
 
 // AiAssistantFeedbackResponse is the response from submitting AI assistant feedback.
 type AiAssistantFeedbackResponse = generated.AiAssistantFeedbackResponse
+
+// ── Identity ────────────────────────────────────────────────────────────────
+
+// MeResponse is the response from the GET /me identity endpoint.
+type MeResponse = generated.MeResponse
+
+// OrganizationInfoResponse is an organization entry inside MeResponse.
+type OrganizationInfoResponse = generated.OrganizationInfoResponse

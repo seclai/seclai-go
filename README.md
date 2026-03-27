@@ -65,6 +65,10 @@ func main() {
 | `DefaultHeaders` | — | `nil` |
 | `HTTPClient` | — | `&http.Client{Timeout: 30s}` |
 
+> At least one credential must be provided via the options above, the
+> `SECLAI_API_KEY` environment variable, or an SSO profile
+> (see [Authentication](#authentication) below).
+
 ### Authentication
 
 Credentials are resolved via a chain (first match wins):
@@ -97,12 +101,26 @@ client, _ := seclai.NewClient(seclai.Options{Profile: "my-profile"})
 client, _ := seclai.NewClient(seclai.Options{})
 ```
 
-To set up SSO authentication, install the [Seclai CLI](https://www.npmjs.com/package/seclai) and run:
+#### SSO authentication
+
+SSO is the default fallback when no explicit credentials are provided. The SDK
+includes built-in production SSO defaults, so a single `auth login` is enough:
 
 ```bash
-seclai configure sso    # set up an SSO profile
-seclai auth login       # authenticate via browser
+npx @seclai/cli auth login    # authenticate via browser — works immediately
 ```
+
+To customize SSO settings (e.g. for a staging environment), create a profile
+with `seclai configure sso` or set environment variables:
+
+| Variable | Description | Default |
+|---|---|---|
+| `SECLAI_SSO_DOMAIN` | Cognito domain | `auth.seclai.com` |
+| `SECLAI_SSO_CLIENT_ID` | Cognito app client ID | `4bgf8v9qmc5puivbaqon9n5lmr` |
+| `SECLAI_SSO_REGION` | AWS region | `us-west-2` |
+
+Environment variables take precedence over config file values, which take
+precedence over built-in defaults.
 
 ## API documentation
 
