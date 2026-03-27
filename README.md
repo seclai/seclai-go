@@ -54,28 +54,66 @@ func main() {
 | Option | Environment variable | Default |
 | --- | --- | --- |
 | `APIKey` | `SECLAI_API_KEY` | — |
+| `AccessToken` | — | — |
+| `AccessTokenProvider` | — | — |
+| `Profile` | `SECLAI_PROFILE` | `"default"` |
+| `ConfigDir` | `SECLAI_CONFIG_DIR` | `~/.seclai` |
+| `AutoRefresh` | — | `true` |
+| `AccountID` | — | — |
 | `BaseURL` | `SECLAI_API_URL` | `https://seclai.com` |
 | `APIKeyHeader` | — | `x-api-key` |
 | `DefaultHeaders` | — | `nil` |
 | `HTTPClient` | — | `&http.Client{Timeout: 30s}` |
 
-```go
-client, err := seclai.NewClient(seclai.Options{
-	APIKey:         "sk-...",
-	BaseURL:        "https://staging-api.seclai.com",
-	DefaultHeaders: map[string]string{"X-Custom": "value"},
-})
-```
-
 ### Authentication
 
-The Go SDK currently supports API key authentication.
-Set the `SECLAI_API_KEY` environment variable or pass `APIKey` in `Options`.
+Credentials are resolved via a chain (first match wins):
 
-For SSO / OAuth2 bearer token authentication, use the
-[Seclai CLI](https://www.npmjs.com/package/seclai) or one of the other SDKs
-(JavaScript, Python, C#) which include full SSO support with automatic token
-refresh.
+1. Explicit `APIKey` option
+2. Explicit `AccessToken` option (static string)
+3. Explicit `AccessTokenProvider` option (`func(ctx) (string, error)`, called per request)
+4. `SECLAI_API_KEY` environment variable
+5. SSO profile from `~/.seclai/config` with cached tokens in `~/.seclai/sso/cache/`
+
+```go
+// API key
+client, _ := seclai.NewClient(seclai.Options{APIKey: "sk-..."})
+
+// Static bearer token
+client, _ := seclai.NewClient(seclai.Options{AccessToken: "eyJhbGciOi..."})
+
+// Dynamic bearer token provider (called per request)
+client, _ := seclai.NewClient(seclai.Options{
+	AccessTokenProvider: func(ctx context.Context) (string, error) {
+		return getTokenFromVault(ctx)
+	},
+})
+
+// SSO profile (uses cached tokens, auto-refreshes)
+client, _ := seclai.NewClient(seclai.Options{Profile: "my-profile"})
+
+// Environment variable (no options needed)
+// export SECLAI_API_KEY="sk-..."
+client, _ := seclai.NewClient(seclai.Options{})
+```
+
+#### SSO authentication
+
+SSO is the default fallback when no explicit credentials are provided. The SDK
+includes built-in production SSO defaults, so no configuration is needed:
+
+```bash
+npx @seclai/cli auth login    # authenticate via browser — works immediately
+```
+
+To customize SSO settings (e.g. for a staging environment), use `seclai configure sso`
+or set environment variables:
+
+| Variable | Description | Default |
+|---|---|---|
+| `SECLAI_SSO_DOMAIN` | Cognito domain | `auth.seclai.com` |
+| `SECLAI_SSO_CLIENT_ID` | Cognito app client ID | `4bgf8v9qmc5puivbaqon9n5lmr` |
+| `SECLAI_SSO_REGION` | AWS region | `us-west-2` |
 
 ## API documentation
 

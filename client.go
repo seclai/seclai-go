@@ -26,10 +26,34 @@ import (
 // Convenience methods use paths like "/sources/" under this base.
 const DefaultBaseURL = "https://seclai.com"
 
+// AccessTokenProvider is a function that returns a bearer token on each call.
+type AccessTokenProvider = func(ctx context.Context) (string, error)
+
 // Options configure a Client.
 type Options struct {
 	// APIKey is used for authentication. Defaults to the SECLAI_API_KEY environment variable.
 	APIKey string
+
+	// AccessToken is a static bearer token (mutually exclusive with APIKey).
+	AccessToken string
+
+	// AccessTokenProvider returns a bearer token per request (mutually exclusive with APIKey).
+	AccessTokenProvider AccessTokenProvider
+
+	// Profile selects an SSO profile from the config file.
+	// Defaults to the SECLAI_PROFILE environment variable, then "default".
+	Profile string
+
+	// ConfigDir overrides the config directory path.
+	// Defaults to the SECLAI_CONFIG_DIR environment variable, then ~/.seclai.
+	ConfigDir string
+
+	// AutoRefresh controls whether expired SSO tokens are automatically refreshed.
+	// Defaults to true. Set to a pointer to false to disable.
+	AutoRefresh *bool
+
+	// AccountID is sent as the X-Account-Id header for multi‑org targeting.
+	AccountID string
 
 	// BaseURL is the API base URL. Defaults to SECLAI_API_URL if set, else DefaultBaseURL.
 	BaseURL string
@@ -46,9 +70,8 @@ type Options struct {
 
 // Client is the Seclai Go SDK client.
 type Client struct {
-	apiKey         string
+	auth           *authState
 	baseURL        *url.URL
-	apiKeyHeader   string
 	defaultHeaders map[string]string
 	httpClient     *http.Client
 
@@ -57,14 +80,11 @@ type Client struct {
 
 // NewClient constructs a new Client.
 //
-// Returns ConfigurationError if the API key is missing or if the base URL is invalid.
+// Returns ConfigurationError if credentials are missing or if the base URL is invalid.
 func NewClient(opts Options) (*Client, error) {
-	apiKey := strings.TrimSpace(opts.APIKey)
-	if apiKey == "" {
-		apiKey = strings.TrimSpace(os.Getenv("SECLAI_API_KEY"))
-	}
-	if apiKey == "" {
-		return nil, &ConfigurationError{Message: "missing API key: provide Options.APIKey or set SECLAI_API_KEY"}
+	state, err := resolveCredentialChain(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	base := strings.TrimSpace(opts.BaseURL)
@@ -79,19 +99,22 @@ func NewClient(opts Options) (*Client, error) {
 		return nil, &ConfigurationError{Message: fmt.Sprintf("invalid base URL: %v", err)}
 	}
 
-	header := strings.TrimSpace(opts.APIKeyHeader)
-	if header == "" {
-		header = "x-api-key"
-	}
-
 	hc := opts.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
+	state.httpClient = hc
 
 	defHeaders := make(map[string]string, len(opts.DefaultHeaders))
 	for k, v := range opts.DefaultHeaders {
 		defHeaders[k] = v
+	}
+
+	client := &Client{
+		auth:           state,
+		baseURL:        parsed,
+		defaultHeaders: defHeaders,
+		httpClient:     hc,
 	}
 
 	gen, err := generated.NewClientWithResponses(parsed.String(),
@@ -100,22 +123,15 @@ func NewClient(opts Options) (*Client, error) {
 			for k, v := range defHeaders {
 				req.Header.Set(k, v)
 			}
-			req.Header.Set(header, apiKey)
-			return nil
+			return client.applyAuth(ctx, req)
 		}),
 	)
 	if err != nil {
 		return nil, &ConfigurationError{Message: fmt.Sprintf("failed to construct generated client: %v", err)}
 	}
+	client.generated = gen
 
-	return &Client{
-		apiKey:         apiKey,
-		baseURL:        parsed,
-		apiKeyHeader:   header,
-		defaultHeaders: defHeaders,
-		httpClient:     hc,
-		generated:      gen,
-	}, nil
+	return client, nil
 }
 
 // Generated returns the underlying OpenAPI-generated client.
@@ -126,6 +142,18 @@ func (c *Client) Generated() *generated.ClientWithResponses {
 		return nil
 	}
 	return c.generated
+}
+
+// applyAuth resolves auth headers and applies them to a request.
+func (c *Client) applyAuth(ctx context.Context, req *http.Request) error {
+	hdrs, err := resolveAuthHeaders(ctx, c.auth)
+	if err != nil {
+		return err
+	}
+	for k, v := range hdrs {
+		req.Header.Set(k, v)
+	}
+	return nil
 }
 
 // Do makes a low-level request to the Seclai API.
@@ -156,7 +184,9 @@ func (c *Client) Do(ctx context.Context, method, apiPath string, query map[strin
 	for k, v := range c.defaultHeaders {
 		req.Header.Set(k, v)
 	}
-	req.Header.Set(c.apiKeyHeader, c.apiKey)
+	if err := c.applyAuth(ctx, req); err != nil {
+		return err
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -218,6 +248,7 @@ type SortableListOptions struct {
 	Order string
 }
 
+// listQuery builds pagination query parameters from page and limit values.
 func listQuery(page, limit int) map[string]string {
 	q := map[string]string{}
 	if page > 0 {
@@ -229,6 +260,7 @@ func listQuery(page, limit int) map[string]string {
 	return q
 }
 
+// sortableListQuery builds pagination and sort query parameters.
 func sortableListQuery(opts SortableListOptions) map[string]string {
 	q := listQuery(opts.Page, opts.Limit)
 	if opts.Sort != "" {
@@ -593,7 +625,9 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 	for k, v := range c.defaultHeaders {
 		req.Header.Set(k, v)
 	}
-	req.Header.Set(c.apiKeyHeader, c.apiKey)
+	if err := c.applyAuth(ctx, req); err != nil {
+		return nil, err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 
@@ -744,7 +778,10 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 		for k, v := range c.defaultHeaders {
 			req.Header.Set(k, v)
 		}
-		req.Header.Set(c.apiKeyHeader, c.apiKey)
+		if err := c.applyAuth(ctx, req); err != nil {
+			errCh <- err
+			return
+		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "text/event-stream")
 
@@ -988,7 +1025,9 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 	for k, v := range c.defaultHeaders {
 		httpReq.Header.Set(k, v)
 	}
-	httpReq.Header.Set(c.apiKeyHeader, c.apiKey)
+	if err := c.applyAuth(ctx, httpReq); err != nil {
+		return nil, err
+	}
 	httpReq.Header.Set("Content-Type", w.FormDataContentType())
 	httpReq.Header.Set("Accept", "application/json")
 
@@ -1337,7 +1376,9 @@ func (c *Client) DownloadSourceExport(ctx context.Context, sourceID, exportID st
 	for k, v := range c.defaultHeaders {
 		req.Header.Set(k, v)
 	}
-	req.Header.Set(c.apiKeyHeader, c.apiKey)
+	if err := c.applyAuth(ctx, req); err != nil {
+		return nil, err
+	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -1915,6 +1956,8 @@ func (c *Client) AcceptAiMemoryBankSuggestion(ctx context.Context, conversationI
 
 // ── Internal helpers ────────────────────────────────────────────────────────
 
+// buildURL constructs a full request URL by joining apiPath to the base URL
+// and appending query parameters.
 func (c *Client) buildURL(apiPath string, query map[string]string) *url.URL {
 	u := *c.baseURL
 	joined := apiPath
