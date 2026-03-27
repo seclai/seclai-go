@@ -18,6 +18,11 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+const (
+	ApiKeyAuthScopes = "ApiKeyAuth.Scopes"
+	BearerAuthScopes = "BearerAuth.Scopes"
+)
+
 // Defines values for AgentEvaluationTier.
 const (
 	Balanced AgentEvaluationTier = "balanced"
@@ -277,6 +282,24 @@ type AgentTraceSearchResponse struct {
 	Total int `json:"total"`
 }
 
+// AiAssistantAcceptResponse Response from accepting and executing a plan.
+type AiAssistantAcceptResponse struct {
+	// ConversationId Conversation ID.
+	ConversationId openapi_types.UUID `json:"conversation_id"`
+
+	// Error Error message if failed.
+	Error *string `json:"error"`
+
+	// ExecutedActions Results of each executed action.
+	ExecutedActions []ExecutedActionResponse `json:"executed_actions"`
+
+	// SolutionId Solution ID when a new solution was auto-created.
+	SolutionId *openapi_types.UUID `json:"solution_id"`
+
+	// Success Whether execution succeeded.
+	Success *bool `json:"success,omitempty"`
+}
+
 // AiAssistantFeedbackResponse Response after submitting feedback.
 type AiAssistantFeedbackResponse struct {
 	FeedbackId openapi_types.UUID `json:"feedback_id"`
@@ -288,6 +311,27 @@ type AiAssistantFeedbackResponse struct {
 type AiAssistantGenerateRequest struct {
 	// UserInput User input describing what to do
 	UserInput string `json:"user_input"`
+}
+
+// AiAssistantGenerateResponse Response from an AI assistant generate endpoint.
+type AiAssistantGenerateResponse struct {
+	// ConversationId Conversation ID for accept/decline.
+	ConversationId openapi_types.UUID `json:"conversation_id"`
+
+	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of this AI assistant.
+	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// Note AI-generated note about the plan.
+	Note string `json:"note"`
+
+	// ProposedActions List of proposed actions.
+	ProposedActions []ProposedActionResponse `json:"proposed_actions"`
+
+	// RequiresDeleteConfirmation Whether destructive actions require explicit confirmation.
+	RequiresDeleteConfirmation *bool `json:"requires_delete_confirmation,omitempty"`
+
+	// Success Whether plan generation succeeded.
+	Success *bool `json:"success,omitempty"`
 }
 
 // AiConversationHistoryResponse defines model for AiConversationHistoryResponse.
@@ -321,6 +365,24 @@ type AiConversationTurnResponse struct {
 
 	// UserInput User input for this turn.
 	UserInput string `json:"user_input"`
+}
+
+// AppliedActionResponse Result of a single executed governance action.
+type AppliedActionResponse struct {
+	// ActionType Type of action that was executed.
+	ActionType string `json:"action_type"`
+
+	// Description Human-readable description of the executed action.
+	Description string `json:"description"`
+
+	// Error Error message if this action failed, or null.
+	Error *string `json:"error"`
+
+	// PolicyId ID of the policy that was created or modified, or null.
+	PolicyId *string `json:"policy_id"`
+
+	// Success Whether this individual action succeeded.
+	Success bool `json:"success"`
 }
 
 // BodyUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost defines model for Body_upload_file_to_content_api_contents__source_connection_content_version__upload_post.
@@ -722,6 +784,27 @@ type EvaluationStatus string
 // ExamplePrompt defines model for ExamplePrompt.
 type ExamplePrompt map[string]string
 
+// ExecutedActionResponse A single executed action result.
+type ExecutedActionResponse struct {
+	// ActionType Type of the executed action.
+	ActionType string `json:"action_type"`
+
+	// Description Human-readable description.
+	Description string `json:"description"`
+
+	// Error Error message if failed.
+	Error *string `json:"error"`
+
+	// ResourceId ID of the affected resource.
+	ResourceId *string `json:"resource_id"`
+
+	// ResourceType Type of the affected resource.
+	ResourceType *string `json:"resource_type"`
+
+	// Success Whether the action succeeded.
+	Success *bool `json:"success,omitempty"`
+}
+
 // ExportFormat Supported export file formats.
 type ExportFormat string
 
@@ -808,6 +891,42 @@ type GenerateStepConfigResponse struct {
 	StepType string `json:"step_type"`
 
 	// Success Whether a valid configuration was generated.
+	Success bool `json:"success"`
+}
+
+// GovernanceAiAcceptResponse Response from accepting a governance AI assistant plan.
+type GovernanceAiAcceptResponse struct {
+	// ActionsApplied Results of each action that was executed.
+	ActionsApplied []AppliedActionResponse `json:"actions_applied"`
+
+	// ConversationId Conversation ID that was accepted.
+	ConversationId string `json:"conversation_id"`
+
+	// Error Overall error message if the plan failed, or null.
+	Error *string `json:"error"`
+
+	// Success Whether all actions were applied successfully.
+	Success bool `json:"success"`
+}
+
+// GovernanceAiAssistantResponse Response from the governance AI assistant generate endpoint.
+type GovernanceAiAssistantResponse struct {
+	// ConversationId Conversation ID to accept or decline this plan.
+	ConversationId string `json:"conversation_id"`
+
+	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of the governance AI assistant.
+	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// Note AI-generated summary of the proposed changes.
+	Note string `json:"note"`
+
+	// PromptCallId Prompt call ID for credit tracking, or null.
+	PromptCallId *string `json:"prompt_call_id"`
+
+	// ProposedActions Ordered list of policy actions the AI proposes to execute.
+	ProposedActions []ProposedPolicyActionResponse `json:"proposed_actions"`
+
+	// Success Whether the plan was generated successfully.
 	Success bool `json:"success"`
 }
 
@@ -918,6 +1037,63 @@ type MarkConversationTurnRequest struct {
 	Accepted bool `json:"accepted"`
 }
 
+// MeResponse defines model for MeResponse.
+type MeResponse struct {
+	AccountId     openapi_types.UUID         `json:"account_id"`
+	Organizations []OrganizationInfoResponse `json:"organizations"`
+}
+
+// MemoryBankAiAssistantResponse Response from the memory bank AI assistant.
+type MemoryBankAiAssistantResponse struct {
+	// Config Suggested memory bank configuration from the AI assistant.
+	Config *MemoryBankConfigResponse `json:"config,omitempty"`
+
+	// ConversationId Conversation ID for follow-up.
+	ConversationId string `json:"conversation_id"`
+
+	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of the memory bank AI assistant.
+	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// Note AI-generated explanation.
+	Note string `json:"note"`
+
+	// PromptCallId Prompt call ID for credit tracking.
+	PromptCallId *string `json:"prompt_call_id"`
+
+	// Success Whether generation succeeded.
+	Success *bool `json:"success,omitempty"`
+}
+
+// MemoryBankConfigResponse Suggested memory bank configuration from the AI assistant.
+type MemoryBankConfigResponse struct {
+	// CompactionPrompt Suggested compaction prompt.
+	CompactionPrompt *string `json:"compaction_prompt"`
+
+	// Description Suggested description.
+	Description *string `json:"description"`
+
+	// MaxAgeDays Max age in days.
+	MaxAgeDays *int `json:"max_age_days"`
+
+	// MaxSizeTokens Max size in tokens.
+	MaxSizeTokens *int `json:"max_size_tokens"`
+
+	// MaxTurns Max conversation turns.
+	MaxTurns *int `json:"max_turns"`
+
+	// Mode Memory bank mode.
+	Mode string `json:"mode"`
+
+	// Name Suggested name.
+	Name string `json:"name"`
+
+	// RetentionDays Retention in days.
+	RetentionDays *int `json:"retention_days"`
+
+	// Type Memory bank type: conversation or general.
+	Type string `json:"type"`
+}
+
 // MemoryBankListResponseModel Paginated list of memory banks.
 type MemoryBankListResponseModel struct {
 	// Limit Items per page.
@@ -993,6 +1169,13 @@ type OrganizationAlertPreferenceListResponse struct {
 	Total       int                                                   `json:"total"`
 }
 
+// OrganizationInfoResponse defines model for OrganizationInfoResponse.
+type OrganizationInfoResponse struct {
+	AccountId openapi_types.UUID `json:"account_id"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
+}
+
 // PaginationResponse Pagination information.
 type PaginationResponse struct {
 	HasNext bool `json:"has_next"`
@@ -1008,6 +1191,33 @@ type PendingProcessingCompletedFailedStatus string
 
 // PromptModelAutoUpgradeStrategy defines model for PromptModelAutoUpgradeStrategy.
 type PromptModelAutoUpgradeStrategy string
+
+// ProposedActionResponse A single proposed action.
+type ProposedActionResponse struct {
+	// ActionType Type of the proposed action.
+	ActionType string `json:"action_type"`
+
+	// Description Human-readable description of the action.
+	Description string `json:"description"`
+
+	// IsDestructive Whether the action is destructive.
+	IsDestructive *bool `json:"is_destructive,omitempty"`
+
+	// Params Parameters for the action.
+	Params map[string]interface{} `json:"params"`
+}
+
+// ProposedPolicyActionResponse A single proposed governance policy action.
+type ProposedPolicyActionResponse struct {
+	// ActionType Type of action: create, update, delete, enable, or disable.
+	ActionType string `json:"action_type"`
+
+	// Description Human-readable description of what this action will do.
+	Description string `json:"description"`
+
+	// Params Parameters for the action (e.g. policy_document_id, thresholds).
+	Params map[string]interface{} `json:"params"`
+}
 
 // SolutionSourceConnectionResponse defines model for SolutionSourceConnectionResponse.
 type SolutionSourceConnectionResponse struct {
@@ -1675,64 +1885,10 @@ type RoutersApiContentsFileUploadResponse struct {
 	Status string `json:"status"`
 }
 
-// RoutersApiGovernanceAppliedActionResponse Result of a single executed governance action.
-type RoutersApiGovernanceAppliedActionResponse struct {
-	// ActionType Type of action that was executed.
-	ActionType string `json:"action_type"`
-
-	// Description Human-readable description of the executed action.
-	Description string `json:"description"`
-
-	// Error Error message if this action failed, or null.
-	Error *string `json:"error"`
-
-	// PolicyId ID of the policy that was created or modified, or null.
-	PolicyId *string `json:"policy_id"`
-
-	// Success Whether this individual action succeeded.
-	Success bool `json:"success"`
-}
-
-// RoutersApiGovernanceGovernanceAiAcceptResponse Response from accepting a governance AI assistant plan.
-type RoutersApiGovernanceGovernanceAiAcceptResponse struct {
-	// ActionsApplied Results of each action that was executed.
-	ActionsApplied []RoutersApiGovernanceAppliedActionResponse `json:"actions_applied"`
-
-	// ConversationId Conversation ID that was accepted.
-	ConversationId string `json:"conversation_id"`
-
-	// Error Overall error message if the plan failed, or null.
-	Error *string `json:"error"`
-
-	// Success Whether all actions were applied successfully.
-	Success bool `json:"success"`
-}
-
 // RoutersApiGovernanceGovernanceAiAssistantRequest Request body for the governance AI assistant.
 type RoutersApiGovernanceGovernanceAiAssistantRequest struct {
 	// UserInput Natural-language request for the governance AI assistant.
 	UserInput string `json:"user_input"`
-}
-
-// RoutersApiGovernanceGovernanceAiAssistantResponse Response from the governance AI assistant generate endpoint.
-type RoutersApiGovernanceGovernanceAiAssistantResponse struct {
-	// ConversationId Conversation ID to accept or decline this plan.
-	ConversationId string `json:"conversation_id"`
-
-	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of the governance AI assistant.
-	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
-
-	// Note AI-generated summary of the proposed changes.
-	Note string `json:"note"`
-
-	// PromptCallId Prompt call ID for credit tracking, or null.
-	PromptCallId *string `json:"prompt_call_id"`
-
-	// ProposedActions Ordered list of policy actions the AI proposes to execute.
-	ProposedActions []RoutersApiGovernanceProposedPolicyActionResponse `json:"proposed_actions"`
-
-	// Success Whether the plan was generated successfully.
-	Success bool `json:"success"`
 }
 
 // RoutersApiGovernanceGovernanceConversationResponse A governance AI assistant conversation entry.
@@ -1756,18 +1912,6 @@ type RoutersApiGovernanceGovernanceConversationResponse struct {
 	UserInput string `json:"user_input"`
 }
 
-// RoutersApiGovernanceProposedPolicyActionResponse A single proposed governance policy action.
-type RoutersApiGovernanceProposedPolicyActionResponse struct {
-	// ActionType Type of action: create, update, delete, enable, or disable.
-	ActionType string `json:"action_type"`
-
-	// Description Human-readable description of what this action will do.
-	Description string `json:"description"`
-
-	// Params Parameters for the action (e.g. policy_document_id, thresholds).
-	Params map[string]interface{} `json:"params"`
-}
-
 // RoutersApiMemoryBanksMemoryBankAcceptRequest Accept or decline a memory bank AI suggestion.
 type RoutersApiMemoryBanksMemoryBankAcceptRequest struct {
 	// Accepted Whether the user accepted the proposed configuration.
@@ -1784,57 +1928,6 @@ type RoutersApiMemoryBanksMemoryBankAiAssistantRequest struct {
 
 	// UserInput Natural-language description of the memory bank.
 	UserInput string `json:"user_input"`
-}
-
-// RoutersApiMemoryBanksMemoryBankAiAssistantResponse Response from the memory bank AI assistant.
-type RoutersApiMemoryBanksMemoryBankAiAssistantResponse struct {
-	// Config Suggested memory bank configuration from the AI assistant.
-	Config *RoutersApiMemoryBanksMemoryBankConfigResponse `json:"config,omitempty"`
-
-	// ConversationId Conversation ID for follow-up.
-	ConversationId string `json:"conversation_id"`
-
-	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of the memory bank AI assistant.
-	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
-
-	// Note AI-generated explanation.
-	Note string `json:"note"`
-
-	// PromptCallId Prompt call ID for credit tracking.
-	PromptCallId *string `json:"prompt_call_id"`
-
-	// Success Whether generation succeeded.
-	Success *bool `json:"success,omitempty"`
-}
-
-// RoutersApiMemoryBanksMemoryBankConfigResponse Suggested memory bank configuration from the AI assistant.
-type RoutersApiMemoryBanksMemoryBankConfigResponse struct {
-	// CompactionPrompt Suggested compaction prompt.
-	CompactionPrompt *string `json:"compaction_prompt"`
-
-	// Description Suggested description.
-	Description *string `json:"description"`
-
-	// MaxAgeDays Max age in days.
-	MaxAgeDays *int `json:"max_age_days"`
-
-	// MaxSizeTokens Max size in tokens.
-	MaxSizeTokens *int `json:"max_size_tokens"`
-
-	// MaxTurns Max conversation turns.
-	MaxTurns *int `json:"max_turns"`
-
-	// Mode Memory bank mode.
-	Mode string `json:"mode"`
-
-	// Name Suggested name.
-	Name string `json:"name"`
-
-	// RetentionDays Retention in days.
-	RetentionDays *int `json:"retention_days"`
-
-	// Type Memory bank type: conversation or general.
-	Type string `json:"type"`
 }
 
 // RoutersApiMemoryBanksMemoryBankConversationTurnResponse A single turn of memory bank AI assistant conversation.
@@ -1883,81 +1976,6 @@ type RoutersApiSolutionsAiAssistantAcceptRequest struct {
 
 	// SolutionName When running in standalone mode (no pre-existing solution), provide a name to auto-create a solution and link resources.
 	SolutionName *string `json:"solution_name"`
-}
-
-// RoutersApiSolutionsAiAssistantAcceptResponse Response from accepting and executing a plan.
-type RoutersApiSolutionsAiAssistantAcceptResponse struct {
-	// ConversationId Conversation ID.
-	ConversationId openapi_types.UUID `json:"conversation_id"`
-
-	// Error Error message if failed.
-	Error *string `json:"error"`
-
-	// ExecutedActions Results of each executed action.
-	ExecutedActions []RoutersApiSolutionsExecutedActionResponse `json:"executed_actions"`
-
-	// SolutionId Solution ID when a new solution was auto-created.
-	SolutionId *openapi_types.UUID `json:"solution_id"`
-
-	// Success Whether execution succeeded.
-	Success *bool `json:"success,omitempty"`
-}
-
-// RoutersApiSolutionsAiAssistantGenerateResponse Response from an AI assistant generate endpoint.
-type RoutersApiSolutionsAiAssistantGenerateResponse struct {
-	// ConversationId Conversation ID for accept/decline.
-	ConversationId openapi_types.UUID `json:"conversation_id"`
-
-	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of this AI assistant.
-	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
-
-	// Note AI-generated note about the plan.
-	Note string `json:"note"`
-
-	// ProposedActions List of proposed actions.
-	ProposedActions []RoutersApiSolutionsProposedActionResponse `json:"proposed_actions"`
-
-	// RequiresDeleteConfirmation Whether destructive actions require explicit confirmation.
-	RequiresDeleteConfirmation *bool `json:"requires_delete_confirmation,omitempty"`
-
-	// Success Whether plan generation succeeded.
-	Success *bool `json:"success,omitempty"`
-}
-
-// RoutersApiSolutionsExecutedActionResponse A single executed action result.
-type RoutersApiSolutionsExecutedActionResponse struct {
-	// ActionType Type of the executed action.
-	ActionType string `json:"action_type"`
-
-	// Description Human-readable description.
-	Description string `json:"description"`
-
-	// Error Error message if failed.
-	Error *string `json:"error"`
-
-	// ResourceId ID of the affected resource.
-	ResourceId *string `json:"resource_id"`
-
-	// ResourceType Type of the affected resource.
-	ResourceType *string `json:"resource_type"`
-
-	// Success Whether the action succeeded.
-	Success *bool `json:"success,omitempty"`
-}
-
-// RoutersApiSolutionsProposedActionResponse A single proposed action.
-type RoutersApiSolutionsProposedActionResponse struct {
-	// ActionType Type of the proposed action.
-	ActionType string `json:"action_type"`
-
-	// Description Human-readable description of the action.
-	Description string `json:"description"`
-
-	// IsDestructive Whether the action is destructive.
-	IsDestructive *bool `json:"is_destructive,omitempty"`
-
-	// Params Parameters for the action.
-	Params map[string]interface{} `json:"params"`
 }
 
 // RoutersApiSolutionsSolutionAgentResponse defines model for routers__api__solutions__SolutionAgentResponse.
@@ -2199,6 +2217,9 @@ type SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse struct {
 	Total       int                                                            `json:"total"`
 }
 
+// XAccountId defines model for X-Account-Id.
+type XAccountId = openapi_types.UUID
+
 // ListAgentsApiAgentsGetParams defines parameters for ListAgentsApiAgentsGet.
 type ListAgentsApiAgentsGetParams struct {
 	// Page Page number
@@ -2206,6 +2227,33 @@ type ListAgentsApiAgentsGetParams struct {
 
 	// Limit Items per page
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateAgentApiAgentsPostParams defines parameters for CreateAgentApiAgentsPost.
+type CreateAgentApiAgentsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams defines parameters for DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete.
+type DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams defines parameters for GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet.
+type GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams defines parameters for UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch.
+type UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams defines parameters for ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet.
@@ -2213,6 +2261,9 @@ type ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetPar
 	Page         *int       `form:"page,omitempty" json:"page,omitempty"`
 	Limit        *int       `form:"limit,omitempty" json:"limit,omitempty"`
 	StartedAfter *time.Time `form:"started_after,omitempty" json:"started_after,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams defines parameters for ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet.
@@ -2223,6 +2274,21 @@ type ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams 
 	TimeTo      *string `form:"time_to,omitempty" json:"time_to,omitempty"`
 	Page        *int    `form:"page,omitempty" json:"page,omitempty"`
 	Limit       *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams defines parameters for CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost.
+type CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams defines parameters for GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet.
+type GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams defines parameters for GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet.
@@ -2230,12 +2296,48 @@ type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetP
 	Days      *int    `form:"days,omitempty" json:"days,omitempty"`
 	StartDate *string `form:"start_date,omitempty" json:"start_date,omitempty"`
 	EndDate   *string `form:"end_date,omitempty" json:"end_date,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// SearchAgentRunsApiAgentsRunsSearchPostParams defines parameters for SearchAgentRunsApiAgentsRunsSearchPost.
+type SearchAgentRunsApiAgentsRunsSearchPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteAgentRunApiAgentsRunsRunIdDeleteParams defines parameters for DeleteAgentRunApiAgentsRunsRunIdDelete.
+type DeleteAgentRunApiAgentsRunsRunIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // GetAgentRunApiAgentsRunsRunIdGetParams defines parameters for GetAgentRunApiAgentsRunsRunIdGet.
 type GetAgentRunApiAgentsRunsRunIdGetParams struct {
 	// IncludeStepOutputs If true, include per-step outputs with timing, durations, and credits.
 	IncludeStepOutputs *bool `form:"include_step_outputs,omitempty" json:"include_step_outputs,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteAgentApiAgentsAgentIdDeleteParams defines parameters for DeleteAgentApiAgentsAgentIdDelete.
+type DeleteAgentApiAgentsAgentIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetAgentMetadataApiAgentsAgentIdGetParams defines parameters for GetAgentMetadataApiAgentsAgentIdGet.
+type GetAgentMetadataApiAgentsAgentIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateAgentApiAgentsAgentIdPutParams defines parameters for UpdateAgentApiAgentsAgentIdPut.
+type UpdateAgentApiAgentsAgentIdPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams defines parameters for GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet.
@@ -2251,6 +2353,57 @@ type GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams s
 
 	// Offset Number of recent turns to skip.
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams defines parameters for GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost.
+type GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams defines parameters for GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost.
+type GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams defines parameters for MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch.
+type MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams defines parameters for GetAgentDefinitionApiAgentsAgentIdDefinitionGet.
+type GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams defines parameters for UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut.
+type UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams defines parameters for ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet.
+type ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams defines parameters for CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost.
+type CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams defines parameters for TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost.
+type TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams defines parameters for ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet.
@@ -2262,6 +2415,9 @@ type ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams struct
 	TimeTo      *string `form:"time_to,omitempty" json:"time_to,omitempty"`
 	Page        *int    `form:"page,omitempty" json:"page,omitempty"`
 	Limit       *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams defines parameters for ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet.
@@ -2272,6 +2428,15 @@ type ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams struct {
 	TimeTo   *string `form:"time_to,omitempty" json:"time_to,omitempty"`
 	Page     *int    `form:"page,omitempty" json:"page,omitempty"`
 	Limit    *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams defines parameters for ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet.
+type ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListAgentRunsApiAgentsAgentIdRunsGetParams defines parameters for ListAgentRunsApiAgentsAgentIdRunsGet.
@@ -2284,6 +2449,51 @@ type ListAgentRunsApiAgentsAgentIdRunsGetParams struct {
 
 	// Status Filter runs by status
 	Status *PendingProcessingCompletedFailedStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// RunAgentApiAgentsAgentIdRunsPostParams defines parameters for RunAgentApiAgentsAgentIdRunsPost.
+type RunAgentApiAgentsAgentIdRunsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams defines parameters for RunStreamingAgentApiAgentsAgentIdRunsStreamPost.
+type RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams defines parameters for ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet.
+type ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams defines parameters for ApiUploadAgentInputApiAgentsAgentIdUploadInputPost.
+type ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiAiFeedbackApiAiAssistantFeedbackPostParams defines parameters for ApiAiFeedbackApiAiAssistantFeedbackPost.
+type ApiAiFeedbackApiAiAssistantFeedbackPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams defines parameters for ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost.
+type ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiAiMemoryBankApiAiAssistantMemoryBankPostParams defines parameters for ApiAiMemoryBankApiAiAssistantMemoryBankPost.
+type ApiAiMemoryBankApiAiAssistantMemoryBankPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams defines parameters for ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet.
@@ -2293,6 +2503,39 @@ type ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams str
 
 	// Offset Skip count.
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams defines parameters for ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch.
+type ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiAiSolutionApiAiAssistantSolutionPostParams defines parameters for ApiAiSolutionApiAiAssistantSolutionPost.
+type ApiAiSolutionApiAiAssistantSolutionPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiAiSourceApiAiAssistantSourcePostParams defines parameters for ApiAiSourceApiAiAssistantSourcePost.
+type ApiAiSourceApiAiAssistantSourcePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams defines parameters for ApiAiAcceptApiAiAssistantConversationIdAcceptPost.
+type ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams defines parameters for ApiAiDeclineApiAiAssistantConversationIdDeclinePost.
+type ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListAlertsApiAlertsGetParams defines parameters for ListAlertsApiAlertsGet.
@@ -2317,6 +2560,9 @@ type ListAlertsApiAlertsGetParams struct {
 
 	// TimeTo To (ISO 8601)
 	TimeTo *time.Time `form:"time_to,omitempty" json:"time_to,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListAlertConfigsApiAlertsConfigsGetParams defines parameters for ListAlertConfigsApiAlertsConfigsGet.
@@ -2329,6 +2575,33 @@ type ListAlertConfigsApiAlertsConfigsGetParams struct {
 
 	// Scope Set to 'source' to list account-level source alert configs
 	Scope *string `form:"scope,omitempty" json:"scope,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateAlertConfigApiAlertsConfigsPostParams defines parameters for CreateAlertConfigApiAlertsConfigsPost.
+type CreateAlertConfigApiAlertsConfigsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams defines parameters for DeleteAlertConfigApiAlertsConfigsConfigIdDelete.
+type DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetAlertConfigApiAlertsConfigsConfigIdGetParams defines parameters for GetAlertConfigApiAlertsConfigsConfigIdGet.
+type GetAlertConfigApiAlertsConfigsConfigIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams defines parameters for UpdateAlertConfigApiAlertsConfigsConfigIdPatch.
+type UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams defines parameters for ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet.
@@ -2338,24 +2611,108 @@ type ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams st
 
 	// IncludeDefaults Include default subscribed entries for all alert types
 	IncludeDefaults *bool `form:"include_defaults,omitempty" json:"include_defaults,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams defines parameters for UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch.
+type UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetAlertDetailApiAlertsAlertIdGetParams defines parameters for GetAlertDetailApiAlertsAlertIdGet.
+type GetAlertDetailApiAlertsAlertIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// AddAlertCommentApiAlertsAlertIdCommentsPostParams defines parameters for AddAlertCommentApiAlertsAlertIdCommentsPost.
+type AddAlertCommentApiAlertsAlertIdCommentsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ChangeAlertStatusApiAlertsAlertIdStatusPostParams defines parameters for ChangeAlertStatusApiAlertsAlertIdStatusPost.
+type ChangeAlertStatusApiAlertsAlertIdStatusPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// SubscribeToAlertApiAlertsAlertIdSubscribePostParams defines parameters for SubscribeToAlertApiAlertsAlertIdSubscribePost.
+type SubscribeToAlertApiAlertsAlertIdSubscribePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams defines parameters for UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost.
+type UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteContentApiContentsSourceConnectionContentVersionDeleteParams defines parameters for DeleteContentApiContentsSourceConnectionContentVersionDelete.
+type DeleteContentApiContentsSourceConnectionContentVersionDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // GetContentDetailApiContentsSourceConnectionContentVersionGetParams defines parameters for GetContentDetailApiContentsSourceConnectionContentVersionGet.
 type GetContentDetailApiContentsSourceConnectionContentVersionGetParams struct {
 	Start *int `form:"start,omitempty" json:"start,omitempty"`
 	End   *int `form:"end,omitempty" json:"end,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams defines parameters for ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut.
+type ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams defines parameters for ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet.
 type ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams struct {
 	Page  *int `form:"page,omitempty" json:"page,omitempty"`
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams defines parameters for UploadFileToContentApiContentsSourceConnectionContentVersionUploadPost.
+type UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GovernanceAiGenerateApiGovernanceAiAssistantPostParams defines parameters for GovernanceAiGenerateApiGovernanceAiAssistantPost.
+type GovernanceAiGenerateApiGovernanceAiAssistantPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams defines parameters for ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet.
 type ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams struct {
 	// Limit Number of conversations.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams defines parameters for GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost.
+type GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams defines parameters for GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost.
+type GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListKnowledgeBasesApiKnowledgeBasesGetParams defines parameters for ListKnowledgeBasesApiKnowledgeBasesGet.
@@ -2371,6 +2728,33 @@ type ListKnowledgeBasesApiKnowledgeBasesGetParams struct {
 
 	// Order Sort direction: asc or desc.
 	Order *string `form:"order,omitempty" json:"order,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateKnowledgeBaseApiKnowledgeBasesPostParams defines parameters for CreateKnowledgeBaseApiKnowledgeBasesPost.
+type CreateKnowledgeBaseApiKnowledgeBasesPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams defines parameters for DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete.
+type DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams defines parameters for GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet.
+type GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams defines parameters for UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut.
+type UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListMemoryBanksApiMemoryBanksGetParams defines parameters for ListMemoryBanksApiMemoryBanksGet.
@@ -2389,6 +2773,21 @@ type ListMemoryBanksApiMemoryBanksGetParams struct {
 
 	// Type Filter by bank type: conversation or general.
 	Type *string `form:"type,omitempty" json:"type,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateMemoryBankApiMemoryBanksPostParams defines parameters for CreateMemoryBankApiMemoryBanksPost.
+type CreateMemoryBankApiMemoryBanksPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams defines parameters for MemoryBankAiGenerateApiMemoryBanksAiAssistantPost.
+type MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams defines parameters for MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet.
@@ -2398,6 +2797,63 @@ type MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetPar
 
 	// Offset Number of most-recent turns to skip.
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams defines parameters for MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch.
+type MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ListTemplatesApiMemoryBanksTemplatesGetParams defines parameters for ListTemplatesApiMemoryBanksTemplatesGet.
+type ListTemplatesApiMemoryBanksTemplatesGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams defines parameters for TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost.
+type TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams defines parameters for DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete.
+type DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetMemoryBankApiMemoryBanksMemoryBankIdGetParams defines parameters for GetMemoryBankApiMemoryBanksMemoryBankIdGet.
+type GetMemoryBankApiMemoryBanksMemoryBankIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams defines parameters for UpdateMemoryBankApiMemoryBanksMemoryBankIdPut.
+type UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams defines parameters for GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet.
+type GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams defines parameters for CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost.
+type CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams defines parameters for DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete.
+type DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams defines parameters for GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet.
@@ -2405,6 +2861,15 @@ type GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams struct {
 	Days      *int                `form:"days,omitempty" json:"days,omitempty"`
 	StartDate *openapi_types.Date `form:"start_date,omitempty" json:"start_date,omitempty"`
 	EndDate   *openapi_types.Date `form:"end_date,omitempty" json:"end_date,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams defines parameters for TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost.
+type TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListAlertsApiModelsAlertsGetParams defines parameters for ListAlertsApiModelsAlertsGet.
@@ -2420,6 +2885,27 @@ type ListAlertsApiModelsAlertsGetParams struct {
 
 	// Offset Pagination offset.
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// MarkAllReadApiModelsAlertsMarkAllReadPostParams defines parameters for MarkAllReadApiModelsAlertsMarkAllReadPost.
+type MarkAllReadApiModelsAlertsMarkAllReadPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams defines parameters for GetAlertUnreadCountApiModelsAlertsUnreadCountGet.
+type GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// MarkReadApiModelsAlertsAlertIdReadPatchParams defines parameters for MarkReadApiModelsAlertsAlertIdReadPatch.
+type MarkReadApiModelsAlertsAlertIdReadPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // GetRecommendationsApiModelsModelIdRecommendationsGetParams defines parameters for GetRecommendationsApiModelsModelIdRecommendationsGet.
@@ -2438,6 +2924,9 @@ type GetRecommendationsApiModelsModelIdRecommendationsGetParams struct {
 
 	// MinOutputTokens Minimum output token limit.
 	MinOutputTokens *int `form:"min_output_tokens,omitempty" json:"min_output_tokens,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // SearchApiSearchGetParams defines parameters for SearchApiSearchGet.
@@ -2450,6 +2939,9 @@ type SearchApiSearchGetParams struct {
 
 	// EntityType Optional entity type filter (e.g. 'agent', 'knowledge_base')
 	EntityType *string `form:"entity_type,omitempty" json:"entity_type,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListSolutionsApiSolutionsGetParams defines parameters for ListSolutionsApiSolutionsGet.
@@ -2468,6 +2960,123 @@ type ListSolutionsApiSolutionsGetParams struct {
 
 	// Search Filter by solution name (case-insensitive partial match)
 	Search *string `form:"search,omitempty" json:"search,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateSolutionApiSolutionsPostParams defines parameters for CreateSolutionApiSolutionsPost.
+type CreateSolutionApiSolutionsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteSolutionApiSolutionsSolutionIdDeleteParams defines parameters for DeleteSolutionApiSolutionsSolutionIdDelete.
+type DeleteSolutionApiSolutionsSolutionIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetSolutionApiSolutionsSolutionIdGetParams defines parameters for GetSolutionApiSolutionsSolutionIdGet.
+type GetSolutionApiSolutionsSolutionIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateSolutionApiSolutionsSolutionIdPatchParams defines parameters for UpdateSolutionApiSolutionsSolutionIdPatch.
+type UpdateSolutionApiSolutionsSolutionIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams defines parameters for UnlinkAgentsApiSolutionsSolutionIdAgentsDelete.
+type UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// LinkAgentsApiSolutionsSolutionIdAgentsPostParams defines parameters for LinkAgentsApiSolutionsSolutionIdAgentsPost.
+type LinkAgentsApiSolutionsSolutionIdAgentsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams defines parameters for AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost.
+type AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams defines parameters for AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost.
+type AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams defines parameters for AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost.
+type AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams defines parameters for AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost.
+type AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams defines parameters for AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost.
+type AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ListConversationsApiSolutionsSolutionIdConversationsGetParams defines parameters for ListConversationsApiSolutionsSolutionIdConversationsGet.
+type ListConversationsApiSolutionsSolutionIdConversationsGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// AddConversationTurnApiSolutionsSolutionIdConversationsPostParams defines parameters for AddConversationTurnApiSolutionsSolutionIdConversationsPost.
+type AddConversationTurnApiSolutionsSolutionIdConversationsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams defines parameters for MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch.
+type MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams defines parameters for UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete.
+type UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams defines parameters for LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost.
+type LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams defines parameters for UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete.
+type UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams defines parameters for LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost.
+type LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateSourceApiSourcesPostParams defines parameters for CreateSourceApiSourcesPost.
+type CreateSourceApiSourcesPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListSourcesApiSourcesGetParams defines parameters for ListSourcesApiSourcesGet.
@@ -2486,12 +3095,102 @@ type ListSourcesApiSourcesGetParams struct {
 
 	// AccountId List sources for the given account. Defaults to the api key's account.
 	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteSourceApiSourcesSourceConnectionIdDeleteParams defines parameters for DeleteSourceApiSourcesSourceConnectionIdDelete.
+type DeleteSourceApiSourcesSourceConnectionIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetSourceApiSourcesSourceConnectionIdGetParams defines parameters for GetSourceApiSourcesSourceConnectionIdGet.
+type GetSourceApiSourcesSourceConnectionIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams defines parameters for UploadInlineTextToSourceApiSourcesSourceConnectionIdPost.
+type UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UpdateSourceApiSourcesSourceConnectionIdPutParams defines parameters for UpdateSourceApiSourcesSourceConnectionIdPut.
+type UpdateSourceApiSourcesSourceConnectionIdPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams defines parameters for GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet.
+type GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams defines parameters for StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost.
+type StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams defines parameters for CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost.
+type CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams defines parameters for ListSourceExportsApiSourcesSourceConnectionIdExportsGet.
 type ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams struct {
 	Page  *int `form:"page,omitempty" json:"page,omitempty"`
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams defines parameters for CreateSourceExportApiSourcesSourceConnectionIdExportsPost.
+type CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams defines parameters for EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost.
+type EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams defines parameters for DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete.
+type DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams defines parameters for GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet.
+type GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams defines parameters for CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost.
+type CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams defines parameters for DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet.
+type DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams defines parameters for UploadFileToSourceApiSourcesSourceConnectionIdUploadPost.
+type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
 // CreateAgentApiAgentsPostJSONRequestBody defines body for CreateAgentApiAgentsPost for application/json ContentType.
@@ -2804,20 +3503,20 @@ type ClientInterface interface {
 	ListAgentsApiAgentsGet(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateAgentApiAgentsPostWithBody request with any body
-	CreateAgentApiAgentsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateAgentApiAgentsPostWithBody(ctx context.Context, params *CreateAgentApiAgentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateAgentApiAgentsPost(ctx context.Context, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateAgentApiAgentsPost(ctx context.Context, params *CreateAgentApiAgentsPostParams, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete request
-	DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx context.Context, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet request
-	GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx context.Context, criteriaId string, params *GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody request with any body
-	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx context.Context, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx context.Context, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx context.Context, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet request
 	ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet(ctx context.Context, criteriaId string, params *ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2826,76 +3525,76 @@ type ClientInterface interface {
 	ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet(ctx context.Context, criteriaId string, params *ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody request with any body
-	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx context.Context, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx context.Context, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx context.Context, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet request
-	GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx context.Context, criteriaId string, params *GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SearchAgentRunsApiAgentsRunsSearchPostWithBody request with any body
-	SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	SearchAgentRunsApiAgentsRunsSearchPost(ctx context.Context, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	SearchAgentRunsApiAgentsRunsSearchPost(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteAgentRunApiAgentsRunsRunIdDelete request
-	DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, runId string, params *DeleteAgentRunApiAgentsRunsRunIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgentRunApiAgentsRunsRunIdGet request
 	GetAgentRunApiAgentsRunsRunIdGet(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteAgentApiAgentsAgentIdDelete request
-	DeleteAgentApiAgentsAgentIdDelete(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteAgentApiAgentsAgentIdDelete(ctx context.Context, agentId string, params *DeleteAgentApiAgentsAgentIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgentMetadataApiAgentsAgentIdGet request
-	GetAgentMetadataApiAgentsAgentIdGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAgentMetadataApiAgentsAgentIdGet(ctx context.Context, agentId string, params *GetAgentMetadataApiAgentsAgentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateAgentApiAgentsAgentIdPutWithBody request with any body
-	UpdateAgentApiAgentsAgentIdPutWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateAgentApiAgentsAgentIdPutWithBody(ctx context.Context, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateAgentApiAgentsAgentIdPut(ctx context.Context, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateAgentApiAgentsAgentIdPut(ctx context.Context, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet request
 	GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet(ctx context.Context, agentId string, params *GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody request with any body
-	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx context.Context, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx context.Context, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx context.Context, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody request with any body
-	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx context.Context, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx context.Context, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx context.Context, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody request with any body
-	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx context.Context, agentId string, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx context.Context, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgentDefinitionApiAgentsAgentIdDefinitionGet request
-	GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody request with any body
-	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.Context, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet request
-	ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx context.Context, agentId string, params *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody request with any body
-	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx context.Context, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx context.Context, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx context.Context, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody request with any body
-	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx context.Context, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx context.Context, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx context.Context, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet request
 	ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet(ctx context.Context, agentId string, params *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2904,67 +3603,67 @@ type ClientInterface interface {
 	ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet request
-	ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx context.Context, agentId string, uploadId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx context.Context, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAgentRunsApiAgentsAgentIdRunsGet request
 	ListAgentRunsApiAgentsAgentIdRunsGet(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RunAgentApiAgentsAgentIdRunsPostWithBody request with any body
-	RunAgentApiAgentsAgentIdRunsPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RunAgentApiAgentsAgentIdRunsPostWithBody(ctx context.Context, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	RunAgentApiAgentsAgentIdRunsPost(ctx context.Context, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RunAgentApiAgentsAgentIdRunsPost(ctx context.Context, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody request with any body
-	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx context.Context, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Context, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet request
-	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPost request
-	ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiFeedbackApiAiAssistantFeedbackPostWithBody request with any body
-	ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx context.Context, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ApiAiFeedbackApiAiAssistantFeedbackPost(ctx context.Context, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiFeedbackApiAiAssistantFeedbackPost(ctx context.Context, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody request with any body
-	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx context.Context, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx context.Context, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx context.Context, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody request with any body
-	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx context.Context, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx context.Context, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx context.Context, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet request
 	ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet(ctx context.Context, params *ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody request with any body
-	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiSolutionApiAiAssistantSolutionPostWithBody request with any body
-	ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx context.Context, params *ApiAiSolutionApiAiAssistantSolutionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ApiAiSolutionApiAiAssistantSolutionPost(ctx context.Context, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiSolutionApiAiAssistantSolutionPost(ctx context.Context, params *ApiAiSolutionApiAiAssistantSolutionPostParams, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiSourceApiAiAssistantSourcePostWithBody request with any body
-	ApiAiSourceApiAiAssistantSourcePostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiSourceApiAiAssistantSourcePostWithBody(ctx context.Context, params *ApiAiSourceApiAiAssistantSourcePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ApiAiSourceApiAiAssistantSourcePost(ctx context.Context, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiSourceApiAiAssistantSourcePost(ctx context.Context, params *ApiAiSourceApiAiAssistantSourcePostParams, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody request with any body
-	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiAiDeclineApiAiAssistantConversationIdDeclinePost request
-	ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAlertsApiAlertsGet request
 	ListAlertsApiAlertsGet(ctx context.Context, params *ListAlertsApiAlertsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2973,166 +3672,169 @@ type ClientInterface interface {
 	ListAlertConfigsApiAlertsConfigsGet(ctx context.Context, params *ListAlertConfigsApiAlertsConfigsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateAlertConfigApiAlertsConfigsPostWithBody request with any body
-	CreateAlertConfigApiAlertsConfigsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateAlertConfigApiAlertsConfigsPostWithBody(ctx context.Context, params *CreateAlertConfigApiAlertsConfigsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateAlertConfigApiAlertsConfigsPost(ctx context.Context, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateAlertConfigApiAlertsConfigsPost(ctx context.Context, params *CreateAlertConfigApiAlertsConfigsPostParams, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteAlertConfigApiAlertsConfigsConfigIdDelete request
-	DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx context.Context, configId string, params *DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAlertConfigApiAlertsConfigsConfigIdGet request
-	GetAlertConfigApiAlertsConfigsConfigIdGet(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAlertConfigApiAlertsConfigsConfigIdGet(ctx context.Context, configId string, params *GetAlertConfigApiAlertsConfigsConfigIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody request with any body
-	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx context.Context, configId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx context.Context, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx context.Context, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx context.Context, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet request
 	ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet(ctx context.Context, params *ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody request with any body
-	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx context.Context, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx context.Context, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx context.Context, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx context.Context, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAlertDetailApiAlertsAlertIdGet request
-	GetAlertDetailApiAlertsAlertIdGet(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAlertDetailApiAlertsAlertIdGet(ctx context.Context, alertId string, params *GetAlertDetailApiAlertsAlertIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AddAlertCommentApiAlertsAlertIdCommentsPostWithBody request with any body
-	AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx context.Context, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	AddAlertCommentApiAlertsAlertIdCommentsPost(ctx context.Context, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AddAlertCommentApiAlertsAlertIdCommentsPost(ctx context.Context, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody request with any body
-	ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx context.Context, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx context.Context, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx context.Context, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SubscribeToAlertApiAlertsAlertIdSubscribePost request
-	SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx context.Context, alertId string, params *SubscribeToAlertApiAlertsAlertIdSubscribePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost request
-	UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context.Context, alertId string, params *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteContentApiContentsSourceConnectionContentVersionDelete request
-	DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetContentDetailApiContentsSourceConnectionContentVersionGet request
 	GetContentDetailApiContentsSourceConnectionContentVersionGet(ctx context.Context, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody request with any body
-	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx context.Context, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet request
 	ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody request with any body
-	UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx context.Context, sourceConnectionContentVersion string, params *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody request with any body
-	GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx context.Context, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet request
 	ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet(ctx context.Context, params *ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost request
-	GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, params *GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost request
-	GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, params *GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListKnowledgeBasesApiKnowledgeBasesGet request
 	ListKnowledgeBasesApiKnowledgeBasesGet(ctx context.Context, params *ListKnowledgeBasesApiKnowledgeBasesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateKnowledgeBaseApiKnowledgeBasesPostWithBody request with any body
-	CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx context.Context, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateKnowledgeBaseApiKnowledgeBasesPost(ctx context.Context, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateKnowledgeBaseApiKnowledgeBasesPost(ctx context.Context, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete request
-	DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx context.Context, knowledgeBaseId string, params *DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet request
-	GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx context.Context, knowledgeBaseId string, params *GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody request with any body
-	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx context.Context, knowledgeBaseId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMeApiMeGet request
+	GetMeApiMeGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListMemoryBanksApiMemoryBanksGet request
 	ListMemoryBanksApiMemoryBanksGet(ctx context.Context, params *ListMemoryBanksApiMemoryBanksGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateMemoryBankApiMemoryBanksPostWithBody request with any body
-	CreateMemoryBankApiMemoryBanksPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateMemoryBankApiMemoryBanksPostWithBody(ctx context.Context, params *CreateMemoryBankApiMemoryBanksPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateMemoryBankApiMemoryBanksPost(ctx context.Context, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateMemoryBankApiMemoryBanksPost(ctx context.Context, params *CreateMemoryBankApiMemoryBanksPostParams, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody request with any body
-	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx context.Context, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx context.Context, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx context.Context, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet request
 	MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet(ctx context.Context, params *MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody request with any body
-	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTemplatesApiMemoryBanksTemplatesGet request
-	ListTemplatesApiMemoryBanksTemplatesGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListTemplatesApiMemoryBanksTemplatesGet(ctx context.Context, params *ListTemplatesApiMemoryBanksTemplatesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody request with any body
-	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx context.Context, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx context.Context, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx context.Context, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete request
-	DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx context.Context, memoryBankId string, params *DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMemoryBankApiMemoryBanksMemoryBankIdGet request
-	GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx context.Context, memoryBankId string, params *GetMemoryBankApiMemoryBanksMemoryBankIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody request with any body
-	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx context.Context, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx context.Context, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx context.Context, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet request
-	GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx context.Context, memoryBankId string, params *GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost request
-	CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx context.Context, memoryBankId string, params *CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete request
-	DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx context.Context, memoryBankId string, params *DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet request
 	GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet(ctx context.Context, memoryBankId string, params *GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody request with any body
-	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx context.Context, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAlertsApiModelsAlertsGet request
 	ListAlertsApiModelsAlertsGet(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MarkAllReadApiModelsAlertsMarkAllReadPost request
-	MarkAllReadApiModelsAlertsMarkAllReadPost(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MarkAllReadApiModelsAlertsMarkAllReadPost(ctx context.Context, params *MarkAllReadApiModelsAlertsMarkAllReadPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAlertUnreadCountApiModelsAlertsUnreadCountGet request
-	GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Context, params *GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MarkReadApiModelsAlertsAlertIdReadPatch request
-	MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRecommendationsApiModelsModelIdRecommendationsGet request
 	GetRecommendationsApiModelsModelIdRecommendationsGet(ctx context.Context, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3144,149 +3846,149 @@ type ClientInterface interface {
 	ListSolutionsApiSolutionsGet(ctx context.Context, params *ListSolutionsApiSolutionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSolutionApiSolutionsPostWithBody request with any body
-	CreateSolutionApiSolutionsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateSolutionApiSolutionsPostWithBody(ctx context.Context, params *CreateSolutionApiSolutionsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateSolutionApiSolutionsPost(ctx context.Context, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateSolutionApiSolutionsPost(ctx context.Context, params *CreateSolutionApiSolutionsPostParams, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteSolutionApiSolutionsSolutionIdDelete request
-	DeleteSolutionApiSolutionsSolutionIdDelete(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteSolutionApiSolutionsSolutionIdDelete(ctx context.Context, solutionId openapi_types.UUID, params *DeleteSolutionApiSolutionsSolutionIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSolutionApiSolutionsSolutionIdGet request
-	GetSolutionApiSolutionsSolutionIdGet(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetSolutionApiSolutionsSolutionIdGet(ctx context.Context, solutionId openapi_types.UUID, params *GetSolutionApiSolutionsSolutionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateSolutionApiSolutionsSolutionIdPatchWithBody request with any body
-	UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateSolutionApiSolutionsSolutionIdPatch(ctx context.Context, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateSolutionApiSolutionsSolutionIdPatch(ctx context.Context, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody request with any body
-	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody request with any body
-	LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx context.Context, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx context.Context, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody request with any body
-	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody request with any body
-	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody request with any body
-	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody request with any body
-	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost request
-	AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListConversationsApiSolutionsSolutionIdConversationsGet request
-	ListConversationsApiSolutionsSolutionIdConversationsGet(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListConversationsApiSolutionsSolutionIdConversationsGet(ctx context.Context, solutionId openapi_types.UUID, params *ListConversationsApiSolutionsSolutionIdConversationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody request with any body
-	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx context.Context, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx context.Context, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody request with any body
-	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody request with any body
-	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody request with any body
-	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx context.Context, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx context.Context, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody request with any body
-	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody request with any body
-	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx context.Context, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSourceApiSourcesPostWithBody request with any body
-	CreateSourceApiSourcesPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateSourceApiSourcesPostWithBody(ctx context.Context, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateSourceApiSourcesPost(ctx context.Context, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateSourceApiSourcesPost(ctx context.Context, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSourcesApiSourcesGet request
 	ListSourcesApiSourcesGet(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteSourceApiSourcesSourceConnectionIdDelete request
-	DeleteSourceApiSourcesSourceConnectionIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteSourceApiSourcesSourceConnectionIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, params *DeleteSourceApiSourcesSourceConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSourceApiSourcesSourceConnectionIdGet request
-	GetSourceApiSourcesSourceConnectionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetSourceApiSourcesSourceConnectionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceApiSourcesSourceConnectionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody request with any body
-	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdateSourceApiSourcesSourceConnectionIdPutWithBody request with any body
-	UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet request
-	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody request with any body
-	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost request
-	CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListSourceExportsApiSourcesSourceConnectionIdExportsGet request
 	ListSourceExportsApiSourcesSourceConnectionIdExportsGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody request with any body
-	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody request with any body
-	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx context.Context, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete request
-	DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet request
-	GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost request
-	CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet request
-	DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody request with any body
-	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, params *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListAgentsApiAgentsGet(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3301,8 +4003,8 @@ func (c *Client) ListAgentsApiAgentsGet(ctx context.Context, params *ListAgentsA
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateAgentApiAgentsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateAgentApiAgentsPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreateAgentApiAgentsPostWithBody(ctx context.Context, params *CreateAgentApiAgentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentApiAgentsPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3313,8 +4015,8 @@ func (c *Client) CreateAgentApiAgentsPostWithBody(ctx context.Context, contentTy
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateAgentApiAgentsPost(ctx context.Context, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateAgentApiAgentsPostRequest(c.Server, body)
+func (c *Client) CreateAgentApiAgentsPost(ctx context.Context, params *CreateAgentApiAgentsPostParams, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentApiAgentsPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3325,8 +4027,8 @@ func (c *Client) CreateAgentApiAgentsPost(ctx context.Context, body CreateAgentA
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest(c.Server, criteriaId)
+func (c *Client) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx context.Context, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest(c.Server, criteriaId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3337,8 +4039,8 @@ func (c *Client) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDe
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest(c.Server, criteriaId)
+func (c *Client) GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx context.Context, criteriaId string, params *GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest(c.Server, criteriaId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3349,8 +4051,8 @@ func (c *Client) GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(c
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(c.Server, criteriaId, contentType, body)
+func (c *Client) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx context.Context, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(c.Server, criteriaId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3361,8 +4063,8 @@ func (c *Client) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPa
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx context.Context, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequest(c.Server, criteriaId, body)
+func (c *Client) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx context.Context, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequest(c.Server, criteriaId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3397,8 +4099,8 @@ func (c *Client) ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResul
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(c.Server, criteriaId, contentType, body)
+func (c *Client) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx context.Context, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(c.Server, criteriaId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3409,8 +4111,8 @@ func (c *Client) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResu
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx context.Context, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequest(c.Server, criteriaId, body)
+func (c *Client) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx context.Context, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequest(c.Server, criteriaId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3421,8 +4123,8 @@ func (c *Client) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResu
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRequest(c.Server, criteriaId)
+func (c *Client) GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx context.Context, criteriaId string, params *GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRequest(c.Server, criteriaId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3445,8 +4147,8 @@ func (c *Client) GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManua
 	return c.Client.Do(req)
 }
 
-func (c *Client) SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3457,8 +4159,8 @@ func (c *Client) SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx context.Cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) SearchAgentRunsApiAgentsRunsSearchPost(ctx context.Context, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSearchAgentRunsApiAgentsRunsSearchPostRequest(c.Server, body)
+func (c *Client) SearchAgentRunsApiAgentsRunsSearchPost(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSearchAgentRunsApiAgentsRunsSearchPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3469,8 +4171,8 @@ func (c *Client) SearchAgentRunsApiAgentsRunsSearchPost(ctx context.Context, bod
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest(c.Server, runId)
+func (c *Client) DeleteAgentRunApiAgentsRunsRunIdDelete(ctx context.Context, runId string, params *DeleteAgentRunApiAgentsRunsRunIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest(c.Server, runId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3493,8 +4195,8 @@ func (c *Client) GetAgentRunApiAgentsRunsRunIdGet(ctx context.Context, runId str
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteAgentApiAgentsAgentIdDelete(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteAgentApiAgentsAgentIdDeleteRequest(c.Server, agentId)
+func (c *Client) DeleteAgentApiAgentsAgentIdDelete(ctx context.Context, agentId string, params *DeleteAgentApiAgentsAgentIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAgentApiAgentsAgentIdDeleteRequest(c.Server, agentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3505,8 +4207,8 @@ func (c *Client) DeleteAgentApiAgentsAgentIdDelete(ctx context.Context, agentId 
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAgentMetadataApiAgentsAgentIdGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAgentMetadataApiAgentsAgentIdGetRequest(c.Server, agentId)
+func (c *Client) GetAgentMetadataApiAgentsAgentIdGet(ctx context.Context, agentId string, params *GetAgentMetadataApiAgentsAgentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentMetadataApiAgentsAgentIdGetRequest(c.Server, agentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3517,8 +4219,8 @@ func (c *Client) GetAgentMetadataApiAgentsAgentIdGet(ctx context.Context, agentI
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateAgentApiAgentsAgentIdPutWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(c.Server, agentId, contentType, body)
+func (c *Client) UpdateAgentApiAgentsAgentIdPutWithBody(ctx context.Context, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(c.Server, agentId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3529,8 +4231,8 @@ func (c *Client) UpdateAgentApiAgentsAgentIdPutWithBody(ctx context.Context, age
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateAgentApiAgentsAgentIdPut(ctx context.Context, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateAgentApiAgentsAgentIdPutRequest(c.Server, agentId, body)
+func (c *Client) UpdateAgentApiAgentsAgentIdPut(ctx context.Context, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentApiAgentsAgentIdPutRequest(c.Server, agentId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3553,8 +4255,8 @@ func (c *Client) GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversation
 	return c.Client.Do(req)
 }
 
-func (c *Client) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(c.Server, agentId, contentType, body)
+func (c *Client) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx context.Context, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(c.Server, agentId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3565,8 +4267,8 @@ func (c *Client) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostW
 	return c.Client.Do(req)
 }
 
-func (c *Client) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx context.Context, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequest(c.Server, agentId, body)
+func (c *Client) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx context.Context, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequest(c.Server, agentId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3577,8 +4279,8 @@ func (c *Client) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(
 	return c.Client.Do(req)
 }
 
-func (c *Client) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(c.Server, agentId, contentType, body)
+func (c *Client) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx context.Context, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(c.Server, agentId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3589,8 +4291,8 @@ func (c *Client) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWith
 	return c.Client.Do(req)
 }
 
-func (c *Client) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx context.Context, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequest(c.Server, agentId, body)
+func (c *Client) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx context.Context, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequest(c.Server, agentId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3601,8 +4303,8 @@ func (c *Client) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx
 	return c.Client.Do(req)
 }
 
-func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx context.Context, agentId string, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(c.Server, agentId, conversationId, contentType, body)
+func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(c.Server, agentId, conversationId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3613,8 +4315,8 @@ func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchW
 	return c.Client.Do(req)
 }
 
-func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx context.Context, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest(c.Server, agentId, conversationId, body)
+func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest(c.Server, agentId, conversationId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3625,8 +4327,8 @@ func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(c.Server, agentId)
+func (c *Client) GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(c.Server, agentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3637,8 +4339,8 @@ func (c *Client) GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Con
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(c.Server, agentId, contentType, body)
+func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(c.Server, agentId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3649,8 +4351,8 @@ func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.Context, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest(c.Server, agentId, body)
+func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest(c.Server, agentId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3661,8 +4363,8 @@ func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(c.Server, agentId)
+func (c *Client) ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx context.Context, agentId string, params *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(c.Server, agentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3673,8 +4375,8 @@ func (c *Client) ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(c.Server, agentId, contentType, body)
+func (c *Client) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx context.Context, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(c.Server, agentId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3685,8 +4387,8 @@ func (c *Client) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostW
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx context.Context, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequest(c.Server, agentId, body)
+func (c *Client) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx context.Context, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequest(c.Server, agentId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3697,8 +4399,8 @@ func (c *Client) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(
 	return c.Client.Do(req)
 }
 
-func (c *Client) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(c.Server, agentId, contentType, body)
+func (c *Client) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx context.Context, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(c.Server, agentId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3709,8 +4411,8 @@ func (c *Client) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftP
 	return c.Client.Do(req)
 }
 
-func (c *Client) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx context.Context, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequest(c.Server, agentId, body)
+func (c *Client) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx context.Context, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequest(c.Server, agentId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3745,8 +4447,8 @@ func (c *Client) ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet(ctx context
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx context.Context, agentId string, uploadId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest(c.Server, agentId, uploadId)
+func (c *Client) ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx context.Context, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest(c.Server, agentId, uploadId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3769,8 +4471,8 @@ func (c *Client) ListAgentRunsApiAgentsAgentIdRunsGet(ctx context.Context, agent
 	return c.Client.Do(req)
 }
 
-func (c *Client) RunAgentApiAgentsAgentIdRunsPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(c.Server, agentId, contentType, body)
+func (c *Client) RunAgentApiAgentsAgentIdRunsPostWithBody(ctx context.Context, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(c.Server, agentId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3781,8 +4483,8 @@ func (c *Client) RunAgentApiAgentsAgentIdRunsPostWithBody(ctx context.Context, a
 	return c.Client.Do(req)
 }
 
-func (c *Client) RunAgentApiAgentsAgentIdRunsPost(ctx context.Context, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRunAgentApiAgentsAgentIdRunsPostRequest(c.Server, agentId, body)
+func (c *Client) RunAgentApiAgentsAgentIdRunsPost(ctx context.Context, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunAgentApiAgentsAgentIdRunsPostRequest(c.Server, agentId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3793,8 +4495,8 @@ func (c *Client) RunAgentApiAgentsAgentIdRunsPost(ctx context.Context, agentId s
 	return c.Client.Do(req)
 }
 
-func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(c.Server, agentId, contentType, body)
+func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx context.Context, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(c.Server, agentId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3805,8 +4507,8 @@ func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx con
 	return c.Client.Do(req)
 }
 
-func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequest(c.Server, agentId, body)
+func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Context, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequest(c.Server, agentId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3817,8 +4519,8 @@ func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Con
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest(c.Server, agentId, runId)
+func (c *Client) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest(c.Server, agentId, runId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3829,8 +4531,8 @@ func (c *Client) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResu
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest(c.Server, agentId)
+func (c *Client) ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest(c.Server, agentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3841,8 +4543,8 @@ func (c *Client) ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx context.Context, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3853,8 +4555,8 @@ func (c *Client) ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx context.Con
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiFeedbackApiAiAssistantFeedbackPost(ctx context.Context, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiFeedbackApiAiAssistantFeedbackPostRequest(c.Server, body)
+func (c *Client) ApiAiFeedbackApiAiAssistantFeedbackPost(ctx context.Context, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiFeedbackApiAiAssistantFeedbackPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3865,8 +4567,8 @@ func (c *Client) ApiAiFeedbackApiAiAssistantFeedbackPost(ctx context.Context, bo
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(c.Server, contentType, body)
+func (c *Client) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx context.Context, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3877,8 +4579,8 @@ func (c *Client) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx c
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx context.Context, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequest(c.Server, body)
+func (c *Client) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx context.Context, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3889,8 +4591,8 @@ func (c *Client) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx context.C
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx context.Context, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3901,8 +4603,8 @@ func (c *Client) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx context
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx context.Context, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequest(c.Server, body)
+func (c *Client) ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx context.Context, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3925,8 +4627,8 @@ func (c *Client) ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationG
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(c.Server, conversationId, contentType, body)
+func (c *Client) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(c.Server, conversationId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3937,8 +4639,8 @@ func (c *Client) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatc
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequest(c.Server, conversationId, body)
+func (c *Client) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequest(c.Server, conversationId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3949,8 +4651,8 @@ func (c *Client) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatc
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx context.Context, params *ApiAiSolutionApiAiAssistantSolutionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3961,8 +4663,8 @@ func (c *Client) ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx context.Con
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiSolutionApiAiAssistantSolutionPost(ctx context.Context, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiSolutionApiAiAssistantSolutionPostRequest(c.Server, body)
+func (c *Client) ApiAiSolutionApiAiAssistantSolutionPost(ctx context.Context, params *ApiAiSolutionApiAiAssistantSolutionPostParams, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiSolutionApiAiAssistantSolutionPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3973,8 +4675,8 @@ func (c *Client) ApiAiSolutionApiAiAssistantSolutionPost(ctx context.Context, bo
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiSourceApiAiAssistantSourcePostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(c.Server, contentType, body)
+func (c *Client) ApiAiSourceApiAiAssistantSourcePostWithBody(ctx context.Context, params *ApiAiSourceApiAiAssistantSourcePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3985,8 +4687,8 @@ func (c *Client) ApiAiSourceApiAiAssistantSourcePostWithBody(ctx context.Context
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiSourceApiAiAssistantSourcePost(ctx context.Context, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiSourceApiAiAssistantSourcePostRequest(c.Server, body)
+func (c *Client) ApiAiSourceApiAiAssistantSourcePost(ctx context.Context, params *ApiAiSourceApiAiAssistantSourcePostParams, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiSourceApiAiAssistantSourcePostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3997,8 +4699,8 @@ func (c *Client) ApiAiSourceApiAiAssistantSourcePost(ctx context.Context, body A
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(c.Server, conversationId, contentType, body)
+func (c *Client) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(c.Server, conversationId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4009,8 +4711,8 @@ func (c *Client) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx c
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequest(c.Server, conversationId, body)
+func (c *Client) ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequest(c.Server, conversationId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4021,8 +4723,8 @@ func (c *Client) ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx context.C
 	return c.Client.Do(req)
 }
 
-func (c *Client) ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest(c.Server, conversationId)
+func (c *Client) ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest(c.Server, conversationId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4057,8 +4759,8 @@ func (c *Client) ListAlertConfigsApiAlertsConfigsGet(ctx context.Context, params
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateAlertConfigApiAlertsConfigsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreateAlertConfigApiAlertsConfigsPostWithBody(ctx context.Context, params *CreateAlertConfigApiAlertsConfigsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4069,8 +4771,8 @@ func (c *Client) CreateAlertConfigApiAlertsConfigsPostWithBody(ctx context.Conte
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateAlertConfigApiAlertsConfigsPost(ctx context.Context, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateAlertConfigApiAlertsConfigsPostRequest(c.Server, body)
+func (c *Client) CreateAlertConfigApiAlertsConfigsPost(ctx context.Context, params *CreateAlertConfigApiAlertsConfigsPostParams, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAlertConfigApiAlertsConfigsPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4081,8 +4783,8 @@ func (c *Client) CreateAlertConfigApiAlertsConfigsPost(ctx context.Context, body
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest(c.Server, configId)
+func (c *Client) DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx context.Context, configId string, params *DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest(c.Server, configId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4093,8 +4795,8 @@ func (c *Client) DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx context.Con
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAlertConfigApiAlertsConfigsConfigIdGet(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest(c.Server, configId)
+func (c *Client) GetAlertConfigApiAlertsConfigsConfigIdGet(ctx context.Context, configId string, params *GetAlertConfigApiAlertsConfigsConfigIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest(c.Server, configId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4105,8 +4807,8 @@ func (c *Client) GetAlertConfigApiAlertsConfigsConfigIdGet(ctx context.Context, 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx context.Context, configId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(c.Server, configId, contentType, body)
+func (c *Client) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx context.Context, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(c.Server, configId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4117,8 +4819,8 @@ func (c *Client) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx context.Context, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequest(c.Server, configId, body)
+func (c *Client) UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx context.Context, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequest(c.Server, configId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4141,8 +4843,8 @@ func (c *Client) ListOrganizationPreferencesApiAlertsOrganizationPreferencesList
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx context.Context, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(c.Server, organizationId, alertType, contentType, body)
+func (c *Client) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx context.Context, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(c.Server, organizationId, alertType, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4153,8 +4855,8 @@ func (c *Client) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrg
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx context.Context, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequest(c.Server, organizationId, alertType, body)
+func (c *Client) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx context.Context, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequest(c.Server, organizationId, alertType, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4165,8 +4867,8 @@ func (c *Client) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrg
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAlertDetailApiAlertsAlertIdGet(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAlertDetailApiAlertsAlertIdGetRequest(c.Server, alertId)
+func (c *Client) GetAlertDetailApiAlertsAlertIdGet(ctx context.Context, alertId string, params *GetAlertDetailApiAlertsAlertIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAlertDetailApiAlertsAlertIdGetRequest(c.Server, alertId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4177,8 +4879,8 @@ func (c *Client) GetAlertDetailApiAlertsAlertIdGet(ctx context.Context, alertId 
 	return c.Client.Do(req)
 }
 
-func (c *Client) AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(c.Server, alertId, contentType, body)
+func (c *Client) AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx context.Context, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(c.Server, alertId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4189,8 +4891,8 @@ func (c *Client) AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx context
 	return c.Client.Do(req)
 }
 
-func (c *Client) AddAlertCommentApiAlertsAlertIdCommentsPost(ctx context.Context, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddAlertCommentApiAlertsAlertIdCommentsPostRequest(c.Server, alertId, body)
+func (c *Client) AddAlertCommentApiAlertsAlertIdCommentsPost(ctx context.Context, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddAlertCommentApiAlertsAlertIdCommentsPostRequest(c.Server, alertId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4201,8 +4903,8 @@ func (c *Client) AddAlertCommentApiAlertsAlertIdCommentsPost(ctx context.Context
 	return c.Client.Do(req)
 }
 
-func (c *Client) ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(c.Server, alertId, contentType, body)
+func (c *Client) ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx context.Context, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(c.Server, alertId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4213,8 +4915,8 @@ func (c *Client) ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx context
 	return c.Client.Do(req)
 }
 
-func (c *Client) ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx context.Context, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewChangeAlertStatusApiAlertsAlertIdStatusPostRequest(c.Server, alertId, body)
+func (c *Client) ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx context.Context, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewChangeAlertStatusApiAlertsAlertIdStatusPostRequest(c.Server, alertId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4225,8 +4927,8 @@ func (c *Client) ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx context.Context
 	return c.Client.Do(req)
 }
 
-func (c *Client) SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest(c.Server, alertId)
+func (c *Client) SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx context.Context, alertId string, params *SubscribeToAlertApiAlertsAlertIdSubscribePostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest(c.Server, alertId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4237,8 +4939,8 @@ func (c *Client) SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx context.Conte
 	return c.Client.Do(req)
 }
 
-func (c *Client) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(c.Server, alertId)
+func (c *Client) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context.Context, alertId string, params *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(c.Server, alertId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4249,8 +4951,8 @@ func (c *Client) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(c.Server, sourceConnectionContentVersion)
+func (c *Client) DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(c.Server, sourceConnectionContentVersion, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4273,8 +4975,8 @@ func (c *Client) GetContentDetailApiContentsSourceConnectionContentVersionGet(ct
 	return c.Client.Do(req)
 }
 
-func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(c.Server, sourceConnectionContentVersion, contentType, body)
+func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(c.Server, sourceConnectionContentVersion, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4285,8 +4987,8 @@ func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentV
 	return c.Client.Do(req)
 }
 
-func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx context.Context, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest(c.Server, sourceConnectionContentVersion, body)
+func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest(c.Server, sourceConnectionContentVersion, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4309,8 +5011,8 @@ func (c *Client) ListContentEmbeddingsApiContentsSourceConnectionContentVersionE
 	return c.Client.Do(req)
 }
 
-func (c *Client) UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRequestWithBody(c.Server, sourceConnectionContentVersion, contentType, body)
+func (c *Client) UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx context.Context, sourceConnectionContentVersion string, params *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRequestWithBody(c.Server, sourceConnectionContentVersion, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4321,8 +5023,8 @@ func (c *Client) UploadFileToContentApiContentsSourceConnectionContentVersionUpl
 	return c.Client.Do(req)
 }
 
-func (c *Client) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4333,8 +5035,8 @@ func (c *Client) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx co
 	return c.Client.Do(req)
 }
 
-func (c *Client) GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx context.Context, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest(c.Server, body)
+func (c *Client) GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4357,8 +5059,8 @@ func (c *Client) ListGovernanceAiConversationsApiGovernanceAiAssistantConversati
 	return c.Client.Do(req)
 }
 
-func (c *Client) GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostRequest(c.Server, conversationId)
+func (c *Client) GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx context.Context, conversationId openapi_types.UUID, params *GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostRequest(c.Server, conversationId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4369,8 +5071,8 @@ func (c *Client) GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptP
 	return c.Client.Do(req)
 }
 
-func (c *Client) GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequest(c.Server, conversationId)
+func (c *Client) GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx context.Context, conversationId openapi_types.UUID, params *GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequest(c.Server, conversationId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4393,8 +5095,8 @@ func (c *Client) ListKnowledgeBasesApiKnowledgeBasesGet(ctx context.Context, par
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx context.Context, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4405,8 +5107,8 @@ func (c *Client) CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx context.Co
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateKnowledgeBaseApiKnowledgeBasesPost(ctx context.Context, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateKnowledgeBaseApiKnowledgeBasesPostRequest(c.Server, body)
+func (c *Client) CreateKnowledgeBaseApiKnowledgeBasesPost(ctx context.Context, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateKnowledgeBaseApiKnowledgeBasesPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4417,8 +5119,8 @@ func (c *Client) CreateKnowledgeBaseApiKnowledgeBasesPost(ctx context.Context, b
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest(c.Server, knowledgeBaseId)
+func (c *Client) DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx context.Context, knowledgeBaseId string, params *DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest(c.Server, knowledgeBaseId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4429,8 +5131,8 @@ func (c *Client) DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx c
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest(c.Server, knowledgeBaseId)
+func (c *Client) GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx context.Context, knowledgeBaseId string, params *GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest(c.Server, knowledgeBaseId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4441,8 +5143,8 @@ func (c *Client) GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx context
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx context.Context, knowledgeBaseId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(c.Server, knowledgeBaseId, contentType, body)
+func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(c.Server, knowledgeBaseId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4453,8 +5155,20 @@ func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest(c.Server, knowledgeBaseId, body)
+func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest(c.Server, knowledgeBaseId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetMeApiMeGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMeApiMeGetRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4477,8 +5191,8 @@ func (c *Client) ListMemoryBanksApiMemoryBanksGet(ctx context.Context, params *L
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateMemoryBankApiMemoryBanksPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreateMemoryBankApiMemoryBanksPostWithBody(ctx context.Context, params *CreateMemoryBankApiMemoryBanksPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4489,8 +5203,8 @@ func (c *Client) CreateMemoryBankApiMemoryBanksPostWithBody(ctx context.Context,
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateMemoryBankApiMemoryBanksPost(ctx context.Context, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateMemoryBankApiMemoryBanksPostRequest(c.Server, body)
+func (c *Client) CreateMemoryBankApiMemoryBanksPost(ctx context.Context, params *CreateMemoryBankApiMemoryBanksPostParams, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMemoryBankApiMemoryBanksPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4501,8 +5215,8 @@ func (c *Client) CreateMemoryBankApiMemoryBanksPost(ctx context.Context, body Cr
 	return c.Client.Do(req)
 }
 
-func (c *Client) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx context.Context, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4513,8 +5227,8 @@ func (c *Client) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx c
 	return c.Client.Do(req)
 }
 
-func (c *Client) MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx context.Context, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequest(c.Server, body)
+func (c *Client) MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx context.Context, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4537,8 +5251,8 @@ func (c *Client) MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConver
 	return c.Client.Do(req)
 }
 
-func (c *Client) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(c.Server, conversationId, contentType, body)
+func (c *Client) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx context.Context, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(c.Server, conversationId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4549,8 +5263,8 @@ func (c *Client) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchW
 	return c.Client.Do(req)
 }
 
-func (c *Client) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequest(c.Server, conversationId, body)
+func (c *Client) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx context.Context, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequest(c.Server, conversationId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4561,8 +5275,8 @@ func (c *Client) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListTemplatesApiMemoryBanksTemplatesGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListTemplatesApiMemoryBanksTemplatesGetRequest(c.Server)
+func (c *Client) ListTemplatesApiMemoryBanksTemplatesGet(ctx context.Context, params *ListTemplatesApiMemoryBanksTemplatesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTemplatesApiMemoryBanksTemplatesGetRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4573,8 +5287,8 @@ func (c *Client) ListTemplatesApiMemoryBanksTemplatesGet(ctx context.Context, re
 	return c.Client.Do(req)
 }
 
-func (c *Client) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx context.Context, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4585,8 +5299,8 @@ func (c *Client) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostW
 	return c.Client.Do(req)
 }
 
-func (c *Client) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx context.Context, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequest(c.Server, body)
+func (c *Client) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx context.Context, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4597,8 +5311,8 @@ func (c *Client) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest(c.Server, memoryBankId)
+func (c *Client) DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx context.Context, memoryBankId string, params *DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest(c.Server, memoryBankId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4609,8 +5323,8 @@ func (c *Client) DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx context.Co
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest(c.Server, memoryBankId)
+func (c *Client) GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx context.Context, memoryBankId string, params *GetMemoryBankApiMemoryBanksMemoryBankIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest(c.Server, memoryBankId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4621,8 +5335,8 @@ func (c *Client) GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx context.Context,
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(c.Server, memoryBankId, contentType, body)
+func (c *Client) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx context.Context, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(c.Server, memoryBankId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4633,8 +5347,8 @@ func (c *Client) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx conte
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx context.Context, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequest(c.Server, memoryBankId, body)
+func (c *Client) UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx context.Context, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequest(c.Server, memoryBankId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4645,8 +5359,8 @@ func (c *Client) UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx context.Conte
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest(c.Server, memoryBankId)
+func (c *Client) GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx context.Context, memoryBankId string, params *GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest(c.Server, memoryBankId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4657,8 +5371,8 @@ func (c *Client) GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx conte
 	return c.Client.Do(req)
 }
 
-func (c *Client) CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest(c.Server, memoryBankId)
+func (c *Client) CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx context.Context, memoryBankId string, params *CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest(c.Server, memoryBankId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4669,8 +5383,8 @@ func (c *Client) CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest(c.Server, memoryBankId)
+func (c *Client) DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx context.Context, memoryBankId string, params *DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest(c.Server, memoryBankId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4693,8 +5407,8 @@ func (c *Client) GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet(ctx c
 	return c.Client.Do(req)
 }
 
-func (c *Client) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(c.Server, memoryBankId, contentType, body)
+func (c *Client) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(c.Server, memoryBankId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4705,8 +5419,8 @@ func (c *Client) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPos
 	return c.Client.Do(req)
 }
 
-func (c *Client) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx context.Context, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequest(c.Server, memoryBankId, body)
+func (c *Client) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequest(c.Server, memoryBankId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4729,8 +5443,8 @@ func (c *Client) ListAlertsApiModelsAlertsGet(ctx context.Context, params *ListA
 	return c.Client.Do(req)
 }
 
-func (c *Client) MarkAllReadApiModelsAlertsMarkAllReadPost(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest(c.Server)
+func (c *Client) MarkAllReadApiModelsAlertsMarkAllReadPost(ctx context.Context, params *MarkAllReadApiModelsAlertsMarkAllReadPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4741,8 +5455,8 @@ func (c *Client) MarkAllReadApiModelsAlertsMarkAllReadPost(ctx context.Context, 
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest(c.Server)
+func (c *Client) GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Context, params *GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4753,8 +5467,8 @@ func (c *Client) GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Co
 	return c.Client.Do(req)
 }
 
-func (c *Client) MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(c.Server, alertId)
+func (c *Client) MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(c.Server, alertId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4801,8 +5515,8 @@ func (c *Client) ListSolutionsApiSolutionsGet(ctx context.Context, params *ListS
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateSolutionApiSolutionsPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateSolutionApiSolutionsPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreateSolutionApiSolutionsPostWithBody(ctx context.Context, params *CreateSolutionApiSolutionsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSolutionApiSolutionsPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4813,8 +5527,8 @@ func (c *Client) CreateSolutionApiSolutionsPostWithBody(ctx context.Context, con
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateSolutionApiSolutionsPost(ctx context.Context, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateSolutionApiSolutionsPostRequest(c.Server, body)
+func (c *Client) CreateSolutionApiSolutionsPost(ctx context.Context, params *CreateSolutionApiSolutionsPostParams, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSolutionApiSolutionsPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4825,8 +5539,8 @@ func (c *Client) CreateSolutionApiSolutionsPost(ctx context.Context, body Create
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteSolutionApiSolutionsSolutionIdDelete(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest(c.Server, solutionId)
+func (c *Client) DeleteSolutionApiSolutionsSolutionIdDelete(ctx context.Context, solutionId openapi_types.UUID, params *DeleteSolutionApiSolutionsSolutionIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest(c.Server, solutionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4837,8 +5551,8 @@ func (c *Client) DeleteSolutionApiSolutionsSolutionIdDelete(ctx context.Context,
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSolutionApiSolutionsSolutionIdGet(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSolutionApiSolutionsSolutionIdGetRequest(c.Server, solutionId)
+func (c *Client) GetSolutionApiSolutionsSolutionIdGet(ctx context.Context, solutionId openapi_types.UUID, params *GetSolutionApiSolutionsSolutionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSolutionApiSolutionsSolutionIdGetRequest(c.Server, solutionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4849,8 +5563,8 @@ func (c *Client) GetSolutionApiSolutionsSolutionIdGet(ctx context.Context, solut
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4861,8 +5575,8 @@ func (c *Client) UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx context.C
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateSolutionApiSolutionsSolutionIdPatch(ctx context.Context, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateSolutionApiSolutionsSolutionIdPatchRequest(c.Server, solutionId, body)
+func (c *Client) UpdateSolutionApiSolutionsSolutionIdPatch(ctx context.Context, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSolutionApiSolutionsSolutionIdPatchRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4873,8 +5587,8 @@ func (c *Client) UpdateSolutionApiSolutionsSolutionIdPatch(ctx context.Context, 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4885,8 +5599,8 @@ func (c *Client) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequest(c.Server, solutionId, body)
+func (c *Client) UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4897,8 +5611,8 @@ func (c *Client) UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx context.Cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4909,8 +5623,8 @@ func (c *Client) LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx context.Context, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequest(c.Server, solutionId, body)
+func (c *Client) LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx context.Context, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4921,8 +5635,8 @@ func (c *Client) LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx context.Context,
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4933,8 +5647,8 @@ func (c *Client) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePos
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequest(c.Server, solutionId, body)
+func (c *Client) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4945,8 +5659,8 @@ func (c *Client) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePos
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4957,8 +5671,8 @@ func (c *Client) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowle
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequest(c.Server, solutionId, body)
+func (c *Client) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4969,8 +5683,8 @@ func (c *Client) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowle
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4981,8 +5695,8 @@ func (c *Client) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWit
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequest(c.Server, solutionId, body)
+func (c *Client) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4993,8 +5707,8 @@ func (c *Client) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ct
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(c.Server, solutionId, conversationId, contentType, body)
+func (c *Client) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(c.Server, solutionId, conversationId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5005,8 +5719,8 @@ func (c *Client) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationI
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequest(c.Server, solutionId, conversationId, body)
+func (c *Client) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequest(c.Server, solutionId, conversationId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5017,8 +5731,8 @@ func (c *Client) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationI
 	return c.Client.Do(req)
 }
 
-func (c *Client) AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostRequest(c.Server, solutionId, conversationId)
+func (c *Client) AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostRequest(c.Server, solutionId, conversationId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5029,8 +5743,8 @@ func (c *Client) AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversation
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListConversationsApiSolutionsSolutionIdConversationsGet(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListConversationsApiSolutionsSolutionIdConversationsGetRequest(c.Server, solutionId)
+func (c *Client) ListConversationsApiSolutionsSolutionIdConversationsGet(ctx context.Context, solutionId openapi_types.UUID, params *ListConversationsApiSolutionsSolutionIdConversationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListConversationsApiSolutionsSolutionIdConversationsGetRequest(c.Server, solutionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5041,8 +5755,8 @@ func (c *Client) ListConversationsApiSolutionsSolutionIdConversationsGet(ctx con
 	return c.Client.Do(req)
 }
 
-func (c *Client) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5053,8 +5767,8 @@ func (c *Client) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithB
 	return c.Client.Do(req)
 }
 
-func (c *Client) AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx context.Context, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequest(c.Server, solutionId, body)
+func (c *Client) AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx context.Context, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5065,8 +5779,8 @@ func (c *Client) AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx 
 	return c.Client.Do(req)
 }
 
-func (c *Client) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(c.Server, solutionId, conversationId, contentType, body)
+func (c *Client) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(c.Server, solutionId, conversationId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5077,8 +5791,8 @@ func (c *Client) MarkConversationTurnApiSolutionsSolutionIdConversationsConversa
 	return c.Client.Do(req)
 }
 
-func (c *Client) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequest(c.Server, solutionId, conversationId, body)
+func (c *Client) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequest(c.Server, solutionId, conversationId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5089,8 +5803,8 @@ func (c *Client) MarkConversationTurnApiSolutionsSolutionIdConversationsConversa
 	return c.Client.Do(req)
 }
 
-func (c *Client) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5101,8 +5815,8 @@ func (c *Client) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteW
 	return c.Client.Do(req)
 }
 
-func (c *Client) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequest(c.Server, solutionId, body)
+func (c *Client) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5113,8 +5827,8 @@ func (c *Client) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(
 	return c.Client.Do(req)
 }
 
-func (c *Client) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5125,8 +5839,8 @@ func (c *Client) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithB
 	return c.Client.Do(req)
 }
 
-func (c *Client) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx context.Context, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequest(c.Server, solutionId, body)
+func (c *Client) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx context.Context, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5137,8 +5851,8 @@ func (c *Client) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5149,8 +5863,8 @@ func (c *Client) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsD
 	return c.Client.Do(req)
 }
 
-func (c *Client) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx context.Context, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequest(c.Server, solutionId, body)
+func (c *Client) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5161,8 +5875,8 @@ func (c *Client) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsD
 	return c.Client.Do(req)
 }
 
-func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(c.Server, solutionId, contentType, body)
+func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(c.Server, solutionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5173,8 +5887,8 @@ func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPos
 	return c.Client.Do(req)
 }
 
-func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx context.Context, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequest(c.Server, solutionId, body)
+func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequest(c.Server, solutionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5185,8 +5899,8 @@ func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPos
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateSourceApiSourcesPostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateSourceApiSourcesPostRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreateSourceApiSourcesPostWithBody(ctx context.Context, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSourceApiSourcesPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5197,8 +5911,8 @@ func (c *Client) CreateSourceApiSourcesPostWithBody(ctx context.Context, content
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateSourceApiSourcesPost(ctx context.Context, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateSourceApiSourcesPostRequest(c.Server, body)
+func (c *Client) CreateSourceApiSourcesPost(ctx context.Context, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSourceApiSourcesPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5221,8 +5935,8 @@ func (c *Client) ListSourcesApiSourcesGet(ctx context.Context, params *ListSourc
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteSourceApiSourcesSourceConnectionIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest(c.Server, sourceConnectionId)
+func (c *Client) DeleteSourceApiSourcesSourceConnectionIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, params *DeleteSourceApiSourcesSourceConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest(c.Server, sourceConnectionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5233,8 +5947,8 @@ func (c *Client) DeleteSourceApiSourcesSourceConnectionIdDelete(ctx context.Cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSourceApiSourcesSourceConnectionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSourceApiSourcesSourceConnectionIdGetRequest(c.Server, sourceConnectionId)
+func (c *Client) GetSourceApiSourcesSourceConnectionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceApiSourcesSourceConnectionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSourceApiSourcesSourceConnectionIdGetRequest(c.Server, sourceConnectionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5245,8 +5959,8 @@ func (c *Client) GetSourceApiSourcesSourceConnectionIdGet(ctx context.Context, s
 	return c.Client.Do(req)
 }
 
-func (c *Client) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+func (c *Client) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(c.Server, sourceConnectionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5257,8 +5971,8 @@ func (c *Client) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBod
 	return c.Client.Do(req)
 }
 
-func (c *Client) UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequest(c.Server, sourceConnectionId, body)
+func (c *Client) UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequest(c.Server, sourceConnectionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5269,8 +5983,8 @@ func (c *Client) UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx co
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(c.Server, sourceConnectionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5281,8 +5995,8 @@ func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateSourceApiSourcesSourceConnectionIdPutRequest(c.Server, sourceConnectionId, body)
+func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateSourceApiSourcesSourceConnectionIdPutRequest(c.Server, sourceConnectionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5293,8 +6007,8 @@ func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest(c.Server, sourceConnectionId)
+func (c *Client) GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest(c.Server, sourceConnectionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5305,8 +6019,8 @@ func (c *Client) GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddin
 	return c.Client.Do(req)
 }
 
-func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(c.Server, sourceConnectionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5317,8 +6031,8 @@ func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbedd
 	return c.Client.Do(req)
 }
 
-func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest(c.Server, sourceConnectionId, body)
+func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest(c.Server, sourceConnectionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5329,8 +6043,8 @@ func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbedd
 	return c.Client.Do(req)
 }
 
-func (c *Client) CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostRequest(c.Server, sourceConnectionId)
+func (c *Client) CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostRequest(c.Server, sourceConnectionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5353,8 +6067,8 @@ func (c *Client) ListSourceExportsApiSourcesSourceConnectionIdExportsGet(ctx con
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+func (c *Client) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(c.Server, sourceConnectionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5365,8 +6079,8 @@ func (c *Client) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBo
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx context.Context, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequest(c.Server, sourceConnectionId, body)
+func (c *Client) CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequest(c.Server, sourceConnectionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5377,8 +6091,8 @@ func (c *Client) CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx c
 	return c.Client.Do(req)
 }
 
-func (c *Client) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+func (c *Client) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(c.Server, sourceConnectionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5389,8 +6103,8 @@ func (c *Client) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimate
 	return c.Client.Do(req)
 }
 
-func (c *Client) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx context.Context, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequest(c.Server, sourceConnectionId, body)
+func (c *Client) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequest(c.Server, sourceConnectionId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5401,8 +6115,8 @@ func (c *Client) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimate
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRequest(c.Server, sourceConnectionId, exportId)
+func (c *Client) DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRequest(c.Server, sourceConnectionId, exportId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5413,8 +6127,8 @@ func (c *Client) DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDe
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest(c.Server, sourceConnectionId, exportId)
+func (c *Client) GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest(c.Server, sourceConnectionId, exportId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5425,8 +6139,8 @@ func (c *Client) GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(c
 	return c.Client.Do(req)
 }
 
-func (c *Client) CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostRequest(c.Server, sourceConnectionId, exportId)
+func (c *Client) CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostRequest(c.Server, sourceConnectionId, exportId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5437,8 +6151,8 @@ func (c *Client) CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCa
 	return c.Client.Do(req)
 }
 
-func (c *Client) DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetRequest(c.Server, sourceConnectionId, exportId)
+func (c *Client) DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetRequest(c.Server, sourceConnectionId, exportId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5449,8 +6163,8 @@ func (c *Client) DownloadSourceExportApiSourcesSourceConnectionIdExportsExportId
 	return c.Client.Do(req)
 }
 
-func (c *Client) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(c.Server, sourceConnectionId, contentType, body)
+func (c *Client) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, params *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(c.Server, sourceConnectionId, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5523,22 +6237,37 @@ func NewListAgentsApiAgentsGetRequest(server string, params *ListAgentsApiAgents
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateAgentApiAgentsPostRequest calls the generic CreateAgentApiAgentsPost builder with application/json body
-func NewCreateAgentApiAgentsPostRequest(server string, body CreateAgentApiAgentsPostJSONRequestBody) (*http.Request, error) {
+func NewCreateAgentApiAgentsPostRequest(server string, params *CreateAgentApiAgentsPostParams, body CreateAgentApiAgentsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateAgentApiAgentsPostRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateAgentApiAgentsPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewCreateAgentApiAgentsPostRequestWithBody generates requests for CreateAgentApiAgentsPost with any type of body
-func NewCreateAgentApiAgentsPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateAgentApiAgentsPostRequestWithBody(server string, params *CreateAgentApiAgentsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5563,11 +6292,26 @@ func NewCreateAgentApiAgentsPostRequestWithBody(server string, contentType strin
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest generates requests for DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete
-func NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest(server string, criteriaId string) (*http.Request, error) {
+func NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest(server string, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5597,11 +6341,26 @@ func NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteReque
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest generates requests for GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet
-func NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest(server string, criteriaId string) (*http.Request, error) {
+func NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest(server string, criteriaId string, params *GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5631,22 +6390,37 @@ func NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest(ser
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequest calls the generic UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch builder with application/json body
-func NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequest(server string, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody) (*http.Request, error) {
+func NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequest(server string, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(server, criteriaId, "application/json", bodyReader)
+	return NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(server, criteriaId, params, "application/json", bodyReader)
 }
 
 // NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody generates requests for UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch with any type of body
-func NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(server string, criteriaId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchRequestWithBody(server string, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5677,6 +6451,21 @@ func NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchReques
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -5764,6 +6553,21 @@ func NewListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -5902,22 +6706,37 @@ func NewListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetRequ
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequest calls the generic CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost builder with application/json body
-func NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequest(server string, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody) (*http.Request, error) {
+func NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequest(server string, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(server, criteriaId, "application/json", bodyReader)
+	return NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(server, criteriaId, params, "application/json", bodyReader)
 }
 
 // NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody generates requests for CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost with any type of body
-func NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(server string, criteriaId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRequestWithBody(server string, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5949,11 +6768,26 @@ func NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRe
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRequest generates requests for GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet
-func NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRequest(server string, criteriaId string) (*http.Request, error) {
+func NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRequest(server string, criteriaId string, params *GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -5981,6 +6815,21 @@ func NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetReque
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -6064,22 +6913,37 @@ func NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewSearchAgentRunsApiAgentsRunsSearchPostRequest calls the generic SearchAgentRunsApiAgentsRunsSearchPost builder with application/json body
-func NewSearchAgentRunsApiAgentsRunsSearchPostRequest(server string, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody) (*http.Request, error) {
+func NewSearchAgentRunsApiAgentsRunsSearchPostRequest(server string, params *SearchAgentRunsApiAgentsRunsSearchPostParams, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(server, "application/json", bodyReader)
+	return NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody generates requests for SearchAgentRunsApiAgentsRunsSearchPost with any type of body
-func NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(server string, params *SearchAgentRunsApiAgentsRunsSearchPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -6104,11 +6968,26 @@ func NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(server string, con
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest generates requests for DeleteAgentRunApiAgentsRunsRunIdDelete
-func NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest(server string, runId string) (*http.Request, error) {
+func NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest(server string, runId string, params *DeleteAgentRunApiAgentsRunsRunIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6136,6 +7015,21 @@ func NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest(server string, runId strin
 	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -6194,11 +7088,26 @@ func NewGetAgentRunApiAgentsRunsRunIdGetRequest(server string, runId string, par
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteAgentApiAgentsAgentIdDeleteRequest generates requests for DeleteAgentApiAgentsAgentIdDelete
-func NewDeleteAgentApiAgentsAgentIdDeleteRequest(server string, agentId string) (*http.Request, error) {
+func NewDeleteAgentApiAgentsAgentIdDeleteRequest(server string, agentId string, params *DeleteAgentApiAgentsAgentIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6228,11 +7137,26 @@ func NewDeleteAgentApiAgentsAgentIdDeleteRequest(server string, agentId string) 
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetAgentMetadataApiAgentsAgentIdGetRequest generates requests for GetAgentMetadataApiAgentsAgentIdGet
-func NewGetAgentMetadataApiAgentsAgentIdGetRequest(server string, agentId string) (*http.Request, error) {
+func NewGetAgentMetadataApiAgentsAgentIdGetRequest(server string, agentId string, params *GetAgentMetadataApiAgentsAgentIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6262,22 +7186,37 @@ func NewGetAgentMetadataApiAgentsAgentIdGetRequest(server string, agentId string
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateAgentApiAgentsAgentIdPutRequest calls the generic UpdateAgentApiAgentsAgentIdPut builder with application/json body
-func NewUpdateAgentApiAgentsAgentIdPutRequest(server string, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody) (*http.Request, error) {
+func NewUpdateAgentApiAgentsAgentIdPutRequest(server string, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(server, agentId, "application/json", bodyReader)
+	return NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(server, agentId, params, "application/json", bodyReader)
 }
 
 // NewUpdateAgentApiAgentsAgentIdPutRequestWithBody generates requests for UpdateAgentApiAgentsAgentIdPut with any type of body
-func NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(server string, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6308,6 +7247,21 @@ func NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(server string, agentId str
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -6409,22 +7363,37 @@ func NewGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetReque
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequest calls the generic GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost builder with application/json body
-func NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequest(server string, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody) (*http.Request, error) {
+func NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequest(server string, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(server, agentId, "application/json", bodyReader)
+	return NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(server, agentId, params, "application/json", bodyReader)
 }
 
 // NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody generates requests for GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost with any type of body
-func NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWithBody(server string, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6456,22 +7425,37 @@ func NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWit
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequest calls the generic GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost builder with application/json body
-func NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequest(server string, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody) (*http.Request, error) {
+func NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequest(server string, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(server, agentId, "application/json", bodyReader)
+	return NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(server, agentId, params, "application/json", bodyReader)
 }
 
 // NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody generates requests for GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost with any type of body
-func NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBody(server string, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6503,22 +7487,37 @@ func NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBo
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest calls the generic MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch builder with application/json body
-func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest(server string, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody) (*http.Request, error) {
+func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest(server string, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(server, agentId, conversationId, "application/json", bodyReader)
+	return NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(server, agentId, conversationId, params, "application/json", bodyReader)
 }
 
 // NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody generates requests for MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch with any type of body
-func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(server string, agentId string, conversationId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWithBody(server string, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6557,11 +7556,26 @@ func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWit
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest generates requests for GetAgentDefinitionApiAgentsAgentIdDefinitionGet
-func NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(server string, agentId string) (*http.Request, error) {
+func NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(server string, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6591,22 +7605,37 @@ func NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(server string, ag
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest calls the generic UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut builder with application/json body
-func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest(server string, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody) (*http.Request, error) {
+func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest(server string, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server, agentId, "application/json", bodyReader)
+	return NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server, agentId, params, "application/json", bodyReader)
 }
 
 // NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody generates requests for UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut with any type of body
-func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server string, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6638,11 +7667,26 @@ func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest generates requests for ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet
-func NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(server string, agentId string) (*http.Request, error) {
+func NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(server string, agentId string, params *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6672,22 +7716,37 @@ func NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(serve
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequest calls the generic CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost builder with application/json body
-func NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequest(server string, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody) (*http.Request, error) {
+func NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequest(server string, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(server, agentId, "application/json", bodyReader)
+	return NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(server, agentId, params, "application/json", bodyReader)
 }
 
 // NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody generates requests for CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost with any type of body
-func NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWithBody(server string, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6719,22 +7778,37 @@ func NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWit
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequest calls the generic TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost builder with application/json body
-func NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequest(server string, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody) (*http.Request, error) {
+func NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequest(server string, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(server, agentId, "application/json", bodyReader)
+	return NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(server, agentId, params, "application/json", bodyReader)
 }
 
 // NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody generates requests for TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost with any type of body
-func NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostRequestWithBody(server string, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -6765,6 +7839,21 @@ func NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostReques
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -6918,6 +8007,21 @@ func NewListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetRequest(se
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -7054,11 +8158,26 @@ func NewListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetRequest(server string
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest generates requests for ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet
-func NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest(server string, agentId string, uploadId string) (*http.Request, error) {
+func NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest(server string, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7093,6 +8212,21 @@ func NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetReque
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -7183,22 +8317,37 @@ func NewListAgentRunsApiAgentsAgentIdRunsGetRequest(server string, agentId strin
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewRunAgentApiAgentsAgentIdRunsPostRequest calls the generic RunAgentApiAgentsAgentIdRunsPost builder with application/json body
-func NewRunAgentApiAgentsAgentIdRunsPostRequest(server string, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody) (*http.Request, error) {
+func NewRunAgentApiAgentsAgentIdRunsPostRequest(server string, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(server, agentId, "application/json", bodyReader)
+	return NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(server, agentId, params, "application/json", bodyReader)
 }
 
 // NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody generates requests for RunAgentApiAgentsAgentIdRunsPost with any type of body
-func NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(server string, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7230,22 +8379,37 @@ func NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(server string, agentId s
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequest calls the generic RunStreamingAgentApiAgentsAgentIdRunsStreamPost builder with application/json body
-func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequest(server string, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody) (*http.Request, error) {
+func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequest(server string, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server, agentId, "application/json", bodyReader)
+	return NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server, agentId, params, "application/json", bodyReader)
 }
 
 // NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody generates requests for RunStreamingAgentApiAgentsAgentIdRunsStreamPost with any type of body
-func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server string, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7277,11 +8441,26 @@ func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server st
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest generates requests for ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet
-func NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest(server string, agentId string, runId string) (*http.Request, error) {
+func NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest(server string, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7318,11 +8497,26 @@ func NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetReq
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest generates requests for ApiUploadAgentInputApiAgentsAgentIdUploadInputPost
-func NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest(server string, agentId string) (*http.Request, error) {
+func NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest(server string, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7352,22 +8546,37 @@ func NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest(server string,
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiAiFeedbackApiAiAssistantFeedbackPostRequest calls the generic ApiAiFeedbackApiAiAssistantFeedbackPost builder with application/json body
-func NewApiAiFeedbackApiAiAssistantFeedbackPostRequest(server string, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody) (*http.Request, error) {
+func NewApiAiFeedbackApiAiAssistantFeedbackPostRequest(server string, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(server, "application/json", bodyReader)
+	return NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody generates requests for ApiAiFeedbackApiAiAssistantFeedbackPost with any type of body
-func NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(server string, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7392,22 +8601,37 @@ func NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(server string, co
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequest calls the generic ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost builder with application/json body
-func NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequest(server string, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody) (*http.Request, error) {
+func NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequest(server string, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(server, "application/json", bodyReader)
+	return NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody generates requests for ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost with any type of body
-func NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(server string, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7432,22 +8656,37 @@ func NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(server 
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequest calls the generic ApiAiMemoryBankApiAiAssistantMemoryBankPost builder with application/json body
-func NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequest(server string, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody) (*http.Request, error) {
+func NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequest(server string, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(server, "application/json", bodyReader)
+	return NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody generates requests for ApiAiMemoryBankApiAiAssistantMemoryBankPost with any type of body
-func NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(server string, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7471,6 +8710,21 @@ func NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(server string
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -7537,22 +8791,37 @@ func NewApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetRequest
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequest calls the generic ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch builder with application/json body
-func NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequest(server string, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody) (*http.Request, error) {
+func NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequest(server string, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(server, conversationId, "application/json", bodyReader)
+	return NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(server, conversationId, params, "application/json", bodyReader)
 }
 
 // NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody generates requests for ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch with any type of body
-func NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(server string, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestWithBody(server string, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7584,22 +8853,37 @@ func NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestW
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiAiSolutionApiAiAssistantSolutionPostRequest calls the generic ApiAiSolutionApiAiAssistantSolutionPost builder with application/json body
-func NewApiAiSolutionApiAiAssistantSolutionPostRequest(server string, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody) (*http.Request, error) {
+func NewApiAiSolutionApiAiAssistantSolutionPostRequest(server string, params *ApiAiSolutionApiAiAssistantSolutionPostParams, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(server, "application/json", bodyReader)
+	return NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody generates requests for ApiAiSolutionApiAiAssistantSolutionPost with any type of body
-func NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(server string, params *ApiAiSolutionApiAiAssistantSolutionPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7624,22 +8908,37 @@ func NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(server string, co
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiAiSourceApiAiAssistantSourcePostRequest calls the generic ApiAiSourceApiAiAssistantSourcePost builder with application/json body
-func NewApiAiSourceApiAiAssistantSourcePostRequest(server string, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody) (*http.Request, error) {
+func NewApiAiSourceApiAiAssistantSourcePostRequest(server string, params *ApiAiSourceApiAiAssistantSourcePostParams, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(server, "application/json", bodyReader)
+	return NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewApiAiSourceApiAiAssistantSourcePostRequestWithBody generates requests for ApiAiSourceApiAiAssistantSourcePost with any type of body
-func NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(server string, params *ApiAiSourceApiAiAssistantSourcePostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -7664,22 +8963,37 @@ func NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(server string, conten
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequest calls the generic ApiAiAcceptApiAiAssistantConversationIdAcceptPost builder with application/json body
-func NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequest(server string, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody) (*http.Request, error) {
+func NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequest(server string, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(server, conversationId, "application/json", bodyReader)
+	return NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(server, conversationId, params, "application/json", bodyReader)
 }
 
 // NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody generates requests for ApiAiAcceptApiAiAssistantConversationIdAcceptPost with any type of body
-func NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(server string, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(server string, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7711,11 +9025,26 @@ func NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(server 
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest generates requests for ApiAiDeclineApiAiAssistantConversationIdDeclinePost
-func NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest(server string, conversationId openapi_types.UUID) (*http.Request, error) {
+func NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest(server string, conversationId openapi_types.UUID, params *ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7743,6 +9072,21 @@ func NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest(server string
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -7890,6 +9234,21 @@ func NewListAlertsApiAlertsGetRequest(server string, params *ListAlertsApiAlerts
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -7971,22 +9330,37 @@ func NewListAlertConfigsApiAlertsConfigsGetRequest(server string, params *ListAl
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateAlertConfigApiAlertsConfigsPostRequest calls the generic CreateAlertConfigApiAlertsConfigsPost builder with application/json body
-func NewCreateAlertConfigApiAlertsConfigsPostRequest(server string, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody) (*http.Request, error) {
+func NewCreateAlertConfigApiAlertsConfigsPostRequest(server string, params *CreateAlertConfigApiAlertsConfigsPostParams, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody generates requests for CreateAlertConfigApiAlertsConfigsPost with any type of body
-func NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(server string, params *CreateAlertConfigApiAlertsConfigsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -8011,11 +9385,26 @@ func NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(server string, cont
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest generates requests for DeleteAlertConfigApiAlertsConfigsConfigIdDelete
-func NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest(server string, configId string) (*http.Request, error) {
+func NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest(server string, configId string, params *DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8045,11 +9434,26 @@ func NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest(server string, co
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest generates requests for GetAlertConfigApiAlertsConfigsConfigIdGet
-func NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest(server string, configId string) (*http.Request, error) {
+func NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest(server string, configId string, params *GetAlertConfigApiAlertsConfigsConfigIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8079,22 +9483,37 @@ func NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest(server string, configId
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequest calls the generic UpdateAlertConfigApiAlertsConfigsConfigIdPatch builder with application/json body
-func NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequest(server string, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody) (*http.Request, error) {
+func NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequest(server string, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(server, configId, "application/json", bodyReader)
+	return NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(server, configId, params, "application/json", bodyReader)
 }
 
 // NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody generates requests for UpdateAlertConfigApiAlertsConfigsConfigIdPatch with any type of body
-func NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(server string, configId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(server string, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8125,6 +9544,21 @@ func NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(server str
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -8191,22 +9625,37 @@ func NewListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetReques
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequest calls the generic UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch builder with application/json body
-func NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequest(server string, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody) (*http.Request, error) {
+func NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequest(server string, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(server, organizationId, alertType, "application/json", bodyReader)
+	return NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(server, organizationId, alertType, params, "application/json", bodyReader)
 }
 
 // NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody generates requests for UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch with any type of body
-func NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(server string, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchRequestWithBody(server string, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8245,11 +9694,26 @@ func NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganization
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetAlertDetailApiAlertsAlertIdGetRequest generates requests for GetAlertDetailApiAlertsAlertIdGet
-func NewGetAlertDetailApiAlertsAlertIdGetRequest(server string, alertId string) (*http.Request, error) {
+func NewGetAlertDetailApiAlertsAlertIdGetRequest(server string, alertId string, params *GetAlertDetailApiAlertsAlertIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8279,22 +9743,37 @@ func NewGetAlertDetailApiAlertsAlertIdGetRequest(server string, alertId string) 
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewAddAlertCommentApiAlertsAlertIdCommentsPostRequest calls the generic AddAlertCommentApiAlertsAlertIdCommentsPost builder with application/json body
-func NewAddAlertCommentApiAlertsAlertIdCommentsPostRequest(server string, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody) (*http.Request, error) {
+func NewAddAlertCommentApiAlertsAlertIdCommentsPostRequest(server string, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(server, alertId, "application/json", bodyReader)
+	return NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(server, alertId, params, "application/json", bodyReader)
 }
 
 // NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody generates requests for AddAlertCommentApiAlertsAlertIdCommentsPost with any type of body
-func NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(server string, alertId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(server string, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8326,22 +9805,37 @@ func NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(server string
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewChangeAlertStatusApiAlertsAlertIdStatusPostRequest calls the generic ChangeAlertStatusApiAlertsAlertIdStatusPost builder with application/json body
-func NewChangeAlertStatusApiAlertsAlertIdStatusPostRequest(server string, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody) (*http.Request, error) {
+func NewChangeAlertStatusApiAlertsAlertIdStatusPostRequest(server string, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(server, alertId, "application/json", bodyReader)
+	return NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(server, alertId, params, "application/json", bodyReader)
 }
 
 // NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody generates requests for ChangeAlertStatusApiAlertsAlertIdStatusPost with any type of body
-func NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(server string, alertId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(server string, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8373,11 +9867,26 @@ func NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(server string
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest generates requests for SubscribeToAlertApiAlertsAlertIdSubscribePost
-func NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest(server string, alertId string) (*http.Request, error) {
+func NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest(server string, alertId string, params *SubscribeToAlertApiAlertsAlertIdSubscribePostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8407,11 +9916,26 @@ func NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest(server string, aler
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest generates requests for UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost
-func NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(server string, alertId string) (*http.Request, error) {
+func NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(server string, alertId string, params *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8441,11 +9965,26 @@ func NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(server string
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest generates requests for DeleteContentApiContentsSourceConnectionContentVersionDelete
-func NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(server string, sourceConnectionContentVersion string) (*http.Request, error) {
+func NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(server string, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8473,6 +10012,21 @@ func NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(serv
 	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -8547,22 +10101,37 @@ func NewGetContentDetailApiContentsSourceConnectionContentVersionGetRequest(serv
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest calls the generic ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut builder with application/json body
-func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest(server string, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody) (*http.Request, error) {
+func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest(server string, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(server, sourceConnectionContentVersion, "application/json", bodyReader)
+	return NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(server, sourceConnectionContentVersion, params, "application/json", bodyReader)
 }
 
 // NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody generates requests for ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut with any type of body
-func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(server string, sourceConnectionContentVersion string, contentType string, body io.Reader) (*http.Request, error) {
+func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequestWithBody(server string, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8593,6 +10162,21 @@ func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -8666,11 +10250,26 @@ func NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddings
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRequestWithBody generates requests for UploadFileToContentApiContentsSourceConnectionContentVersionUploadPost with any type of body
-func NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRequestWithBody(server string, sourceConnectionContentVersion string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRequestWithBody(server string, sourceConnectionContentVersion string, params *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8702,22 +10301,37 @@ func NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRe
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest calls the generic GovernanceAiGenerateApiGovernanceAiAssistantPost builder with application/json body
-func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest(server string, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody) (*http.Request, error) {
+func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest(server string, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(server, "application/json", bodyReader)
+	return NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody generates requests for GovernanceAiGenerateApiGovernanceAiAssistantPost with any type of body
-func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(server string, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -8741,6 +10355,21 @@ func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(server s
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -8791,11 +10420,26 @@ func NewListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetReq
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostRequest generates requests for GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost
-func NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostRequest(server string, conversationId openapi_types.UUID) (*http.Request, error) {
+func NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostRequest(server string, conversationId openapi_types.UUID, params *GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8825,11 +10469,26 @@ func NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostReques
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequest generates requests for GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost
-func NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequest(server string, conversationId openapi_types.UUID) (*http.Request, error) {
+func NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequest(server string, conversationId openapi_types.UUID, params *GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8857,6 +10516,21 @@ func NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequ
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -8956,22 +10630,37 @@ func NewListKnowledgeBasesApiKnowledgeBasesGetRequest(server string, params *Lis
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateKnowledgeBaseApiKnowledgeBasesPostRequest calls the generic CreateKnowledgeBaseApiKnowledgeBasesPost builder with application/json body
-func NewCreateKnowledgeBaseApiKnowledgeBasesPostRequest(server string, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody) (*http.Request, error) {
+func NewCreateKnowledgeBaseApiKnowledgeBasesPostRequest(server string, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody generates requests for CreateKnowledgeBaseApiKnowledgeBasesPost with any type of body
-func NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(server string, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -8996,11 +10685,26 @@ func NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(server string, c
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest generates requests for DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete
-func NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest(server string, knowledgeBaseId string) (*http.Request, error) {
+func NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest(server string, knowledgeBaseId string, params *DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9030,11 +10734,26 @@ func NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest(server 
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest generates requests for GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet
-func NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest(server string, knowledgeBaseId string) (*http.Request, error) {
+func NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest(server string, knowledgeBaseId string, params *GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9064,22 +10783,37 @@ func NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest(server string
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest calls the generic UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut builder with application/json body
-func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest(server string, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody) (*http.Request, error) {
+func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest(server string, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(server, knowledgeBaseId, "application/json", bodyReader)
+	return NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(server, knowledgeBaseId, params, "application/json", bodyReader)
 }
 
 // NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody generates requests for UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut with any type of body
-func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(server string, knowledgeBaseId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(server string, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9110,6 +10844,48 @@ func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(se
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetMeApiMeGetRequest generates requests for GetMeApiMeGet
+func NewGetMeApiMeGetRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/me")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -9224,22 +11000,37 @@ func NewListMemoryBanksApiMemoryBanksGetRequest(server string, params *ListMemor
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateMemoryBankApiMemoryBanksPostRequest calls the generic CreateMemoryBankApiMemoryBanksPost builder with application/json body
-func NewCreateMemoryBankApiMemoryBanksPostRequest(server string, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody) (*http.Request, error) {
+func NewCreateMemoryBankApiMemoryBanksPostRequest(server string, params *CreateMemoryBankApiMemoryBanksPostParams, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewCreateMemoryBankApiMemoryBanksPostRequestWithBody generates requests for CreateMemoryBankApiMemoryBanksPost with any type of body
-func NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(server string, params *CreateMemoryBankApiMemoryBanksPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9264,22 +11055,37 @@ func NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(server string, content
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequest calls the generic MemoryBankAiGenerateApiMemoryBanksAiAssistantPost builder with application/json body
-func NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequest(server string, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody) (*http.Request, error) {
+func NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequest(server string, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(server, "application/json", bodyReader)
+	return NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody generates requests for MemoryBankAiGenerateApiMemoryBanksAiAssistantPost with any type of body
-func NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(server string, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9303,6 +11109,21 @@ func NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(server 
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -9369,22 +11190,37 @@ func NewMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequest calls the generic MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch builder with application/json body
-func NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequest(server string, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody) (*http.Request, error) {
+func NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequest(server string, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(server, conversationId, "application/json", bodyReader)
+	return NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(server, conversationId, params, "application/json", bodyReader)
 }
 
 // NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody generates requests for MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch with any type of body
-func NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(server string, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWithBody(server string, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9416,11 +11252,26 @@ func NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWit
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewListTemplatesApiMemoryBanksTemplatesGetRequest generates requests for ListTemplatesApiMemoryBanksTemplatesGet
-func NewListTemplatesApiMemoryBanksTemplatesGetRequest(server string) (*http.Request, error) {
+func NewListTemplatesApiMemoryBanksTemplatesGetRequest(server string, params *ListTemplatesApiMemoryBanksTemplatesGetParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9443,22 +11294,37 @@ func NewListTemplatesApiMemoryBanksTemplatesGetRequest(server string) (*http.Req
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequest calls the generic TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost builder with application/json body
-func NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequest(server string, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody) (*http.Request, error) {
+func NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequest(server string, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(server, "application/json", bodyReader)
+	return NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody generates requests for TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost with any type of body
-func NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWithBody(server string, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9483,11 +11349,26 @@ func NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWit
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest generates requests for DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete
-func NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest(server string, memoryBankId string) (*http.Request, error) {
+func NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest(server string, memoryBankId string, params *DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9517,11 +11398,26 @@ func NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest(server string, m
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest generates requests for GetMemoryBankApiMemoryBanksMemoryBankIdGet
-func NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest(server string, memoryBankId string) (*http.Request, error) {
+func NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest(server string, memoryBankId string, params *GetMemoryBankApiMemoryBanksMemoryBankIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9551,22 +11447,37 @@ func NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest(server string, memoryB
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequest calls the generic UpdateMemoryBankApiMemoryBanksMemoryBankIdPut builder with application/json body
-func NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequest(server string, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody) (*http.Request, error) {
+func NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequest(server string, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(server, memoryBankId, "application/json", bodyReader)
+	return NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(server, memoryBankId, params, "application/json", bodyReader)
 }
 
 // NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody generates requests for UpdateMemoryBankApiMemoryBanksMemoryBankIdPut with any type of body
-func NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(server string, memoryBankId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(server string, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9598,11 +11509,26 @@ func NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(server stri
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest generates requests for GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet
-func NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest(server string, memoryBankId string) (*http.Request, error) {
+func NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest(server string, memoryBankId string, params *GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9632,11 +11558,26 @@ func NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest(server stri
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest generates requests for CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost
-func NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest(server string, memoryBankId string) (*http.Request, error) {
+func NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest(server string, memoryBankId string, params *CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9666,11 +11607,26 @@ func NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest(server str
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest generates requests for DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete
-func NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest(server string, memoryBankId string) (*http.Request, error) {
+func NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest(server string, memoryBankId string, params *DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9698,6 +11654,21 @@ func NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest(serv
 	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -9788,22 +11759,37 @@ func NewGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetRequest(server 
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequest calls the generic TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost builder with application/json body
-func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequest(server string, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody) (*http.Request, error) {
+func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequest(server string, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(server, memoryBankId, "application/json", bodyReader)
+	return NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(server, memoryBankId, params, "application/json", bodyReader)
 }
 
 // NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody generates requests for TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost with any type of body
-func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(server string, memoryBankId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestWithBody(server string, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9834,6 +11820,21 @@ func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestW
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -9932,11 +11933,26 @@ func NewListAlertsApiModelsAlertsGetRequest(server string, params *ListAlertsApi
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest generates requests for MarkAllReadApiModelsAlertsMarkAllReadPost
-func NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest(server string) (*http.Request, error) {
+func NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest(server string, params *MarkAllReadApiModelsAlertsMarkAllReadPostParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9959,11 +11975,26 @@ func NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest(server string) (*http.R
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest generates requests for GetAlertUnreadCountApiModelsAlertsUnreadCountGet
-func NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest(server string) (*http.Request, error) {
+func NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest(server string, params *GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -9986,11 +12017,26 @@ func NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest(server string) (
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewMarkReadApiModelsAlertsAlertIdReadPatchRequest generates requests for MarkReadApiModelsAlertsAlertIdReadPatch
-func NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(server string, alertId openapi_types.UUID) (*http.Request, error) {
+func NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(server string, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10018,6 +12064,21 @@ func NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(server string, alertId op
 	req, err := http.NewRequest("PATCH", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -10140,6 +12201,21 @@ func NewGetRecommendationsApiModelsModelIdRecommendationsGetRequest(server strin
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
@@ -10215,6 +12291,21 @@ func NewSearchApiSearchGetRequest(server string, params *SearchApiSearchGetParam
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -10330,22 +12421,37 @@ func NewListSolutionsApiSolutionsGetRequest(server string, params *ListSolutions
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateSolutionApiSolutionsPostRequest calls the generic CreateSolutionApiSolutionsPost builder with application/json body
-func NewCreateSolutionApiSolutionsPostRequest(server string, body CreateSolutionApiSolutionsPostJSONRequestBody) (*http.Request, error) {
+func NewCreateSolutionApiSolutionsPostRequest(server string, params *CreateSolutionApiSolutionsPostParams, body CreateSolutionApiSolutionsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateSolutionApiSolutionsPostRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateSolutionApiSolutionsPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewCreateSolutionApiSolutionsPostRequestWithBody generates requests for CreateSolutionApiSolutionsPost with any type of body
-func NewCreateSolutionApiSolutionsPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateSolutionApiSolutionsPostRequestWithBody(server string, params *CreateSolutionApiSolutionsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10370,11 +12476,26 @@ func NewCreateSolutionApiSolutionsPostRequestWithBody(server string, contentType
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest generates requests for DeleteSolutionApiSolutionsSolutionIdDelete
-func NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest(server string, solutionId openapi_types.UUID) (*http.Request, error) {
+func NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest(server string, solutionId openapi_types.UUID, params *DeleteSolutionApiSolutionsSolutionIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10404,11 +12525,26 @@ func NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest(server string, solutio
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetSolutionApiSolutionsSolutionIdGetRequest generates requests for GetSolutionApiSolutionsSolutionIdGet
-func NewGetSolutionApiSolutionsSolutionIdGetRequest(server string, solutionId openapi_types.UUID) (*http.Request, error) {
+func NewGetSolutionApiSolutionsSolutionIdGetRequest(server string, solutionId openapi_types.UUID, params *GetSolutionApiSolutionsSolutionIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10438,22 +12574,37 @@ func NewGetSolutionApiSolutionsSolutionIdGetRequest(server string, solutionId op
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateSolutionApiSolutionsSolutionIdPatchRequest calls the generic UpdateSolutionApiSolutionsSolutionIdPatch builder with application/json body
-func NewUpdateSolutionApiSolutionsSolutionIdPatchRequest(server string, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody) (*http.Request, error) {
+func NewUpdateSolutionApiSolutionsSolutionIdPatchRequest(server string, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody generates requests for UpdateSolutionApiSolutionsSolutionIdPatch with any type of body
-func NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(server string, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10485,22 +12636,37 @@ func NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(server string, 
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequest calls the generic UnlinkAgentsApiSolutionsSolutionIdAgentsDelete builder with application/json body
-func NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequest(server string, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody) (*http.Request, error) {
+func NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequest(server string, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody generates requests for UnlinkAgentsApiSolutionsSolutionIdAgentsDelete with any type of body
-func NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(server string, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10532,22 +12698,37 @@ func NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(server str
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequest calls the generic LinkAgentsApiSolutionsSolutionIdAgentsPost builder with application/json body
-func NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequest(server string, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody) (*http.Request, error) {
+func NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequest(server string, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody generates requests for LinkAgentsApiSolutionsSolutionIdAgentsPost with any type of body
-func NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(server string, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10579,22 +12760,37 @@ func NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(server string,
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequest calls the generic AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost builder with application/json body
-func NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequest(server string, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody) (*http.Request, error) {
+func NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequest(server string, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody generates requests for AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost with any type of body
-func NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestWithBody(server string, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10626,22 +12822,37 @@ func NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestW
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequest calls the generic AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost builder with application/json body
-func NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequest(server string, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody) (*http.Request, error) {
+func NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequest(server string, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody generates requests for AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost with any type of body
-func NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostRequestWithBody(server string, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10673,22 +12884,37 @@ func NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePo
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequest calls the generic AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost builder with application/json body
-func NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequest(server string, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody) (*http.Request, error) {
+func NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequest(server string, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody generates requests for AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost with any type of body
-func NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithBody(server string, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10720,22 +12946,37 @@ func NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithB
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequest calls the generic AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost builder with application/json body
-func NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody) (*http.Request, error) {
+func NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(server, solutionId, conversationId, "application/json", bodyReader)
+	return NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(server, solutionId, conversationId, params, "application/json", bodyReader)
 }
 
 // NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody generates requests for AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost with any type of body
-func NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostRequestWithBody(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10774,11 +13015,26 @@ func NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPo
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostRequest generates requests for AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost
-func NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID) (*http.Request, error) {
+func NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10815,11 +13071,26 @@ func NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDecline
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewListConversationsApiSolutionsSolutionIdConversationsGetRequest generates requests for ListConversationsApiSolutionsSolutionIdConversationsGet
-func NewListConversationsApiSolutionsSolutionIdConversationsGetRequest(server string, solutionId openapi_types.UUID) (*http.Request, error) {
+func NewListConversationsApiSolutionsSolutionIdConversationsGetRequest(server string, solutionId openapi_types.UUID, params *ListConversationsApiSolutionsSolutionIdConversationsGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10849,22 +13120,37 @@ func NewListConversationsApiSolutionsSolutionIdConversationsGetRequest(server st
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequest calls the generic AddConversationTurnApiSolutionsSolutionIdConversationsPost builder with application/json body
-func NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequest(server string, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody) (*http.Request, error) {
+func NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequest(server string, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody generates requests for AddConversationTurnApiSolutionsSolutionIdConversationsPost with any type of body
-func NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBody(server string, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10896,22 +13182,37 @@ func NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBod
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequest calls the generic MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch builder with application/json body
-func NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody) (*http.Request, error) {
+func NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequest(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(server, solutionId, conversationId, "application/json", bodyReader)
+	return NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(server, solutionId, conversationId, params, "application/json", bodyReader)
 }
 
 // NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody generates requests for MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch with any type of body
-func NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchRequestWithBody(server string, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10950,22 +13251,37 @@ func NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPat
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequest calls the generic UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete builder with application/json body
-func NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequest(server string, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody) (*http.Request, error) {
+func NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequest(server string, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody generates requests for UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete with any type of body
-func NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWithBody(server string, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10996,23 +13312,38 @@ func NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWit
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
 
 // NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequest calls the generic LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost builder with application/json body
-func NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequest(server string, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody) (*http.Request, error) {
+func NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequest(server string, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody generates requests for LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost with any type of body
-func NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBody(server string, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11044,22 +13375,37 @@ func NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBod
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequest calls the generic UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete builder with application/json body
-func NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequest(server string, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody) (*http.Request, error) {
+func NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequest(server string, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody generates requests for UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete with any type of body
-func NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequestWithBody(server string, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11091,22 +13437,37 @@ func NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequ
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequest calls the generic LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost builder with application/json body
-func NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequest(server string, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody) (*http.Request, error) {
+func NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequest(server string, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(server, solutionId, "application/json", bodyReader)
+	return NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(server, solutionId, params, "application/json", bodyReader)
 }
 
 // NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody generates requests for LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost with any type of body
-func NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(server string, solutionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestWithBody(server string, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11138,22 +13499,37 @@ func NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestW
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateSourceApiSourcesPostRequest calls the generic CreateSourceApiSourcesPost builder with application/json body
-func NewCreateSourceApiSourcesPostRequest(server string, body CreateSourceApiSourcesPostJSONRequestBody) (*http.Request, error) {
+func NewCreateSourceApiSourcesPostRequest(server string, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateSourceApiSourcesPostRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateSourceApiSourcesPostRequestWithBody(server, params, "application/json", bodyReader)
 }
 
 // NewCreateSourceApiSourcesPostRequestWithBody generates requests for CreateSourceApiSourcesPost with any type of body
-func NewCreateSourceApiSourcesPostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateSourceApiSourcesPostRequestWithBody(server string, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -11177,6 +13553,21 @@ func NewCreateSourceApiSourcesPostRequestWithBody(server string, contentType str
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -11291,11 +13682,26 @@ func NewListSourcesApiSourcesGetRequest(server string, params *ListSourcesApiSou
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest generates requests for DeleteSourceApiSourcesSourceConnectionIdDelete
-func NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest(server string, sourceConnectionId openapi_types.UUID) (*http.Request, error) {
+func NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest(server string, sourceConnectionId openapi_types.UUID, params *DeleteSourceApiSourcesSourceConnectionIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11325,11 +13731,26 @@ func NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest(server string, sou
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetSourceApiSourcesSourceConnectionIdGetRequest generates requests for GetSourceApiSourcesSourceConnectionIdGet
-func NewGetSourceApiSourcesSourceConnectionIdGetRequest(server string, sourceConnectionId openapi_types.UUID) (*http.Request, error) {
+func NewGetSourceApiSourcesSourceConnectionIdGetRequest(server string, sourceConnectionId openapi_types.UUID, params *GetSourceApiSourcesSourceConnectionIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11359,22 +13780,37 @@ func NewGetSourceApiSourcesSourceConnectionIdGetRequest(server string, sourceCon
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequest calls the generic UploadInlineTextToSourceApiSourcesSourceConnectionIdPost builder with application/json body
-func NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequest(server string, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody) (*http.Request, error) {
+func NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequest(server string, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+	return NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(server, sourceConnectionId, params, "application/json", bodyReader)
 }
 
 // NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody generates requests for UploadInlineTextToSourceApiSourcesSourceConnectionIdPost with any type of body
-func NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11406,22 +13842,37 @@ func NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUpdateSourceApiSourcesSourceConnectionIdPutRequest calls the generic UpdateSourceApiSourcesSourceConnectionIdPut builder with application/json body
-func NewUpdateSourceApiSourcesSourceConnectionIdPutRequest(server string, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody) (*http.Request, error) {
+func NewUpdateSourceApiSourcesSourceConnectionIdPutRequest(server string, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+	return NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server, sourceConnectionId, params, "application/json", bodyReader)
 }
 
 // NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody generates requests for UpdateSourceApiSourcesSourceConnectionIdPut with any type of body
-func NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server string, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11453,11 +13904,26 @@ func NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server string
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest generates requests for GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet
-func NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest(server string, sourceConnectionId openapi_types.UUID) (*http.Request, error) {
+func NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest(server string, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11487,22 +13953,37 @@ func NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigratio
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest calls the generic StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost builder with application/json body
-func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest(server string, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody) (*http.Request, error) {
+func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest(server string, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+	return NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(server, sourceConnectionId, params, "application/json", bodyReader)
 }
 
 // NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody generates requests for StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost with any type of body
-func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11534,11 +14015,26 @@ func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrat
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostRequest generates requests for CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost
-func NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostRequest(server string, sourceConnectionId openapi_types.UUID) (*http.Request, error) {
+func NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostRequest(server string, sourceConnectionId openapi_types.UUID, params *CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11566,6 +14062,21 @@ func NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigra
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -11640,22 +14151,37 @@ func NewListSourceExportsApiSourcesSourceConnectionIdExportsGetRequest(server st
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequest calls the generic CreateSourceExportApiSourcesSourceConnectionIdExportsPost builder with application/json body
-func NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequest(server string, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody) (*http.Request, error) {
+func NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequest(server string, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+	return NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(server, sourceConnectionId, params, "application/json", bodyReader)
 }
 
 // NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody generates requests for CreateSourceExportApiSourcesSourceConnectionIdExportsPost with any type of body
-func NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11687,22 +14213,37 @@ func NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequest calls the generic EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost builder with application/json body
-func NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequest(server string, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody) (*http.Request, error) {
+func NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequest(server string, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(server, sourceConnectionId, "application/json", bodyReader)
+	return NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(server, sourceConnectionId, params, "application/json", bodyReader)
 }
 
 // NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody generates requests for EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost with any type of body
-func NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+func NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRequestWithBody(server string, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11734,11 +14275,26 @@ func NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostReque
 
 	req.Header.Add("Content-Type", contentType)
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRequest generates requests for DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete
-func NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID) (*http.Request, error) {
+func NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11775,11 +14331,26 @@ func NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteReque
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest generates requests for GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet
-func NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID) (*http.Request, error) {
+func NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11816,11 +14387,26 @@ func NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest(ser
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostRequest generates requests for CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost
-func NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID) (*http.Request, error) {
+func NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11857,11 +14443,26 @@ func NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostR
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetRequest generates requests for DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet
-func NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID) (*http.Request, error) {
+func NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetRequest(server string, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11898,11 +14499,26 @@ func NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadG
 		return nil, err
 	}
 
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
 	return req, nil
 }
 
 // NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody generates requests for UploadFileToSourceApiSourcesSourceConnectionIdUploadPost with any type of body
-func NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(server string, sourceConnectionId string, contentType string, body io.Reader) (*http.Request, error) {
+func NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(server string, sourceConnectionId string, params *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11933,6 +14549,21 @@ func NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -11984,20 +14615,20 @@ type ClientWithResponsesInterface interface {
 	ListAgentsApiAgentsGetWithResponse(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*ListAgentsApiAgentsGetResponse, error)
 
 	// CreateAgentApiAgentsPostWithBodyWithResponse request with any body
-	CreateAgentApiAgentsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error)
+	CreateAgentApiAgentsPostWithBodyWithResponse(ctx context.Context, params *CreateAgentApiAgentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error)
 
-	CreateAgentApiAgentsPostWithResponse(ctx context.Context, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error)
+	CreateAgentApiAgentsPostWithResponse(ctx context.Context, params *CreateAgentApiAgentsPostParams, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error)
 
 	// DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse request
-	DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error)
+	DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse(ctx context.Context, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error)
 
 	// GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse request
-	GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse, error)
+	GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse(ctx context.Context, criteriaId string, params *GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams, reqEditors ...RequestEditorFn) (*GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse, error)
 
 	// UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse request with any body
-	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error)
+	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse(ctx context.Context, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error)
 
-	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithResponse(ctx context.Context, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error)
+	UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithResponse(ctx context.Context, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error)
 
 	// ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetWithResponse request
 	ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetWithResponse(ctx context.Context, criteriaId string, params *ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams, reqEditors ...RequestEditorFn) (*ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetResponse, error)
@@ -12006,76 +14637,76 @@ type ClientWithResponsesInterface interface {
 	ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetWithResponse(ctx context.Context, criteriaId string, params *ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetResponse, error)
 
 	// CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse request with any body
-	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error)
+	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse(ctx context.Context, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error)
 
-	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithResponse(ctx context.Context, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error)
+	CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithResponse(ctx context.Context, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error)
 
 	// GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse request
-	GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse, error)
+	GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse(ctx context.Context, criteriaId string, params *GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams, reqEditors ...RequestEditorFn) (*GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse, error)
 
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse, error)
 
 	// SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse request with any body
-	SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error)
+	SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error)
 
-	SearchAgentRunsApiAgentsRunsSearchPostWithResponse(ctx context.Context, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error)
+	SearchAgentRunsApiAgentsRunsSearchPostWithResponse(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error)
 
 	// DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse request
-	DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error)
+	DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse(ctx context.Context, runId string, params *DeleteAgentRunApiAgentsRunsRunIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error)
 
 	// GetAgentRunApiAgentsRunsRunIdGetWithResponse request
 	GetAgentRunApiAgentsRunsRunIdGetWithResponse(ctx context.Context, runId string, params *GetAgentRunApiAgentsRunsRunIdGetParams, reqEditors ...RequestEditorFn) (*GetAgentRunApiAgentsRunsRunIdGetResponse, error)
 
 	// DeleteAgentApiAgentsAgentIdDeleteWithResponse request
-	DeleteAgentApiAgentsAgentIdDeleteWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*DeleteAgentApiAgentsAgentIdDeleteResponse, error)
+	DeleteAgentApiAgentsAgentIdDeleteWithResponse(ctx context.Context, agentId string, params *DeleteAgentApiAgentsAgentIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteAgentApiAgentsAgentIdDeleteResponse, error)
 
 	// GetAgentMetadataApiAgentsAgentIdGetWithResponse request
-	GetAgentMetadataApiAgentsAgentIdGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*GetAgentMetadataApiAgentsAgentIdGetResponse, error)
+	GetAgentMetadataApiAgentsAgentIdGetWithResponse(ctx context.Context, agentId string, params *GetAgentMetadataApiAgentsAgentIdGetParams, reqEditors ...RequestEditorFn) (*GetAgentMetadataApiAgentsAgentIdGetResponse, error)
 
 	// UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse request with any body
-	UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error)
+	UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse(ctx context.Context, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error)
 
-	UpdateAgentApiAgentsAgentIdPutWithResponse(ctx context.Context, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error)
+	UpdateAgentApiAgentsAgentIdPutWithResponse(ctx context.Context, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error)
 
 	// GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetWithResponse request
 	GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetWithResponse(ctx context.Context, agentId string, params *GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse, error)
 
 	// GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse request with any body
-	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error)
+	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse(ctx context.Context, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error)
 
-	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithResponse(ctx context.Context, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error)
+	GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithResponse(ctx context.Context, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error)
 
 	// GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse request with any body
-	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error)
+	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse(ctx context.Context, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error)
 
-	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithResponse(ctx context.Context, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error)
+	GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithResponse(ctx context.Context, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error)
 
 	// MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse request with any body
-	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, agentId string, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error)
+	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error)
 
-	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithResponse(ctx context.Context, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error)
+	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithResponse(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error)
 
 	// GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse request
-	GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error)
+	GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error)
 
 	// UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse request with any body
-	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error)
+	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error)
 
-	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithResponse(ctx context.Context, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error)
+	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithResponse(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error)
 
 	// ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse request
-	ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse, error)
+	ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse(ctx context.Context, agentId string, params *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse, error)
 
 	// CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse request with any body
-	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error)
+	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse(ctx context.Context, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error)
 
-	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithResponse(ctx context.Context, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error)
+	CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithResponse(ctx context.Context, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error)
 
 	// TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse request with any body
-	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error)
+	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse(ctx context.Context, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error)
 
-	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithResponse(ctx context.Context, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error)
+	TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithResponse(ctx context.Context, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error)
 
 	// ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetWithResponse request
 	ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, params *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse, error)
@@ -12084,67 +14715,67 @@ type ClientWithResponsesInterface interface {
 	ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetWithResponse(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse, error)
 
 	// ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse request
-	ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse(ctx context.Context, agentId string, uploadId string, reqEditors ...RequestEditorFn) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error)
+	ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse(ctx context.Context, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams, reqEditors ...RequestEditorFn) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error)
 
 	// ListAgentRunsApiAgentsAgentIdRunsGetWithResponse request
 	ListAgentRunsApiAgentsAgentIdRunsGetWithResponse(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*ListAgentRunsApiAgentsAgentIdRunsGetResponse, error)
 
 	// RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse request with any body
-	RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
+	RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse(ctx context.Context, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
 
-	RunAgentApiAgentsAgentIdRunsPostWithResponse(ctx context.Context, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
+	RunAgentApiAgentsAgentIdRunsPostWithResponse(ctx context.Context, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error)
 
 	// RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBodyWithResponse request with any body
-	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error)
+	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBodyWithResponse(ctx context.Context, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error)
 
-	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithResponse(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error)
+	RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithResponse(ctx context.Context, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error)
 
 	// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse request
-	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error)
+	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error)
 
 	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request
-	ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error)
+	ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error)
 
 	// ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse request with any body
-	ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error)
+	ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse(ctx context.Context, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error)
 
-	ApiAiFeedbackApiAiAssistantFeedbackPostWithResponse(ctx context.Context, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error)
+	ApiAiFeedbackApiAiAssistantFeedbackPostWithResponse(ctx context.Context, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error)
 
 	// ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse request with any body
-	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error)
+	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error)
 
-	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error)
+	ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error)
 
 	// ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse request with any body
-	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error)
+	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse(ctx context.Context, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error)
 
-	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithResponse(ctx context.Context, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error)
+	ApiAiMemoryBankApiAiAssistantMemoryBankPostWithResponse(ctx context.Context, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error)
 
 	// ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetWithResponse request
 	ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetWithResponse(ctx context.Context, params *ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse, error)
 
 	// ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse request with any body
-	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error)
+	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error)
 
-	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error)
+	ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error)
 
 	// ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse request with any body
-	ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error)
+	ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse(ctx context.Context, params *ApiAiSolutionApiAiAssistantSolutionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error)
 
-	ApiAiSolutionApiAiAssistantSolutionPostWithResponse(ctx context.Context, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error)
+	ApiAiSolutionApiAiAssistantSolutionPostWithResponse(ctx context.Context, params *ApiAiSolutionApiAiAssistantSolutionPostParams, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error)
 
 	// ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse request with any body
-	ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error)
+	ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, params *ApiAiSourceApiAiAssistantSourcePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error)
 
-	ApiAiSourceApiAiAssistantSourcePostWithResponse(ctx context.Context, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error)
+	ApiAiSourceApiAiAssistantSourcePostWithResponse(ctx context.Context, params *ApiAiSourceApiAiAssistantSourcePostParams, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error)
 
 	// ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse request with any body
-	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error)
+	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error)
 
-	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error)
+	ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error)
 
 	// ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse request
-	ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse, error)
+	ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse, error)
 
 	// ListAlertsApiAlertsGetWithResponse request
 	ListAlertsApiAlertsGetWithResponse(ctx context.Context, params *ListAlertsApiAlertsGetParams, reqEditors ...RequestEditorFn) (*ListAlertsApiAlertsGetResponse, error)
@@ -12153,166 +14784,169 @@ type ClientWithResponsesInterface interface {
 	ListAlertConfigsApiAlertsConfigsGetWithResponse(ctx context.Context, params *ListAlertConfigsApiAlertsConfigsGetParams, reqEditors ...RequestEditorFn) (*ListAlertConfigsApiAlertsConfigsGetResponse, error)
 
 	// CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse request with any body
-	CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error)
+	CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse(ctx context.Context, params *CreateAlertConfigApiAlertsConfigsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error)
 
-	CreateAlertConfigApiAlertsConfigsPostWithResponse(ctx context.Context, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error)
+	CreateAlertConfigApiAlertsConfigsPostWithResponse(ctx context.Context, params *CreateAlertConfigApiAlertsConfigsPostParams, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error)
 
 	// DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse request
-	DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse, error)
+	DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse(ctx context.Context, configId string, params *DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse, error)
 
 	// GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse request
-	GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*GetAlertConfigApiAlertsConfigsConfigIdGetResponse, error)
+	GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse(ctx context.Context, configId string, params *GetAlertConfigApiAlertsConfigsConfigIdGetParams, reqEditors ...RequestEditorFn) (*GetAlertConfigApiAlertsConfigsConfigIdGetResponse, error)
 
 	// UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse request with any body
-	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse(ctx context.Context, configId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error)
+	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse(ctx context.Context, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error)
 
-	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithResponse(ctx context.Context, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error)
+	UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithResponse(ctx context.Context, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error)
 
 	// ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetWithResponse request
 	ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetWithResponse(ctx context.Context, params *ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams, reqEditors ...RequestEditorFn) (*ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse, error)
 
 	// UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse request with any body
-	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error)
+	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error)
 
-	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error)
+	UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error)
 
 	// GetAlertDetailApiAlertsAlertIdGetWithResponse request
-	GetAlertDetailApiAlertsAlertIdGetWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*GetAlertDetailApiAlertsAlertIdGetResponse, error)
+	GetAlertDetailApiAlertsAlertIdGetWithResponse(ctx context.Context, alertId string, params *GetAlertDetailApiAlertsAlertIdGetParams, reqEditors ...RequestEditorFn) (*GetAlertDetailApiAlertsAlertIdGetResponse, error)
 
 	// AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse request with any body
-	AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error)
+	AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse(ctx context.Context, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error)
 
-	AddAlertCommentApiAlertsAlertIdCommentsPostWithResponse(ctx context.Context, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error)
+	AddAlertCommentApiAlertsAlertIdCommentsPostWithResponse(ctx context.Context, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error)
 
 	// ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse request with any body
-	ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error)
+	ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse(ctx context.Context, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error)
 
-	ChangeAlertStatusApiAlertsAlertIdStatusPostWithResponse(ctx context.Context, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error)
+	ChangeAlertStatusApiAlertsAlertIdStatusPostWithResponse(ctx context.Context, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error)
 
 	// SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse request
-	SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*SubscribeToAlertApiAlertsAlertIdSubscribePostResponse, error)
+	SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse(ctx context.Context, alertId string, params *SubscribeToAlertApiAlertsAlertIdSubscribePostParams, reqEditors ...RequestEditorFn) (*SubscribeToAlertApiAlertsAlertIdSubscribePostResponse, error)
 
 	// UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse request
-	UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse, error)
+	UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse(ctx context.Context, alertId string, params *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams, reqEditors ...RequestEditorFn) (*UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse, error)
 
 	// DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request
-	DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error)
+	DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error)
 
 	// GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse request
 	GetContentDetailApiContentsSourceConnectionContentVersionGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *GetContentDetailApiContentsSourceConnectionContentVersionGetParams, reqEditors ...RequestEditorFn) (*GetContentDetailApiContentsSourceConnectionContentVersionGetResponse, error)
 
 	// ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse request with any body
-	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error)
+	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error)
 
-	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithResponse(ctx context.Context, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error)
+	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error)
 
 	// ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse request
 	ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse, error)
 
 	// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse request with any body
-	UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse, error)
+	UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse, error)
 
 	// GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse request with any body
-	GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error)
+	GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error)
 
-	GovernanceAiGenerateApiGovernanceAiAssistantPostWithResponse(ctx context.Context, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error)
+	GovernanceAiGenerateApiGovernanceAiAssistantPostWithResponse(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error)
 
 	// ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetWithResponse request
 	ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetWithResponse(ctx context.Context, params *ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams, reqEditors ...RequestEditorFn) (*ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetResponse, error)
 
 	// GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse request
-	GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse, error)
+	GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams, reqEditors ...RequestEditorFn) (*GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse, error)
 
 	// GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse request
-	GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse, error)
+	GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse, error)
 
 	// ListKnowledgeBasesApiKnowledgeBasesGetWithResponse request
 	ListKnowledgeBasesApiKnowledgeBasesGetWithResponse(ctx context.Context, params *ListKnowledgeBasesApiKnowledgeBasesGetParams, reqEditors ...RequestEditorFn) (*ListKnowledgeBasesApiKnowledgeBasesGetResponse, error)
 
 	// CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse request with any body
-	CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error)
+	CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error)
 
-	CreateKnowledgeBaseApiKnowledgeBasesPostWithResponse(ctx context.Context, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error)
+	CreateKnowledgeBaseApiKnowledgeBasesPostWithResponse(ctx context.Context, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error)
 
 	// DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse request
-	DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse, error)
+	DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse(ctx context.Context, knowledgeBaseId string, params *DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse, error)
 
 	// GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse request
-	GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse, error)
+	GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse(ctx context.Context, knowledgeBaseId string, params *GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams, reqEditors ...RequestEditorFn) (*GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse, error)
 
 	// UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse request with any body
-	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse(ctx context.Context, knowledgeBaseId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
+	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
 
-	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse(ctx context.Context, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
+	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
+
+	// GetMeApiMeGetWithResponse request
+	GetMeApiMeGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMeApiMeGetResponse, error)
 
 	// ListMemoryBanksApiMemoryBanksGetWithResponse request
 	ListMemoryBanksApiMemoryBanksGetWithResponse(ctx context.Context, params *ListMemoryBanksApiMemoryBanksGetParams, reqEditors ...RequestEditorFn) (*ListMemoryBanksApiMemoryBanksGetResponse, error)
 
 	// CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse request with any body
-	CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error)
+	CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse(ctx context.Context, params *CreateMemoryBankApiMemoryBanksPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error)
 
-	CreateMemoryBankApiMemoryBanksPostWithResponse(ctx context.Context, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error)
+	CreateMemoryBankApiMemoryBanksPostWithResponse(ctx context.Context, params *CreateMemoryBankApiMemoryBanksPostParams, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error)
 
 	// MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse request with any body
-	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error)
+	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse(ctx context.Context, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error)
 
-	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithResponse(ctx context.Context, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error)
+	MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithResponse(ctx context.Context, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error)
 
 	// MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetWithResponse request
 	MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetWithResponse(ctx context.Context, params *MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams, reqEditors ...RequestEditorFn) (*MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetResponse, error)
 
 	// MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse request with any body
-	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error)
+	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error)
 
-	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error)
+	MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error)
 
 	// ListTemplatesApiMemoryBanksTemplatesGetWithResponse request
-	ListTemplatesApiMemoryBanksTemplatesGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTemplatesApiMemoryBanksTemplatesGetResponse, error)
+	ListTemplatesApiMemoryBanksTemplatesGetWithResponse(ctx context.Context, params *ListTemplatesApiMemoryBanksTemplatesGetParams, reqEditors ...RequestEditorFn) (*ListTemplatesApiMemoryBanksTemplatesGetResponse, error)
 
 	// TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse request with any body
-	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error)
+	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse(ctx context.Context, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error)
 
-	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithResponse(ctx context.Context, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error)
+	TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithResponse(ctx context.Context, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error)
 
 	// DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse request
-	DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse, error)
+	DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse(ctx context.Context, memoryBankId string, params *DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse, error)
 
 	// GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse request
-	GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse, error)
+	GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse(ctx context.Context, memoryBankId string, params *GetMemoryBankApiMemoryBanksMemoryBankIdGetParams, reqEditors ...RequestEditorFn) (*GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse, error)
 
 	// UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse request with any body
-	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error)
+	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse(ctx context.Context, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error)
 
-	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithResponse(ctx context.Context, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error)
+	UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithResponse(ctx context.Context, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error)
 
 	// GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse request
-	GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse, error)
+	GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse(ctx context.Context, memoryBankId string, params *GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams, reqEditors ...RequestEditorFn) (*GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse, error)
 
 	// CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse request
-	CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse, error)
+	CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse(ctx context.Context, memoryBankId string, params *CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams, reqEditors ...RequestEditorFn) (*CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse, error)
 
 	// DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse request
-	DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse, error)
+	DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse(ctx context.Context, memoryBankId string, params *DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams, reqEditors ...RequestEditorFn) (*DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse, error)
 
 	// GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetWithResponse request
 	GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetWithResponse(ctx context.Context, memoryBankId string, params *GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams, reqEditors ...RequestEditorFn) (*GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse, error)
 
 	// TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse request with any body
-	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error)
+	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error)
 
-	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithResponse(ctx context.Context, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error)
+	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithResponse(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error)
 
 	// ListAlertsApiModelsAlertsGetWithResponse request
 	ListAlertsApiModelsAlertsGetWithResponse(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*ListAlertsApiModelsAlertsGetResponse, error)
 
 	// MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse request
-	MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*MarkAllReadApiModelsAlertsMarkAllReadPostResponse, error)
+	MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse(ctx context.Context, params *MarkAllReadApiModelsAlertsMarkAllReadPostParams, reqEditors ...RequestEditorFn) (*MarkAllReadApiModelsAlertsMarkAllReadPostResponse, error)
 
 	// GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse request
-	GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse, error)
+	GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse(ctx context.Context, params *GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams, reqEditors ...RequestEditorFn) (*GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse, error)
 
 	// MarkReadApiModelsAlertsAlertIdReadPatchWithResponse request
-	MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error)
+	MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error)
 
 	// GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse request
 	GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse(ctx context.Context, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams, reqEditors ...RequestEditorFn) (*GetRecommendationsApiModelsModelIdRecommendationsGetResponse, error)
@@ -12324,149 +14958,149 @@ type ClientWithResponsesInterface interface {
 	ListSolutionsApiSolutionsGetWithResponse(ctx context.Context, params *ListSolutionsApiSolutionsGetParams, reqEditors ...RequestEditorFn) (*ListSolutionsApiSolutionsGetResponse, error)
 
 	// CreateSolutionApiSolutionsPostWithBodyWithResponse request with any body
-	CreateSolutionApiSolutionsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error)
+	CreateSolutionApiSolutionsPostWithBodyWithResponse(ctx context.Context, params *CreateSolutionApiSolutionsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error)
 
-	CreateSolutionApiSolutionsPostWithResponse(ctx context.Context, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error)
+	CreateSolutionApiSolutionsPostWithResponse(ctx context.Context, params *CreateSolutionApiSolutionsPostParams, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error)
 
 	// DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse request
-	DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSolutionApiSolutionsSolutionIdDeleteResponse, error)
+	DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *DeleteSolutionApiSolutionsSolutionIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteSolutionApiSolutionsSolutionIdDeleteResponse, error)
 
 	// GetSolutionApiSolutionsSolutionIdGetWithResponse request
-	GetSolutionApiSolutionsSolutionIdGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSolutionApiSolutionsSolutionIdGetResponse, error)
+	GetSolutionApiSolutionsSolutionIdGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *GetSolutionApiSolutionsSolutionIdGetParams, reqEditors ...RequestEditorFn) (*GetSolutionApiSolutionsSolutionIdGetResponse, error)
 
 	// UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse request with any body
-	UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error)
+	UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error)
 
-	UpdateSolutionApiSolutionsSolutionIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error)
+	UpdateSolutionApiSolutionsSolutionIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error)
 
 	// UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse request with any body
-	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error)
+	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error)
 
-	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error)
+	UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error)
 
 	// LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse request with any body
-	LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error)
+	LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error)
 
-	LinkAgentsApiSolutionsSolutionIdAgentsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error)
+	LinkAgentsApiSolutionsSolutionIdAgentsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error)
 
 	// AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse request with any body
-	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error)
+	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error)
 
-	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error)
+	AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error)
 
 	// AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse request with any body
-	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error)
+	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error)
 
-	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error)
+	AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error)
 
 	// AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse request with any body
-	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error)
+	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error)
 
-	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error)
+	AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error)
 
 	// AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse request with any body
-	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error)
+	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error)
 
-	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error)
+	AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error)
 
 	// AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse request
-	AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse, error)
+	AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse, error)
 
 	// ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse request
-	ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListConversationsApiSolutionsSolutionIdConversationsGetResponse, error)
+	ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *ListConversationsApiSolutionsSolutionIdConversationsGetParams, reqEditors ...RequestEditorFn) (*ListConversationsApiSolutionsSolutionIdConversationsGetResponse, error)
 
 	// AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse request with any body
-	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error)
+	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error)
 
-	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error)
+	AddConversationTurnApiSolutionsSolutionIdConversationsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error)
 
 	// MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse request with any body
-	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error)
+	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error)
 
-	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error)
+	MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error)
 
 	// UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse request with any body
-	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error)
+	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error)
 
-	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error)
+	UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error)
 
 	// LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse request with any body
-	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error)
+	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error)
 
-	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error)
+	LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error)
 
 	// UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse request with any body
-	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error)
+	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error)
 
-	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error)
+	UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error)
 
 	// LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse request with any body
-	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error)
+	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error)
 
-	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error)
+	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error)
 
 	// CreateSourceApiSourcesPostWithBodyWithResponse request with any body
-	CreateSourceApiSourcesPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error)
+	CreateSourceApiSourcesPostWithBodyWithResponse(ctx context.Context, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error)
 
-	CreateSourceApiSourcesPostWithResponse(ctx context.Context, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error)
+	CreateSourceApiSourcesPostWithResponse(ctx context.Context, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error)
 
 	// ListSourcesApiSourcesGetWithResponse request
 	ListSourcesApiSourcesGetWithResponse(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*ListSourcesApiSourcesGetResponse, error)
 
 	// DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse request
-	DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSourceApiSourcesSourceConnectionIdDeleteResponse, error)
+	DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *DeleteSourceApiSourcesSourceConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteSourceApiSourcesSourceConnectionIdDeleteResponse, error)
 
 	// GetSourceApiSourcesSourceConnectionIdGetWithResponse request
-	GetSourceApiSourcesSourceConnectionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceApiSourcesSourceConnectionIdGetResponse, error)
+	GetSourceApiSourcesSourceConnectionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceApiSourcesSourceConnectionIdGetParams, reqEditors ...RequestEditorFn) (*GetSourceApiSourcesSourceConnectionIdGetResponse, error)
 
 	// UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse request with any body
-	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error)
+	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error)
 
-	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error)
+	UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error)
 
 	// UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse request with any body
-	UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error)
+	UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error)
 
-	UpdateSourceApiSourcesSourceConnectionIdPutWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error)
+	UpdateSourceApiSourcesSourceConnectionIdPutWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error)
 
 	// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse request
-	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error)
+	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error)
 
 	// StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse request with any body
-	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error)
+	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error)
 
-	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error)
+	StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error)
 
 	// CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse request
-	CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse, error)
+	CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams, reqEditors ...RequestEditorFn) (*CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse, error)
 
 	// ListSourceExportsApiSourcesSourceConnectionIdExportsGetWithResponse request
 	ListSourceExportsApiSourcesSourceConnectionIdExportsGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams, reqEditors ...RequestEditorFn) (*ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse, error)
 
 	// CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse request with any body
-	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error)
+	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error)
 
-	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error)
+	CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error)
 
 	// EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse request with any body
-	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error)
+	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error)
 
-	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error)
+	EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error)
 
 	// DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse request
-	DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse, error)
+	DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse, error)
 
 	// GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse request
-	GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse, error)
+	GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams, reqEditors ...RequestEditorFn) (*GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse, error)
 
 	// CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse request
-	CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse, error)
+	CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams, reqEditors ...RequestEditorFn) (*CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse, error)
 
 	// DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse request
-	DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse, error)
+	DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams, reqEditors ...RequestEditorFn) (*DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse, error)
 
 	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse request with any body
-	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error)
+	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, params *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error)
 }
 
 type ListAgentsApiAgentsGetResponse struct {
@@ -13252,7 +15886,7 @@ func (r ApiAiFeedbackApiAiAssistantFeedbackPostResponse) StatusCode() int {
 type ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -13275,7 +15909,7 @@ func (r ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse) StatusCode() 
 type ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+	JSON200      *MemoryBankAiAssistantResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -13344,7 +15978,7 @@ func (r ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse
 type ApiAiSolutionApiAiAssistantSolutionPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -13367,7 +16001,7 @@ func (r ApiAiSolutionApiAiAssistantSolutionPostResponse) StatusCode() int {
 type ApiAiSourceApiAiAssistantSourcePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -13390,7 +16024,7 @@ func (r ApiAiSourceApiAiAssistantSourcePostResponse) StatusCode() int {
 type ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiSolutionsAiAssistantAcceptResponse
+	JSON200      *AiAssistantAcceptResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -13847,7 +16481,7 @@ func (r UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRe
 type GovernanceAiGenerateApiGovernanceAiAssistantPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiGovernanceGovernanceAiAssistantResponse
+	JSON200      *GovernanceAiAssistantResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -13893,7 +16527,7 @@ func (r ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetRes
 type GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiGovernanceGovernanceAiAcceptResponse
+	JSON200      *GovernanceAiAcceptResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -14049,6 +16683,28 @@ func (r UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse) StatusCo
 	return 0
 }
 
+type GetMeApiMeGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MeResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMeApiMeGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMeApiMeGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListMemoryBanksApiMemoryBanksGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14098,7 +16754,7 @@ func (r CreateMemoryBankApiMemoryBanksPostResponse) StatusCode() int {
 type MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+	JSON200      *MemoryBankAiAssistantResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -14688,7 +17344,7 @@ func (r LinkAgentsApiSolutionsSolutionIdAgentsPostResponse) StatusCode() int {
 type AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -14711,7 +17367,7 @@ func (r AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse
 type AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -14734,7 +17390,7 @@ func (r AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePo
 type AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiSolutionsAiAssistantGenerateResponse
+	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -14757,7 +17413,7 @@ func (r AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse) St
 type AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *RoutersApiSolutionsAiAssistantAcceptResponse
+	JSON200      *AiAssistantAcceptResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -15358,16 +18014,16 @@ func (c *ClientWithResponses) ListAgentsApiAgentsGetWithResponse(ctx context.Con
 }
 
 // CreateAgentApiAgentsPostWithBodyWithResponse request with arbitrary body returning *CreateAgentApiAgentsPostResponse
-func (c *ClientWithResponses) CreateAgentApiAgentsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error) {
-	rsp, err := c.CreateAgentApiAgentsPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateAgentApiAgentsPostWithBodyWithResponse(ctx context.Context, params *CreateAgentApiAgentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error) {
+	rsp, err := c.CreateAgentApiAgentsPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateAgentApiAgentsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateAgentApiAgentsPostWithResponse(ctx context.Context, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error) {
-	rsp, err := c.CreateAgentApiAgentsPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateAgentApiAgentsPostWithResponse(ctx context.Context, params *CreateAgentApiAgentsPostParams, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error) {
+	rsp, err := c.CreateAgentApiAgentsPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15375,8 +18031,8 @@ func (c *ClientWithResponses) CreateAgentApiAgentsPostWithResponse(ctx context.C
 }
 
 // DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse request returning *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse
-func (c *ClientWithResponses) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error) {
-	rsp, err := c.DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx, criteriaId, reqEditors...)
+func (c *ClientWithResponses) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse(ctx context.Context, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error) {
+	rsp, err := c.DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx, criteriaId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15384,8 +18040,8 @@ func (c *ClientWithResponses) DeleteEvaluationCriteriaApiAgentsEvaluationCriteri
 }
 
 // GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse request returning *GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse
-func (c *ClientWithResponses) GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse, error) {
-	rsp, err := c.GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx, criteriaId, reqEditors...)
+func (c *ClientWithResponses) GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetWithResponse(ctx context.Context, criteriaId string, params *GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams, reqEditors ...RequestEditorFn) (*GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse, error) {
+	rsp, err := c.GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet(ctx, criteriaId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15393,16 +18049,16 @@ func (c *ClientWithResponses) GetEvaluationCriteriaApiAgentsEvaluationCriteriaCr
 }
 
 // UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse request with arbitrary body returning *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse
-func (c *ClientWithResponses) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error) {
-	rsp, err := c.UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx, criteriaId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBodyWithResponse(ctx context.Context, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error) {
+	rsp, err := c.UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithBody(ctx, criteriaId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithResponse(ctx context.Context, criteriaId string, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error) {
-	rsp, err := c.UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx, criteriaId, body, reqEditors...)
+func (c *ClientWithResponses) UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchWithResponse(ctx context.Context, criteriaId string, params *UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams, body UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse, error) {
+	rsp, err := c.UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch(ctx, criteriaId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15428,16 +18084,16 @@ func (c *ClientWithResponses) ListEvaluationResultsApiAgentsEvaluationCriteriaCr
 }
 
 // CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse request with arbitrary body returning *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse
-func (c *ClientWithResponses) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse(ctx context.Context, criteriaId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error) {
-	rsp, err := c.CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx, criteriaId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBodyWithResponse(ctx context.Context, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error) {
+	rsp, err := c.CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithBody(ctx, criteriaId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithResponse(ctx context.Context, criteriaId string, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error) {
-	rsp, err := c.CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx, criteriaId, body, reqEditors...)
+func (c *ClientWithResponses) CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostWithResponse(ctx context.Context, criteriaId string, params *CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams, body CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostResponse, error) {
+	rsp, err := c.CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost(ctx, criteriaId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15445,8 +18101,8 @@ func (c *ClientWithResponses) CreateEvaluationResultApiAgentsEvaluationCriteriaC
 }
 
 // GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse request returning *GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse
-func (c *ClientWithResponses) GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse(ctx context.Context, criteriaId string, reqEditors ...RequestEditorFn) (*GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse, error) {
-	rsp, err := c.GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx, criteriaId, reqEditors...)
+func (c *ClientWithResponses) GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetWithResponse(ctx context.Context, criteriaId string, params *GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams, reqEditors ...RequestEditorFn) (*GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse, error) {
+	rsp, err := c.GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet(ctx, criteriaId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15463,16 +18119,16 @@ func (c *ClientWithResponses) GetNonManualEvaluationSummaryApiAgentsEvaluationRe
 }
 
 // SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse request with arbitrary body returning *SearchAgentRunsApiAgentsRunsSearchPostResponse
-func (c *ClientWithResponses) SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
-	rsp, err := c.SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
+	rsp, err := c.SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseSearchAgentRunsApiAgentsRunsSearchPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) SearchAgentRunsApiAgentsRunsSearchPostWithResponse(ctx context.Context, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
-	rsp, err := c.SearchAgentRunsApiAgentsRunsSearchPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) SearchAgentRunsApiAgentsRunsSearchPostWithResponse(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, body SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
+	rsp, err := c.SearchAgentRunsApiAgentsRunsSearchPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15480,8 +18136,8 @@ func (c *ClientWithResponses) SearchAgentRunsApiAgentsRunsSearchPostWithResponse
 }
 
 // DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse request returning *DeleteAgentRunApiAgentsRunsRunIdDeleteResponse
-func (c *ClientWithResponses) DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse(ctx context.Context, runId string, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error) {
-	rsp, err := c.DeleteAgentRunApiAgentsRunsRunIdDelete(ctx, runId, reqEditors...)
+func (c *ClientWithResponses) DeleteAgentRunApiAgentsRunsRunIdDeleteWithResponse(ctx context.Context, runId string, params *DeleteAgentRunApiAgentsRunsRunIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteAgentRunApiAgentsRunsRunIdDeleteResponse, error) {
+	rsp, err := c.DeleteAgentRunApiAgentsRunsRunIdDelete(ctx, runId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15498,8 +18154,8 @@ func (c *ClientWithResponses) GetAgentRunApiAgentsRunsRunIdGetWithResponse(ctx c
 }
 
 // DeleteAgentApiAgentsAgentIdDeleteWithResponse request returning *DeleteAgentApiAgentsAgentIdDeleteResponse
-func (c *ClientWithResponses) DeleteAgentApiAgentsAgentIdDeleteWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*DeleteAgentApiAgentsAgentIdDeleteResponse, error) {
-	rsp, err := c.DeleteAgentApiAgentsAgentIdDelete(ctx, agentId, reqEditors...)
+func (c *ClientWithResponses) DeleteAgentApiAgentsAgentIdDeleteWithResponse(ctx context.Context, agentId string, params *DeleteAgentApiAgentsAgentIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteAgentApiAgentsAgentIdDeleteResponse, error) {
+	rsp, err := c.DeleteAgentApiAgentsAgentIdDelete(ctx, agentId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15507,8 +18163,8 @@ func (c *ClientWithResponses) DeleteAgentApiAgentsAgentIdDeleteWithResponse(ctx 
 }
 
 // GetAgentMetadataApiAgentsAgentIdGetWithResponse request returning *GetAgentMetadataApiAgentsAgentIdGetResponse
-func (c *ClientWithResponses) GetAgentMetadataApiAgentsAgentIdGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*GetAgentMetadataApiAgentsAgentIdGetResponse, error) {
-	rsp, err := c.GetAgentMetadataApiAgentsAgentIdGet(ctx, agentId, reqEditors...)
+func (c *ClientWithResponses) GetAgentMetadataApiAgentsAgentIdGetWithResponse(ctx context.Context, agentId string, params *GetAgentMetadataApiAgentsAgentIdGetParams, reqEditors ...RequestEditorFn) (*GetAgentMetadataApiAgentsAgentIdGetResponse, error) {
+	rsp, err := c.GetAgentMetadataApiAgentsAgentIdGet(ctx, agentId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15516,16 +18172,16 @@ func (c *ClientWithResponses) GetAgentMetadataApiAgentsAgentIdGetWithResponse(ct
 }
 
 // UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse request with arbitrary body returning *UpdateAgentApiAgentsAgentIdPutResponse
-func (c *ClientWithResponses) UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error) {
-	rsp, err := c.UpdateAgentApiAgentsAgentIdPutWithBody(ctx, agentId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateAgentApiAgentsAgentIdPutWithBodyWithResponse(ctx context.Context, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error) {
+	rsp, err := c.UpdateAgentApiAgentsAgentIdPutWithBody(ctx, agentId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateAgentApiAgentsAgentIdPutResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateAgentApiAgentsAgentIdPutWithResponse(ctx context.Context, agentId string, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error) {
-	rsp, err := c.UpdateAgentApiAgentsAgentIdPut(ctx, agentId, body, reqEditors...)
+func (c *ClientWithResponses) UpdateAgentApiAgentsAgentIdPutWithResponse(ctx context.Context, agentId string, params *UpdateAgentApiAgentsAgentIdPutParams, body UpdateAgentApiAgentsAgentIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentApiAgentsAgentIdPutResponse, error) {
+	rsp, err := c.UpdateAgentApiAgentsAgentIdPut(ctx, agentId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15542,16 +18198,16 @@ func (c *ClientWithResponses) GetAiConversationHistoryApiAgentsAgentIdAiAssistan
 }
 
 // GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse request with arbitrary body returning *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse
-func (c *ClientWithResponses) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error) {
-	rsp, err := c.GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBodyWithResponse(ctx context.Context, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error) {
+	rsp, err := c.GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithBody(ctx, agentId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithResponse(ctx context.Context, agentId string, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error) {
-	rsp, err := c.GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx, agentId, body, reqEditors...)
+func (c *ClientWithResponses) GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostWithResponse(ctx context.Context, agentId string, params *GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams, body GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse, error) {
+	rsp, err := c.GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost(ctx, agentId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15559,16 +18215,16 @@ func (c *ClientWithResponses) GenerateAgentStepsApiAgentsAgentIdAiAssistantGener
 }
 
 // GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse request with arbitrary body returning *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse
-func (c *ClientWithResponses) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error) {
-	rsp, err := c.GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBodyWithResponse(ctx context.Context, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error) {
+	rsp, err := c.GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithBody(ctx, agentId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithResponse(ctx context.Context, agentId string, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error) {
-	rsp, err := c.GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx, agentId, body, reqEditors...)
+func (c *ClientWithResponses) GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostWithResponse(ctx context.Context, agentId string, params *GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams, body GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse, error) {
+	rsp, err := c.GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost(ctx, agentId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15576,16 +18232,16 @@ func (c *ClientWithResponses) GenerateStepConfigApiAgentsAgentIdAiAssistantStepC
 }
 
 // MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse request with arbitrary body returning *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse
-func (c *ClientWithResponses) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, agentId string, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error) {
-	rsp, err := c.MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx, agentId, conversationId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error) {
+	rsp, err := c.MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx, agentId, conversationId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse(rsp)
 }
 
-func (c *ClientWithResponses) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithResponse(ctx context.Context, agentId string, conversationId string, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error) {
-	rsp, err := c.MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx, agentId, conversationId, body, reqEditors...)
+func (c *ClientWithResponses) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithResponse(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error) {
+	rsp, err := c.MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx, agentId, conversationId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15593,8 +18249,8 @@ func (c *ClientWithResponses) MarkAiSuggestionApiAgentsAgentIdAiAssistantConvers
 }
 
 // GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse request returning *GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse
-func (c *ClientWithResponses) GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error) {
-	rsp, err := c.GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx, agentId, reqEditors...)
+func (c *ClientWithResponses) GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error) {
+	rsp, err := c.GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx, agentId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15602,16 +18258,16 @@ func (c *ClientWithResponses) GetAgentDefinitionApiAgentsAgentIdDefinitionGetWit
 }
 
 // UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse request with arbitrary body returning *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse
-func (c *ClientWithResponses) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error) {
-	rsp, err := c.UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx, agentId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error) {
+	rsp, err := c.UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx, agentId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithResponse(ctx context.Context, agentId string, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error) {
-	rsp, err := c.UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx, agentId, body, reqEditors...)
+func (c *ClientWithResponses) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithResponse(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error) {
+	rsp, err := c.UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx, agentId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15619,8 +18275,8 @@ func (c *ClientWithResponses) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut
 }
 
 // ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse request returning *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse
-func (c *ClientWithResponses) ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse, error) {
-	rsp, err := c.ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx, agentId, reqEditors...)
+func (c *ClientWithResponses) ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse(ctx context.Context, agentId string, params *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse, error) {
+	rsp, err := c.ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx, agentId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15628,16 +18284,16 @@ func (c *ClientWithResponses) ListEvaluationCriteriaApiAgentsAgentIdEvaluationCr
 }
 
 // CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse request with arbitrary body returning *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse
-func (c *ClientWithResponses) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error) {
-	rsp, err := c.CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBodyWithResponse(ctx context.Context, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error) {
+	rsp, err := c.CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithBody(ctx, agentId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithResponse(ctx context.Context, agentId string, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error) {
-	rsp, err := c.CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx, agentId, body, reqEditors...)
+func (c *ClientWithResponses) CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostWithResponse(ctx context.Context, agentId string, params *CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams, body CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse, error) {
+	rsp, err := c.CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost(ctx, agentId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15645,16 +18301,16 @@ func (c *ClientWithResponses) CreateEvaluationCriteriaApiAgentsAgentIdEvaluation
 }
 
 // TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse request with arbitrary body returning *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse
-func (c *ClientWithResponses) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error) {
-	rsp, err := c.TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBodyWithResponse(ctx context.Context, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error) {
+	rsp, err := c.TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithBody(ctx, agentId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithResponse(ctx context.Context, agentId string, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error) {
-	rsp, err := c.TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx, agentId, body, reqEditors...)
+func (c *ClientWithResponses) TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostWithResponse(ctx context.Context, agentId string, params *TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams, body TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse, error) {
+	rsp, err := c.TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost(ctx, agentId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15680,8 +18336,8 @@ func (c *ClientWithResponses) ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGe
 }
 
 // ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse request returning *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse
-func (c *ClientWithResponses) ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse(ctx context.Context, agentId string, uploadId string, reqEditors ...RequestEditorFn) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error) {
-	rsp, err := c.ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx, agentId, uploadId, reqEditors...)
+func (c *ClientWithResponses) ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse(ctx context.Context, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams, reqEditors ...RequestEditorFn) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error) {
+	rsp, err := c.ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx, agentId, uploadId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15698,16 +18354,16 @@ func (c *ClientWithResponses) ListAgentRunsApiAgentsAgentIdRunsGetWithResponse(c
 }
 
 // RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse request with arbitrary body returning *RunAgentApiAgentsAgentIdRunsPostResponse
-func (c *ClientWithResponses) RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error) {
-	rsp, err := c.RunAgentApiAgentsAgentIdRunsPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) RunAgentApiAgentsAgentIdRunsPostWithBodyWithResponse(ctx context.Context, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error) {
+	rsp, err := c.RunAgentApiAgentsAgentIdRunsPostWithBody(ctx, agentId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseRunAgentApiAgentsAgentIdRunsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) RunAgentApiAgentsAgentIdRunsPostWithResponse(ctx context.Context, agentId string, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error) {
-	rsp, err := c.RunAgentApiAgentsAgentIdRunsPost(ctx, agentId, body, reqEditors...)
+func (c *ClientWithResponses) RunAgentApiAgentsAgentIdRunsPostWithResponse(ctx context.Context, agentId string, params *RunAgentApiAgentsAgentIdRunsPostParams, body RunAgentApiAgentsAgentIdRunsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunAgentApiAgentsAgentIdRunsPostResponse, error) {
+	rsp, err := c.RunAgentApiAgentsAgentIdRunsPost(ctx, agentId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15715,16 +18371,16 @@ func (c *ClientWithResponses) RunAgentApiAgentsAgentIdRunsPostWithResponse(ctx c
 }
 
 // RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBodyWithResponse request with arbitrary body returning *RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse
-func (c *ClientWithResponses) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error) {
-	rsp, err := c.RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx, agentId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBodyWithResponse(ctx context.Context, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error) {
+	rsp, err := c.RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithBody(ctx, agentId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseRunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithResponse(ctx context.Context, agentId string, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error) {
-	rsp, err := c.RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx, agentId, body, reqEditors...)
+func (c *ClientWithResponses) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWithResponse(ctx context.Context, agentId string, params *RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams, body RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody, reqEditors ...RequestEditorFn) (*RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse, error) {
+	rsp, err := c.RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx, agentId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15732,8 +18388,8 @@ func (c *ClientWithResponses) RunStreamingAgentApiAgentsAgentIdRunsStreamPostWit
 }
 
 // ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse request returning *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse
-func (c *ClientWithResponses) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, runId string, reqEditors ...RequestEditorFn) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error) {
-	rsp, err := c.ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx, agentId, runId, reqEditors...)
+func (c *ClientWithResponses) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error) {
+	rsp, err := c.ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx, agentId, runId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15741,8 +18397,8 @@ func (c *ClientWithResponses) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdE
 }
 
 // ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request returning *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse
-func (c *ClientWithResponses) ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error) {
-	rsp, err := c.ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx, agentId, reqEditors...)
+func (c *ClientWithResponses) ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error) {
+	rsp, err := c.ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx, agentId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15750,16 +18406,16 @@ func (c *ClientWithResponses) ApiUploadAgentInputApiAgentsAgentIdUploadInputPost
 }
 
 // ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse request with arbitrary body returning *ApiAiFeedbackApiAiAssistantFeedbackPostResponse
-func (c *ClientWithResponses) ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error) {
-	rsp, err := c.ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiFeedbackApiAiAssistantFeedbackPostWithBodyWithResponse(ctx context.Context, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error) {
+	rsp, err := c.ApiAiFeedbackApiAiAssistantFeedbackPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseApiAiFeedbackApiAiAssistantFeedbackPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) ApiAiFeedbackApiAiAssistantFeedbackPostWithResponse(ctx context.Context, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error) {
-	rsp, err := c.ApiAiFeedbackApiAiAssistantFeedbackPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiFeedbackApiAiAssistantFeedbackPostWithResponse(ctx context.Context, params *ApiAiFeedbackApiAiAssistantFeedbackPostParams, body ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiFeedbackApiAiAssistantFeedbackPostResponse, error) {
+	rsp, err := c.ApiAiFeedbackApiAiAssistantFeedbackPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15767,16 +18423,16 @@ func (c *ClientWithResponses) ApiAiFeedbackApiAiAssistantFeedbackPostWithRespons
 }
 
 // ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse request with arbitrary body returning *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse
-func (c *ClientWithResponses) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error) {
-	rsp, err := c.ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error) {
+	rsp, err := c.ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse(rsp)
 }
 
-func (c *ClientWithResponses) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error) {
-	rsp, err := c.ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, params *ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams, body ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse, error) {
+	rsp, err := c.ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15784,16 +18440,16 @@ func (c *ClientWithResponses) ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostW
 }
 
 // ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse request with arbitrary body returning *ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse
-func (c *ClientWithResponses) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error) {
-	rsp, err := c.ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBodyWithResponse(ctx context.Context, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error) {
+	rsp, err := c.ApiAiMemoryBankApiAiAssistantMemoryBankPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseApiAiMemoryBankApiAiAssistantMemoryBankPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithResponse(ctx context.Context, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error) {
-	rsp, err := c.ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiMemoryBankApiAiAssistantMemoryBankPostWithResponse(ctx context.Context, params *ApiAiMemoryBankApiAiAssistantMemoryBankPostParams, body ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse, error) {
+	rsp, err := c.ApiAiMemoryBankApiAiAssistantMemoryBankPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15810,16 +18466,16 @@ func (c *ClientWithResponses) ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLast
 }
 
 // ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse request with arbitrary body returning *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse
-func (c *ClientWithResponses) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error) {
-	rsp, err := c.ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx, conversationId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error) {
+	rsp, err := c.ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithBody(ctx, conversationId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse(rsp)
 }
 
-func (c *ClientWithResponses) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error) {
-	rsp, err := c.ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx, conversationId, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams, body ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse, error) {
+	rsp, err := c.ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch(ctx, conversationId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15827,16 +18483,16 @@ func (c *ClientWithResponses) ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConve
 }
 
 // ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse request with arbitrary body returning *ApiAiSolutionApiAiAssistantSolutionPostResponse
-func (c *ClientWithResponses) ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error) {
-	rsp, err := c.ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiSolutionApiAiAssistantSolutionPostWithBodyWithResponse(ctx context.Context, params *ApiAiSolutionApiAiAssistantSolutionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error) {
+	rsp, err := c.ApiAiSolutionApiAiAssistantSolutionPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseApiAiSolutionApiAiAssistantSolutionPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) ApiAiSolutionApiAiAssistantSolutionPostWithResponse(ctx context.Context, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error) {
-	rsp, err := c.ApiAiSolutionApiAiAssistantSolutionPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiSolutionApiAiAssistantSolutionPostWithResponse(ctx context.Context, params *ApiAiSolutionApiAiAssistantSolutionPostParams, body ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSolutionApiAiAssistantSolutionPostResponse, error) {
+	rsp, err := c.ApiAiSolutionApiAiAssistantSolutionPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15844,16 +18500,16 @@ func (c *ClientWithResponses) ApiAiSolutionApiAiAssistantSolutionPostWithRespons
 }
 
 // ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse request with arbitrary body returning *ApiAiSourceApiAiAssistantSourcePostResponse
-func (c *ClientWithResponses) ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error) {
-	rsp, err := c.ApiAiSourceApiAiAssistantSourcePostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiSourceApiAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, params *ApiAiSourceApiAiAssistantSourcePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error) {
+	rsp, err := c.ApiAiSourceApiAiAssistantSourcePostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseApiAiSourceApiAiAssistantSourcePostResponse(rsp)
 }
 
-func (c *ClientWithResponses) ApiAiSourceApiAiAssistantSourcePostWithResponse(ctx context.Context, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error) {
-	rsp, err := c.ApiAiSourceApiAiAssistantSourcePost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiSourceApiAiAssistantSourcePostWithResponse(ctx context.Context, params *ApiAiSourceApiAiAssistantSourcePostParams, body ApiAiSourceApiAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiSourceApiAiAssistantSourcePostResponse, error) {
+	rsp, err := c.ApiAiSourceApiAiAssistantSourcePost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15861,16 +18517,16 @@ func (c *ClientWithResponses) ApiAiSourceApiAiAssistantSourcePostWithResponse(ct
 }
 
 // ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse request with arbitrary body returning *ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse
-func (c *ClientWithResponses) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error) {
-	rsp, err := c.ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx, conversationId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithBody(ctx, conversationId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error) {
-	rsp, err := c.ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx, conversationId, body, reqEditors...)
+func (c *ClientWithResponses) ApiAiAcceptApiAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams, body ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.ApiAiAcceptApiAiAssistantConversationIdAcceptPost(ctx, conversationId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15878,8 +18534,8 @@ func (c *ClientWithResponses) ApiAiAcceptApiAiAssistantConversationIdAcceptPostW
 }
 
 // ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse request returning *ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse
-func (c *ClientWithResponses) ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse, error) {
-	rsp, err := c.ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx, conversationId, reqEditors...)
+func (c *ClientWithResponses) ApiAiDeclineApiAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse, error) {
+	rsp, err := c.ApiAiDeclineApiAiAssistantConversationIdDeclinePost(ctx, conversationId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15905,16 +18561,16 @@ func (c *ClientWithResponses) ListAlertConfigsApiAlertsConfigsGetWithResponse(ct
 }
 
 // CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse request with arbitrary body returning *CreateAlertConfigApiAlertsConfigsPostResponse
-func (c *ClientWithResponses) CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error) {
-	rsp, err := c.CreateAlertConfigApiAlertsConfigsPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateAlertConfigApiAlertsConfigsPostWithBodyWithResponse(ctx context.Context, params *CreateAlertConfigApiAlertsConfigsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error) {
+	rsp, err := c.CreateAlertConfigApiAlertsConfigsPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateAlertConfigApiAlertsConfigsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateAlertConfigApiAlertsConfigsPostWithResponse(ctx context.Context, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error) {
-	rsp, err := c.CreateAlertConfigApiAlertsConfigsPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateAlertConfigApiAlertsConfigsPostWithResponse(ctx context.Context, params *CreateAlertConfigApiAlertsConfigsPostParams, body CreateAlertConfigApiAlertsConfigsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAlertConfigApiAlertsConfigsPostResponse, error) {
+	rsp, err := c.CreateAlertConfigApiAlertsConfigsPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15922,8 +18578,8 @@ func (c *ClientWithResponses) CreateAlertConfigApiAlertsConfigsPostWithResponse(
 }
 
 // DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse request returning *DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse
-func (c *ClientWithResponses) DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse, error) {
-	rsp, err := c.DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx, configId, reqEditors...)
+func (c *ClientWithResponses) DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWithResponse(ctx context.Context, configId string, params *DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse, error) {
+	rsp, err := c.DeleteAlertConfigApiAlertsConfigsConfigIdDelete(ctx, configId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15931,8 +18587,8 @@ func (c *ClientWithResponses) DeleteAlertConfigApiAlertsConfigsConfigIdDeleteWit
 }
 
 // GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse request returning *GetAlertConfigApiAlertsConfigsConfigIdGetResponse
-func (c *ClientWithResponses) GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse(ctx context.Context, configId string, reqEditors ...RequestEditorFn) (*GetAlertConfigApiAlertsConfigsConfigIdGetResponse, error) {
-	rsp, err := c.GetAlertConfigApiAlertsConfigsConfigIdGet(ctx, configId, reqEditors...)
+func (c *ClientWithResponses) GetAlertConfigApiAlertsConfigsConfigIdGetWithResponse(ctx context.Context, configId string, params *GetAlertConfigApiAlertsConfigsConfigIdGetParams, reqEditors ...RequestEditorFn) (*GetAlertConfigApiAlertsConfigsConfigIdGetResponse, error) {
+	rsp, err := c.GetAlertConfigApiAlertsConfigsConfigIdGet(ctx, configId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15940,16 +18596,16 @@ func (c *ClientWithResponses) GetAlertConfigApiAlertsConfigsConfigIdGetWithRespo
 }
 
 // UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse request with arbitrary body returning *UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse
-func (c *ClientWithResponses) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse(ctx context.Context, configId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error) {
-	rsp, err := c.UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx, configId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBodyWithResponse(ctx context.Context, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error) {
+	rsp, err := c.UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithBody(ctx, configId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithResponse(ctx context.Context, configId string, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error) {
-	rsp, err := c.UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx, configId, body, reqEditors...)
+func (c *ClientWithResponses) UpdateAlertConfigApiAlertsConfigsConfigIdPatchWithResponse(ctx context.Context, configId string, params *UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams, body UpdateAlertConfigApiAlertsConfigsConfigIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse, error) {
+	rsp, err := c.UpdateAlertConfigApiAlertsConfigsConfigIdPatch(ctx, configId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15966,16 +18622,16 @@ func (c *ClientWithResponses) ListOrganizationPreferencesApiAlertsOrganizationPr
 }
 
 // UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse request with arbitrary body returning *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse
-func (c *ClientWithResponses) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error) {
-	rsp, err := c.UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx, organizationId, alertType, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBodyWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error) {
+	rsp, err := c.UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithBody(ctx, organizationId, alertType, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error) {
-	rsp, err := c.UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx, organizationId, alertType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchWithResponse(ctx context.Context, organizationId openapi_types.UUID, alertType string, params *UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams, body UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchResponse, error) {
+	rsp, err := c.UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch(ctx, organizationId, alertType, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15983,8 +18639,8 @@ func (c *ClientWithResponses) UpdateOrganizationPreferenceApiAlertsOrganizationP
 }
 
 // GetAlertDetailApiAlertsAlertIdGetWithResponse request returning *GetAlertDetailApiAlertsAlertIdGetResponse
-func (c *ClientWithResponses) GetAlertDetailApiAlertsAlertIdGetWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*GetAlertDetailApiAlertsAlertIdGetResponse, error) {
-	rsp, err := c.GetAlertDetailApiAlertsAlertIdGet(ctx, alertId, reqEditors...)
+func (c *ClientWithResponses) GetAlertDetailApiAlertsAlertIdGetWithResponse(ctx context.Context, alertId string, params *GetAlertDetailApiAlertsAlertIdGetParams, reqEditors ...RequestEditorFn) (*GetAlertDetailApiAlertsAlertIdGetResponse, error) {
+	rsp, err := c.GetAlertDetailApiAlertsAlertIdGet(ctx, alertId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -15992,16 +18648,16 @@ func (c *ClientWithResponses) GetAlertDetailApiAlertsAlertIdGetWithResponse(ctx 
 }
 
 // AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse request with arbitrary body returning *AddAlertCommentApiAlertsAlertIdCommentsPostResponse
-func (c *ClientWithResponses) AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error) {
-	rsp, err := c.AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx, alertId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) AddAlertCommentApiAlertsAlertIdCommentsPostWithBodyWithResponse(ctx context.Context, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error) {
+	rsp, err := c.AddAlertCommentApiAlertsAlertIdCommentsPostWithBody(ctx, alertId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseAddAlertCommentApiAlertsAlertIdCommentsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) AddAlertCommentApiAlertsAlertIdCommentsPostWithResponse(ctx context.Context, alertId string, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error) {
-	rsp, err := c.AddAlertCommentApiAlertsAlertIdCommentsPost(ctx, alertId, body, reqEditors...)
+func (c *ClientWithResponses) AddAlertCommentApiAlertsAlertIdCommentsPostWithResponse(ctx context.Context, alertId string, params *AddAlertCommentApiAlertsAlertIdCommentsPostParams, body AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddAlertCommentApiAlertsAlertIdCommentsPostResponse, error) {
+	rsp, err := c.AddAlertCommentApiAlertsAlertIdCommentsPost(ctx, alertId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16009,16 +18665,16 @@ func (c *ClientWithResponses) AddAlertCommentApiAlertsAlertIdCommentsPostWithRes
 }
 
 // ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse request with arbitrary body returning *ChangeAlertStatusApiAlertsAlertIdStatusPostResponse
-func (c *ClientWithResponses) ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse(ctx context.Context, alertId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error) {
-	rsp, err := c.ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx, alertId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ChangeAlertStatusApiAlertsAlertIdStatusPostWithBodyWithResponse(ctx context.Context, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error) {
+	rsp, err := c.ChangeAlertStatusApiAlertsAlertIdStatusPostWithBody(ctx, alertId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseChangeAlertStatusApiAlertsAlertIdStatusPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) ChangeAlertStatusApiAlertsAlertIdStatusPostWithResponse(ctx context.Context, alertId string, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error) {
-	rsp, err := c.ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx, alertId, body, reqEditors...)
+func (c *ClientWithResponses) ChangeAlertStatusApiAlertsAlertIdStatusPostWithResponse(ctx context.Context, alertId string, params *ChangeAlertStatusApiAlertsAlertIdStatusPostParams, body ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody, reqEditors ...RequestEditorFn) (*ChangeAlertStatusApiAlertsAlertIdStatusPostResponse, error) {
+	rsp, err := c.ChangeAlertStatusApiAlertsAlertIdStatusPost(ctx, alertId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16026,8 +18682,8 @@ func (c *ClientWithResponses) ChangeAlertStatusApiAlertsAlertIdStatusPostWithRes
 }
 
 // SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse request returning *SubscribeToAlertApiAlertsAlertIdSubscribePostResponse
-func (c *ClientWithResponses) SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*SubscribeToAlertApiAlertsAlertIdSubscribePostResponse, error) {
-	rsp, err := c.SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx, alertId, reqEditors...)
+func (c *ClientWithResponses) SubscribeToAlertApiAlertsAlertIdSubscribePostWithResponse(ctx context.Context, alertId string, params *SubscribeToAlertApiAlertsAlertIdSubscribePostParams, reqEditors ...RequestEditorFn) (*SubscribeToAlertApiAlertsAlertIdSubscribePostResponse, error) {
+	rsp, err := c.SubscribeToAlertApiAlertsAlertIdSubscribePost(ctx, alertId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16035,8 +18691,8 @@ func (c *ClientWithResponses) SubscribeToAlertApiAlertsAlertIdSubscribePostWithR
 }
 
 // UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse request returning *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse
-func (c *ClientWithResponses) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse(ctx context.Context, alertId string, reqEditors ...RequestEditorFn) (*UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse, error) {
-	rsp, err := c.UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx, alertId, reqEditors...)
+func (c *ClientWithResponses) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse(ctx context.Context, alertId string, params *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams, reqEditors ...RequestEditorFn) (*UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse, error) {
+	rsp, err := c.UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx, alertId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16044,8 +18700,8 @@ func (c *ClientWithResponses) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePos
 }
 
 // DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request returning *DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse
-func (c *ClientWithResponses) DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error) {
-	rsp, err := c.DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx, sourceConnectionContentVersion, reqEditors...)
+func (c *ClientWithResponses) DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error) {
+	rsp, err := c.DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx, sourceConnectionContentVersion, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16062,16 +18718,16 @@ func (c *ClientWithResponses) GetContentDetailApiContentsSourceConnectionContent
 }
 
 // ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse request with arbitrary body returning *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse
-func (c *ClientWithResponses) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error) {
-	rsp, err := c.ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx, sourceConnectionContentVersion, contentType, body, reqEditors...)
+func (c *ClientWithResponses) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error) {
+	rsp, err := c.ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx, sourceConnectionContentVersion, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse(rsp)
 }
 
-func (c *ClientWithResponses) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithResponse(ctx context.Context, sourceConnectionContentVersion string, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error) {
-	rsp, err := c.ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx, sourceConnectionContentVersion, body, reqEditors...)
+func (c *ClientWithResponses) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error) {
+	rsp, err := c.ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx, sourceConnectionContentVersion, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16088,8 +18744,8 @@ func (c *ClientWithResponses) ListContentEmbeddingsApiContentsSourceConnectionCo
 }
 
 // UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse request with arbitrary body returning *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse
-func (c *ClientWithResponses) UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse, error) {
-	rsp, err := c.UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx, sourceConnectionContentVersion, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse, error) {
+	rsp, err := c.UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx, sourceConnectionContentVersion, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16097,16 +18753,16 @@ func (c *ClientWithResponses) UploadFileToContentApiContentsSourceConnectionCont
 }
 
 // GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse request with arbitrary body returning *GovernanceAiGenerateApiGovernanceAiAssistantPostResponse
-func (c *ClientWithResponses) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error) {
-	rsp, err := c.GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error) {
+	rsp, err := c.GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGovernanceAiGenerateApiGovernanceAiAssistantPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) GovernanceAiGenerateApiGovernanceAiAssistantPostWithResponse(ctx context.Context, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error) {
-	rsp, err := c.GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) GovernanceAiGenerateApiGovernanceAiAssistantPostWithResponse(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error) {
+	rsp, err := c.GovernanceAiGenerateApiGovernanceAiAssistantPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16123,8 +18779,8 @@ func (c *ClientWithResponses) ListGovernanceAiConversationsApiGovernanceAiAssist
 }
 
 // GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse request returning *GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse
-func (c *ClientWithResponses) GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse, error) {
-	rsp, err := c.GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx, conversationId, reqEditors...)
+func (c *ClientWithResponses) GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams, reqEditors ...RequestEditorFn) (*GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost(ctx, conversationId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16132,8 +18788,8 @@ func (c *ClientWithResponses) GovernanceAiAcceptApiGovernanceAiAssistantConversa
 }
 
 // GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse request returning *GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse
-func (c *ClientWithResponses) GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse, error) {
-	rsp, err := c.GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx, conversationId, reqEditors...)
+func (c *ClientWithResponses) GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostResponse, error) {
+	rsp, err := c.GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost(ctx, conversationId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16150,16 +18806,16 @@ func (c *ClientWithResponses) ListKnowledgeBasesApiKnowledgeBasesGetWithResponse
 }
 
 // CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse request with arbitrary body returning *CreateKnowledgeBaseApiKnowledgeBasesPostResponse
-func (c *ClientWithResponses) CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error) {
-	rsp, err := c.CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateKnowledgeBaseApiKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error) {
+	rsp, err := c.CreateKnowledgeBaseApiKnowledgeBasesPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateKnowledgeBaseApiKnowledgeBasesPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateKnowledgeBaseApiKnowledgeBasesPostWithResponse(ctx context.Context, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error) {
-	rsp, err := c.CreateKnowledgeBaseApiKnowledgeBasesPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateKnowledgeBaseApiKnowledgeBasesPostWithResponse(ctx context.Context, params *CreateKnowledgeBaseApiKnowledgeBasesPostParams, body CreateKnowledgeBaseApiKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateKnowledgeBaseApiKnowledgeBasesPostResponse, error) {
+	rsp, err := c.CreateKnowledgeBaseApiKnowledgeBasesPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16167,8 +18823,8 @@ func (c *ClientWithResponses) CreateKnowledgeBaseApiKnowledgeBasesPostWithRespon
 }
 
 // DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse request returning *DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse
-func (c *ClientWithResponses) DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse, error) {
-	rsp, err := c.DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx, knowledgeBaseId, reqEditors...)
+func (c *ClientWithResponses) DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteWithResponse(ctx context.Context, knowledgeBaseId string, params *DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse, error) {
+	rsp, err := c.DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete(ctx, knowledgeBaseId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16176,8 +18832,8 @@ func (c *ClientWithResponses) DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseI
 }
 
 // GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse request returning *GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse
-func (c *ClientWithResponses) GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse(ctx context.Context, knowledgeBaseId string, reqEditors ...RequestEditorFn) (*GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse, error) {
-	rsp, err := c.GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx, knowledgeBaseId, reqEditors...)
+func (c *ClientWithResponses) GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetWithResponse(ctx context.Context, knowledgeBaseId string, params *GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams, reqEditors ...RequestEditorFn) (*GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse, error) {
+	rsp, err := c.GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet(ctx, knowledgeBaseId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16185,20 +18841,29 @@ func (c *ClientWithResponses) GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGe
 }
 
 // UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse request with arbitrary body returning *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse
-func (c *ClientWithResponses) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse(ctx context.Context, knowledgeBaseId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error) {
-	rsp, err := c.UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx, knowledgeBaseId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error) {
+	rsp, err := c.UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx, knowledgeBaseId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse(ctx context.Context, knowledgeBaseId string, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error) {
-	rsp, err := c.UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx, knowledgeBaseId, body, reqEditors...)
+func (c *ClientWithResponses) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error) {
+	rsp, err := c.UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx, knowledgeBaseId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp)
+}
+
+// GetMeApiMeGetWithResponse request returning *GetMeApiMeGetResponse
+func (c *ClientWithResponses) GetMeApiMeGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMeApiMeGetResponse, error) {
+	rsp, err := c.GetMeApiMeGet(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMeApiMeGetResponse(rsp)
 }
 
 // ListMemoryBanksApiMemoryBanksGetWithResponse request returning *ListMemoryBanksApiMemoryBanksGetResponse
@@ -16211,16 +18876,16 @@ func (c *ClientWithResponses) ListMemoryBanksApiMemoryBanksGetWithResponse(ctx c
 }
 
 // CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse request with arbitrary body returning *CreateMemoryBankApiMemoryBanksPostResponse
-func (c *ClientWithResponses) CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error) {
-	rsp, err := c.CreateMemoryBankApiMemoryBanksPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateMemoryBankApiMemoryBanksPostWithBodyWithResponse(ctx context.Context, params *CreateMemoryBankApiMemoryBanksPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error) {
+	rsp, err := c.CreateMemoryBankApiMemoryBanksPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateMemoryBankApiMemoryBanksPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateMemoryBankApiMemoryBanksPostWithResponse(ctx context.Context, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error) {
-	rsp, err := c.CreateMemoryBankApiMemoryBanksPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateMemoryBankApiMemoryBanksPostWithResponse(ctx context.Context, params *CreateMemoryBankApiMemoryBanksPostParams, body CreateMemoryBankApiMemoryBanksPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMemoryBankApiMemoryBanksPostResponse, error) {
+	rsp, err := c.CreateMemoryBankApiMemoryBanksPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16228,16 +18893,16 @@ func (c *ClientWithResponses) CreateMemoryBankApiMemoryBanksPostWithResponse(ctx
 }
 
 // MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse request with arbitrary body returning *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse
-func (c *ClientWithResponses) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error) {
-	rsp, err := c.MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBodyWithResponse(ctx context.Context, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error) {
+	rsp, err := c.MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseMemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithResponse(ctx context.Context, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error) {
-	rsp, err := c.MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) MemoryBankAiGenerateApiMemoryBanksAiAssistantPostWithResponse(ctx context.Context, params *MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams, body MemoryBankAiGenerateApiMemoryBanksAiAssistantPostJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse, error) {
+	rsp, err := c.MemoryBankAiGenerateApiMemoryBanksAiAssistantPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16254,16 +18919,16 @@ func (c *ClientWithResponses) MemoryBankAiLastConversationApiMemoryBanksAiAssist
 }
 
 // MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse request with arbitrary body returning *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse
-func (c *ClientWithResponses) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error) {
-	rsp, err := c.MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx, conversationId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error) {
+	rsp, err := c.MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithBody(ctx, conversationId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse(rsp)
 }
 
-func (c *ClientWithResponses) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error) {
-	rsp, err := c.MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx, conversationId, body, reqEditors...)
+func (c *ClientWithResponses) MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchWithResponse(ctx context.Context, conversationId openapi_types.UUID, params *MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams, body MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse, error) {
+	rsp, err := c.MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch(ctx, conversationId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16271,8 +18936,8 @@ func (c *ClientWithResponses) MemoryBankAiAcceptApiMemoryBanksAiAssistantConvers
 }
 
 // ListTemplatesApiMemoryBanksTemplatesGetWithResponse request returning *ListTemplatesApiMemoryBanksTemplatesGetResponse
-func (c *ClientWithResponses) ListTemplatesApiMemoryBanksTemplatesGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTemplatesApiMemoryBanksTemplatesGetResponse, error) {
-	rsp, err := c.ListTemplatesApiMemoryBanksTemplatesGet(ctx, reqEditors...)
+func (c *ClientWithResponses) ListTemplatesApiMemoryBanksTemplatesGetWithResponse(ctx context.Context, params *ListTemplatesApiMemoryBanksTemplatesGetParams, reqEditors ...RequestEditorFn) (*ListTemplatesApiMemoryBanksTemplatesGetResponse, error) {
+	rsp, err := c.ListTemplatesApiMemoryBanksTemplatesGet(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16280,16 +18945,16 @@ func (c *ClientWithResponses) ListTemplatesApiMemoryBanksTemplatesGetWithRespons
 }
 
 // TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse request with arbitrary body returning *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse
-func (c *ClientWithResponses) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error) {
-	rsp, err := c.TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBodyWithResponse(ctx context.Context, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error) {
+	rsp, err := c.TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithResponse(ctx context.Context, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error) {
-	rsp, err := c.TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostWithResponse(ctx context.Context, params *TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams, body TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse, error) {
+	rsp, err := c.TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16297,8 +18962,8 @@ func (c *ClientWithResponses) TestCompactionPromptStandaloneApiMemoryBanksTestCo
 }
 
 // DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse request returning *DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse
-func (c *ClientWithResponses) DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse, error) {
-	rsp, err := c.DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx, memoryBankId, reqEditors...)
+func (c *ClientWithResponses) DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWithResponse(ctx context.Context, memoryBankId string, params *DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse, error) {
+	rsp, err := c.DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete(ctx, memoryBankId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16306,8 +18971,8 @@ func (c *ClientWithResponses) DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteWi
 }
 
 // GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse request returning *GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse
-func (c *ClientWithResponses) GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse, error) {
-	rsp, err := c.GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx, memoryBankId, reqEditors...)
+func (c *ClientWithResponses) GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResponse(ctx context.Context, memoryBankId string, params *GetMemoryBankApiMemoryBanksMemoryBankIdGetParams, reqEditors ...RequestEditorFn) (*GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse, error) {
+	rsp, err := c.GetMemoryBankApiMemoryBanksMemoryBankIdGet(ctx, memoryBankId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16315,16 +18980,16 @@ func (c *ClientWithResponses) GetMemoryBankApiMemoryBanksMemoryBankIdGetWithResp
 }
 
 // UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse request with arbitrary body returning *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse
-func (c *ClientWithResponses) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error) {
-	rsp, err := c.UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx, memoryBankId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBodyWithResponse(ctx context.Context, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error) {
+	rsp, err := c.UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithBody(ctx, memoryBankId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithResponse(ctx context.Context, memoryBankId string, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error) {
-	rsp, err := c.UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx, memoryBankId, body, reqEditors...)
+func (c *ClientWithResponses) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithResponse(ctx context.Context, memoryBankId string, params *UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams, body UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse, error) {
+	rsp, err := c.UpdateMemoryBankApiMemoryBanksMemoryBankIdPut(ctx, memoryBankId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16332,8 +18997,8 @@ func (c *ClientWithResponses) UpdateMemoryBankApiMemoryBanksMemoryBankIdPutWithR
 }
 
 // GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse request returning *GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse
-func (c *ClientWithResponses) GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse, error) {
-	rsp, err := c.GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx, memoryBankId, reqEditors...)
+func (c *ClientWithResponses) GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetWithResponse(ctx context.Context, memoryBankId string, params *GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams, reqEditors ...RequestEditorFn) (*GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse, error) {
+	rsp, err := c.GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet(ctx, memoryBankId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16341,8 +19006,8 @@ func (c *ClientWithResponses) GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgents
 }
 
 // CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse request returning *CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse
-func (c *ClientWithResponses) CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse, error) {
-	rsp, err := c.CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx, memoryBankId, reqEditors...)
+func (c *ClientWithResponses) CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostWithResponse(ctx context.Context, memoryBankId string, params *CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams, reqEditors ...RequestEditorFn) (*CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse, error) {
+	rsp, err := c.CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost(ctx, memoryBankId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16350,8 +19015,8 @@ func (c *ClientWithResponses) CompactMemoryBankApiMemoryBanksMemoryBankIdCompact
 }
 
 // DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse request returning *DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse
-func (c *ClientWithResponses) DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse(ctx context.Context, memoryBankId string, reqEditors ...RequestEditorFn) (*DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse, error) {
-	rsp, err := c.DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx, memoryBankId, reqEditors...)
+func (c *ClientWithResponses) DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteWithResponse(ctx context.Context, memoryBankId string, params *DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams, reqEditors ...RequestEditorFn) (*DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse, error) {
+	rsp, err := c.DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete(ctx, memoryBankId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16368,16 +19033,16 @@ func (c *ClientWithResponses) GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdS
 }
 
 // TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse request with arbitrary body returning *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse
-func (c *ClientWithResponses) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse(ctx context.Context, memoryBankId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error) {
-	rsp, err := c.TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx, memoryBankId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBodyWithResponse(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error) {
+	rsp, err := c.TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithBody(ctx, memoryBankId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithResponse(ctx context.Context, memoryBankId string, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error) {
-	rsp, err := c.TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx, memoryBankId, body, reqEditors...)
+func (c *ClientWithResponses) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithResponse(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error) {
+	rsp, err := c.TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx, memoryBankId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16394,8 +19059,8 @@ func (c *ClientWithResponses) ListAlertsApiModelsAlertsGetWithResponse(ctx conte
 }
 
 // MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse request returning *MarkAllReadApiModelsAlertsMarkAllReadPostResponse
-func (c *ClientWithResponses) MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*MarkAllReadApiModelsAlertsMarkAllReadPostResponse, error) {
-	rsp, err := c.MarkAllReadApiModelsAlertsMarkAllReadPost(ctx, reqEditors...)
+func (c *ClientWithResponses) MarkAllReadApiModelsAlertsMarkAllReadPostWithResponse(ctx context.Context, params *MarkAllReadApiModelsAlertsMarkAllReadPostParams, reqEditors ...RequestEditorFn) (*MarkAllReadApiModelsAlertsMarkAllReadPostResponse, error) {
+	rsp, err := c.MarkAllReadApiModelsAlertsMarkAllReadPost(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16403,8 +19068,8 @@ func (c *ClientWithResponses) MarkAllReadApiModelsAlertsMarkAllReadPostWithRespo
 }
 
 // GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse request returning *GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse
-func (c *ClientWithResponses) GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse, error) {
-	rsp, err := c.GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx, reqEditors...)
+func (c *ClientWithResponses) GetAlertUnreadCountApiModelsAlertsUnreadCountGetWithResponse(ctx context.Context, params *GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams, reqEditors ...RequestEditorFn) (*GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse, error) {
+	rsp, err := c.GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16412,8 +19077,8 @@ func (c *ClientWithResponses) GetAlertUnreadCountApiModelsAlertsUnreadCountGetWi
 }
 
 // MarkReadApiModelsAlertsAlertIdReadPatchWithResponse request returning *MarkReadApiModelsAlertsAlertIdReadPatchResponse
-func (c *ClientWithResponses) MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error) {
-	rsp, err := c.MarkReadApiModelsAlertsAlertIdReadPatch(ctx, alertId, reqEditors...)
+func (c *ClientWithResponses) MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error) {
+	rsp, err := c.MarkReadApiModelsAlertsAlertIdReadPatch(ctx, alertId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16448,16 +19113,16 @@ func (c *ClientWithResponses) ListSolutionsApiSolutionsGetWithResponse(ctx conte
 }
 
 // CreateSolutionApiSolutionsPostWithBodyWithResponse request with arbitrary body returning *CreateSolutionApiSolutionsPostResponse
-func (c *ClientWithResponses) CreateSolutionApiSolutionsPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error) {
-	rsp, err := c.CreateSolutionApiSolutionsPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateSolutionApiSolutionsPostWithBodyWithResponse(ctx context.Context, params *CreateSolutionApiSolutionsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error) {
+	rsp, err := c.CreateSolutionApiSolutionsPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateSolutionApiSolutionsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateSolutionApiSolutionsPostWithResponse(ctx context.Context, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error) {
-	rsp, err := c.CreateSolutionApiSolutionsPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateSolutionApiSolutionsPostWithResponse(ctx context.Context, params *CreateSolutionApiSolutionsPostParams, body CreateSolutionApiSolutionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSolutionApiSolutionsPostResponse, error) {
+	rsp, err := c.CreateSolutionApiSolutionsPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16465,8 +19130,8 @@ func (c *ClientWithResponses) CreateSolutionApiSolutionsPostWithResponse(ctx con
 }
 
 // DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse request returning *DeleteSolutionApiSolutionsSolutionIdDeleteResponse
-func (c *ClientWithResponses) DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSolutionApiSolutionsSolutionIdDeleteResponse, error) {
-	rsp, err := c.DeleteSolutionApiSolutionsSolutionIdDelete(ctx, solutionId, reqEditors...)
+func (c *ClientWithResponses) DeleteSolutionApiSolutionsSolutionIdDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *DeleteSolutionApiSolutionsSolutionIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteSolutionApiSolutionsSolutionIdDeleteResponse, error) {
+	rsp, err := c.DeleteSolutionApiSolutionsSolutionIdDelete(ctx, solutionId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16474,8 +19139,8 @@ func (c *ClientWithResponses) DeleteSolutionApiSolutionsSolutionIdDeleteWithResp
 }
 
 // GetSolutionApiSolutionsSolutionIdGetWithResponse request returning *GetSolutionApiSolutionsSolutionIdGetResponse
-func (c *ClientWithResponses) GetSolutionApiSolutionsSolutionIdGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSolutionApiSolutionsSolutionIdGetResponse, error) {
-	rsp, err := c.GetSolutionApiSolutionsSolutionIdGet(ctx, solutionId, reqEditors...)
+func (c *ClientWithResponses) GetSolutionApiSolutionsSolutionIdGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *GetSolutionApiSolutionsSolutionIdGetParams, reqEditors ...RequestEditorFn) (*GetSolutionApiSolutionsSolutionIdGetResponse, error) {
+	rsp, err := c.GetSolutionApiSolutionsSolutionIdGet(ctx, solutionId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16483,16 +19148,16 @@ func (c *ClientWithResponses) GetSolutionApiSolutionsSolutionIdGetWithResponse(c
 }
 
 // UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse request with arbitrary body returning *UpdateSolutionApiSolutionsSolutionIdPatchResponse
-func (c *ClientWithResponses) UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error) {
-	rsp, err := c.UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateSolutionApiSolutionsSolutionIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error) {
+	rsp, err := c.UpdateSolutionApiSolutionsSolutionIdPatchWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateSolutionApiSolutionsSolutionIdPatchResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateSolutionApiSolutionsSolutionIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error) {
-	rsp, err := c.UpdateSolutionApiSolutionsSolutionIdPatch(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) UpdateSolutionApiSolutionsSolutionIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UpdateSolutionApiSolutionsSolutionIdPatchParams, body UpdateSolutionApiSolutionsSolutionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSolutionApiSolutionsSolutionIdPatchResponse, error) {
+	rsp, err := c.UpdateSolutionApiSolutionsSolutionIdPatch(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16500,16 +19165,16 @@ func (c *ClientWithResponses) UpdateSolutionApiSolutionsSolutionIdPatchWithRespo
 }
 
 // UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse request with arbitrary body returning *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse
-func (c *ClientWithResponses) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error) {
-	rsp, err := c.UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error) {
+	rsp, err := c.UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse(rsp)
 }
 
-func (c *ClientWithResponses) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error) {
-	rsp, err := c.UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams, body UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse, error) {
+	rsp, err := c.UnlinkAgentsApiSolutionsSolutionIdAgentsDelete(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16517,16 +19182,16 @@ func (c *ClientWithResponses) UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteWith
 }
 
 // LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse request with arbitrary body returning *LinkAgentsApiSolutionsSolutionIdAgentsPostResponse
-func (c *ClientWithResponses) LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error) {
-	rsp, err := c.LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) LinkAgentsApiSolutionsSolutionIdAgentsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error) {
+	rsp, err := c.LinkAgentsApiSolutionsSolutionIdAgentsPostWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseLinkAgentsApiSolutionsSolutionIdAgentsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) LinkAgentsApiSolutionsSolutionIdAgentsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error) {
-	rsp, err := c.LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) LinkAgentsApiSolutionsSolutionIdAgentsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkAgentsApiSolutionsSolutionIdAgentsPostParams, body LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkAgentsApiSolutionsSolutionIdAgentsPostResponse, error) {
+	rsp, err := c.LinkAgentsApiSolutionsSolutionIdAgentsPost(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16534,16 +19199,16 @@ func (c *ClientWithResponses) LinkAgentsApiSolutionsSolutionIdAgentsPostWithResp
 }
 
 // AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse request with arbitrary body returning *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse
-func (c *ClientWithResponses) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error) {
-	rsp, err := c.AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error) {
+	rsp, err := c.AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse(rsp)
 }
 
-func (c *ClientWithResponses) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error) {
-	rsp, err := c.AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams, body AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse, error) {
+	rsp, err := c.AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16551,16 +19216,16 @@ func (c *ClientWithResponses) AiAssistantGenerateApiSolutionsSolutionIdAiAssista
 }
 
 // AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse request with arbitrary body returning *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse
-func (c *ClientWithResponses) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error) {
-	rsp, err := c.AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error) {
+	rsp, err := c.AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse(rsp)
 }
 
-func (c *ClientWithResponses) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error) {
-	rsp, err := c.AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams, body AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostResponse, error) {
+	rsp, err := c.AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16568,16 +19233,16 @@ func (c *ClientWithResponses) AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAs
 }
 
 // AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse request with arbitrary body returning *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse
-func (c *ClientWithResponses) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error) {
-	rsp, err := c.AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error) {
+	rsp, err := c.AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse(rsp)
 }
 
-func (c *ClientWithResponses) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error) {
-	rsp, err := c.AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams, body AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse, error) {
+	rsp, err := c.AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16585,16 +19250,16 @@ func (c *ClientWithResponses) AiAssistantSourceApiSolutionsSolutionIdAiAssistant
 }
 
 // AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse request with arbitrary body returning *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse
-func (c *ClientWithResponses) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error) {
-	rsp, err := c.AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx, solutionId, conversationId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithBody(ctx, solutionId, conversationId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error) {
-	rsp, err := c.AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx, solutionId, conversationId, body, reqEditors...)
+func (c *ClientWithResponses) AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams, body AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostResponse, error) {
+	rsp, err := c.AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost(ctx, solutionId, conversationId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16602,8 +19267,8 @@ func (c *ClientWithResponses) AiAssistantAcceptApiSolutionsSolutionIdAiAssistant
 }
 
 // AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse request returning *AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse
-func (c *ClientWithResponses) AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse, error) {
-	rsp, err := c.AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx, solutionId, conversationId, reqEditors...)
+func (c *ClientWithResponses) AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams, reqEditors ...RequestEditorFn) (*AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostResponse, error) {
+	rsp, err := c.AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost(ctx, solutionId, conversationId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16611,8 +19276,8 @@ func (c *ClientWithResponses) AiAssistantDeclineApiSolutionsSolutionIdAiAssistan
 }
 
 // ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse request returning *ListConversationsApiSolutionsSolutionIdConversationsGetResponse
-func (c *ClientWithResponses) ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListConversationsApiSolutionsSolutionIdConversationsGetResponse, error) {
-	rsp, err := c.ListConversationsApiSolutionsSolutionIdConversationsGet(ctx, solutionId, reqEditors...)
+func (c *ClientWithResponses) ListConversationsApiSolutionsSolutionIdConversationsGetWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *ListConversationsApiSolutionsSolutionIdConversationsGetParams, reqEditors ...RequestEditorFn) (*ListConversationsApiSolutionsSolutionIdConversationsGetResponse, error) {
+	rsp, err := c.ListConversationsApiSolutionsSolutionIdConversationsGet(ctx, solutionId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16620,16 +19285,16 @@ func (c *ClientWithResponses) ListConversationsApiSolutionsSolutionIdConversatio
 }
 
 // AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse request with arbitrary body returning *AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse
-func (c *ClientWithResponses) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error) {
-	rsp, err := c.AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error) {
+	rsp, err := c.AddConversationTurnApiSolutionsSolutionIdConversationsPostWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseAddConversationTurnApiSolutionsSolutionIdConversationsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error) {
-	rsp, err := c.AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) AddConversationTurnApiSolutionsSolutionIdConversationsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *AddConversationTurnApiSolutionsSolutionIdConversationsPostParams, body AddConversationTurnApiSolutionsSolutionIdConversationsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse, error) {
+	rsp, err := c.AddConversationTurnApiSolutionsSolutionIdConversationsPost(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16637,16 +19302,16 @@ func (c *ClientWithResponses) AddConversationTurnApiSolutionsSolutionIdConversat
 }
 
 // MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse request with arbitrary body returning *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse
-func (c *ClientWithResponses) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error) {
-	rsp, err := c.MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx, solutionId, conversationId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error) {
+	rsp, err := c.MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithBody(ctx, solutionId, conversationId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse(rsp)
 }
 
-func (c *ClientWithResponses) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error) {
-	rsp, err := c.MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx, solutionId, conversationId, body, reqEditors...)
+func (c *ClientWithResponses) MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchWithResponse(ctx context.Context, solutionId openapi_types.UUID, conversationId openapi_types.UUID, params *MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams, body MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchResponse, error) {
+	rsp, err := c.MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch(ctx, solutionId, conversationId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16654,16 +19319,16 @@ func (c *ClientWithResponses) MarkConversationTurnApiSolutionsSolutionIdConversa
 }
 
 // UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse request with arbitrary body returning *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse
-func (c *ClientWithResponses) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error) {
-	rsp, err := c.UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error) {
+	rsp, err := c.UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse(rsp)
 }
 
-func (c *ClientWithResponses) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error) {
-	rsp, err := c.UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams, body UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse, error) {
+	rsp, err := c.UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16671,16 +19336,16 @@ func (c *ClientWithResponses) UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledg
 }
 
 // LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse request with arbitrary body returning *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse
-func (c *ClientWithResponses) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error) {
-	rsp, err := c.LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error) {
+	rsp, err := c.LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error) {
-	rsp, err := c.LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams, body LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse, error) {
+	rsp, err := c.LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16688,16 +19353,16 @@ func (c *ClientWithResponses) LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeB
 }
 
 // UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse request with arbitrary body returning *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse
-func (c *ClientWithResponses) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error) {
-	rsp, err := c.UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error) {
+	rsp, err := c.UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse(rsp)
 }
 
-func (c *ClientWithResponses) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error) {
-	rsp, err := c.UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams, body UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteJSONRequestBody, reqEditors ...RequestEditorFn) (*UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteResponse, error) {
+	rsp, err := c.UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16705,16 +19370,16 @@ func (c *ClientWithResponses) UnlinkSourceConnectionsApiSolutionsSolutionIdSourc
 }
 
 // LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse request with arbitrary body returning *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse
-func (c *ClientWithResponses) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error) {
-	rsp, err := c.LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx, solutionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBodyWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error) {
+	rsp, err := c.LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithBody(ctx, solutionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error) {
-	rsp, err := c.LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx, solutionId, body, reqEditors...)
+func (c *ClientWithResponses) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error) {
+	rsp, err := c.LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx, solutionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16722,16 +19387,16 @@ func (c *ClientWithResponses) LinkSourceConnectionsApiSolutionsSolutionIdSourceC
 }
 
 // CreateSourceApiSourcesPostWithBodyWithResponse request with arbitrary body returning *CreateSourceApiSourcesPostResponse
-func (c *ClientWithResponses) CreateSourceApiSourcesPostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error) {
-	rsp, err := c.CreateSourceApiSourcesPostWithBody(ctx, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateSourceApiSourcesPostWithBodyWithResponse(ctx context.Context, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error) {
+	rsp, err := c.CreateSourceApiSourcesPostWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateSourceApiSourcesPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateSourceApiSourcesPostWithResponse(ctx context.Context, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error) {
-	rsp, err := c.CreateSourceApiSourcesPost(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateSourceApiSourcesPostWithResponse(ctx context.Context, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error) {
+	rsp, err := c.CreateSourceApiSourcesPost(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16748,8 +19413,8 @@ func (c *ClientWithResponses) ListSourcesApiSourcesGetWithResponse(ctx context.C
 }
 
 // DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse request returning *DeleteSourceApiSourcesSourceConnectionIdDeleteResponse
-func (c *ClientWithResponses) DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSourceApiSourcesSourceConnectionIdDeleteResponse, error) {
-	rsp, err := c.DeleteSourceApiSourcesSourceConnectionIdDelete(ctx, sourceConnectionId, reqEditors...)
+func (c *ClientWithResponses) DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *DeleteSourceApiSourcesSourceConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteSourceApiSourcesSourceConnectionIdDeleteResponse, error) {
+	rsp, err := c.DeleteSourceApiSourcesSourceConnectionIdDelete(ctx, sourceConnectionId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16757,8 +19422,8 @@ func (c *ClientWithResponses) DeleteSourceApiSourcesSourceConnectionIdDeleteWith
 }
 
 // GetSourceApiSourcesSourceConnectionIdGetWithResponse request returning *GetSourceApiSourcesSourceConnectionIdGetResponse
-func (c *ClientWithResponses) GetSourceApiSourcesSourceConnectionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceApiSourcesSourceConnectionIdGetResponse, error) {
-	rsp, err := c.GetSourceApiSourcesSourceConnectionIdGet(ctx, sourceConnectionId, reqEditors...)
+func (c *ClientWithResponses) GetSourceApiSourcesSourceConnectionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceApiSourcesSourceConnectionIdGetParams, reqEditors ...RequestEditorFn) (*GetSourceApiSourcesSourceConnectionIdGetResponse, error) {
+	rsp, err := c.GetSourceApiSourcesSourceConnectionIdGet(ctx, sourceConnectionId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16766,16 +19431,16 @@ func (c *ClientWithResponses) GetSourceApiSourcesSourceConnectionIdGetWithRespon
 }
 
 // UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse request with arbitrary body returning *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse
-func (c *ClientWithResponses) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error) {
-	rsp, err := c.UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error) {
+	rsp, err := c.UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithBody(ctx, sourceConnectionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error) {
-	rsp, err := c.UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx, sourceConnectionId, body, reqEditors...)
+func (c *ClientWithResponses) UploadInlineTextToSourceApiSourcesSourceConnectionIdPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams, body UploadInlineTextToSourceApiSourcesSourceConnectionIdPostJSONRequestBody, reqEditors ...RequestEditorFn) (*UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse, error) {
+	rsp, err := c.UploadInlineTextToSourceApiSourcesSourceConnectionIdPost(ctx, sourceConnectionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16783,16 +19448,16 @@ func (c *ClientWithResponses) UploadInlineTextToSourceApiSourcesSourceConnection
 }
 
 // UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse request with arbitrary body returning *UpdateSourceApiSourcesSourceConnectionIdPutResponse
-func (c *ClientWithResponses) UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error) {
-	rsp, err := c.UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UpdateSourceApiSourcesSourceConnectionIdPutWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error) {
+	rsp, err := c.UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx, sourceConnectionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseUpdateSourceApiSourcesSourceConnectionIdPutResponse(rsp)
 }
 
-func (c *ClientWithResponses) UpdateSourceApiSourcesSourceConnectionIdPutWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error) {
-	rsp, err := c.UpdateSourceApiSourcesSourceConnectionIdPut(ctx, sourceConnectionId, body, reqEditors...)
+func (c *ClientWithResponses) UpdateSourceApiSourcesSourceConnectionIdPutWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error) {
+	rsp, err := c.UpdateSourceApiSourcesSourceConnectionIdPut(ctx, sourceConnectionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16800,8 +19465,8 @@ func (c *ClientWithResponses) UpdateSourceApiSourcesSourceConnectionIdPutWithRes
 }
 
 // GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse request returning *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse
-func (c *ClientWithResponses) GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error) {
-	rsp, err := c.GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx, sourceConnectionId, reqEditors...)
+func (c *ClientWithResponses) GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error) {
+	rsp, err := c.GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx, sourceConnectionId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16809,16 +19474,16 @@ func (c *ClientWithResponses) GetSourceEmbeddingMigrationApiSourcesSourceConnect
 }
 
 // StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse request with arbitrary body returning *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse
-func (c *ClientWithResponses) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error) {
-	rsp, err := c.StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error) {
+	rsp, err := c.StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBody(ctx, sourceConnectionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error) {
-	rsp, err := c.StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx, sourceConnectionId, body, reqEditors...)
+func (c *ClientWithResponses) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error) {
+	rsp, err := c.StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx, sourceConnectionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16826,8 +19491,8 @@ func (c *ClientWithResponses) StartSourceEmbeddingMigrationApiSourcesSourceConne
 }
 
 // CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse request returning *CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse
-func (c *ClientWithResponses) CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse, error) {
-	rsp, err := c.CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx, sourceConnectionId, reqEditors...)
+func (c *ClientWithResponses) CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams, reqEditors ...RequestEditorFn) (*CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostResponse, error) {
+	rsp, err := c.CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost(ctx, sourceConnectionId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16844,16 +19509,16 @@ func (c *ClientWithResponses) ListSourceExportsApiSourcesSourceConnectionIdExpor
 }
 
 // CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse request with arbitrary body returning *CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse
-func (c *ClientWithResponses) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error) {
-	rsp, err := c.CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error) {
+	rsp, err := c.CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithBody(ctx, sourceConnectionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error) {
-	rsp, err := c.CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx, sourceConnectionId, body, reqEditors...)
+func (c *ClientWithResponses) CreateSourceExportApiSourcesSourceConnectionIdExportsPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams, body CreateSourceExportApiSourcesSourceConnectionIdExportsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse, error) {
+	rsp, err := c.CreateSourceExportApiSourcesSourceConnectionIdExportsPost(ctx, sourceConnectionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16861,16 +19526,16 @@ func (c *ClientWithResponses) CreateSourceExportApiSourcesSourceConnectionIdExpo
 }
 
 // EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse request with arbitrary body returning *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse
-func (c *ClientWithResponses) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error) {
-	rsp, err := c.EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error) {
+	rsp, err := c.EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithBody(ctx, sourceConnectionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse(rsp)
 }
 
-func (c *ClientWithResponses) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error) {
-	rsp, err := c.EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx, sourceConnectionId, body, reqEditors...)
+func (c *ClientWithResponses) EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams, body EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequestBody, reqEditors ...RequestEditorFn) (*EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse, error) {
+	rsp, err := c.EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost(ctx, sourceConnectionId, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16878,8 +19543,8 @@ func (c *ClientWithResponses) EstimateSourceExportApiSourcesSourceConnectionIdEx
 }
 
 // DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse request returning *DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse
-func (c *ClientWithResponses) DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse, error) {
-	rsp, err := c.DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx, sourceConnectionId, exportId, reqEditors...)
+func (c *ClientWithResponses) DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse, error) {
+	rsp, err := c.DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete(ctx, sourceConnectionId, exportId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16887,8 +19552,8 @@ func (c *ClientWithResponses) DeleteSourceExportApiSourcesSourceConnectionIdExpo
 }
 
 // GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse request returning *GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse
-func (c *ClientWithResponses) GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse, error) {
-	rsp, err := c.GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx, sourceConnectionId, exportId, reqEditors...)
+func (c *ClientWithResponses) GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams, reqEditors ...RequestEditorFn) (*GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse, error) {
+	rsp, err := c.GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet(ctx, sourceConnectionId, exportId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16896,8 +19561,8 @@ func (c *ClientWithResponses) GetSourceExportApiSourcesSourceConnectionIdExports
 }
 
 // CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse request returning *CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse
-func (c *ClientWithResponses) CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse, error) {
-	rsp, err := c.CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx, sourceConnectionId, exportId, reqEditors...)
+func (c *ClientWithResponses) CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams, reqEditors ...RequestEditorFn) (*CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResponse, error) {
+	rsp, err := c.CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost(ctx, sourceConnectionId, exportId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16905,8 +19570,8 @@ func (c *ClientWithResponses) CancelSourceExportApiSourcesSourceConnectionIdExpo
 }
 
 // DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse request returning *DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse
-func (c *ClientWithResponses) DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse, error) {
-	rsp, err := c.DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx, sourceConnectionId, exportId, reqEditors...)
+func (c *ClientWithResponses) DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, exportId openapi_types.UUID, params *DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams, reqEditors ...RequestEditorFn) (*DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetResponse, error) {
+	rsp, err := c.DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet(ctx, sourceConnectionId, exportId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -16914,8 +19579,8 @@ func (c *ClientWithResponses) DownloadSourceExportApiSourcesSourceConnectionIdEx
 }
 
 // UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse request with arbitrary body returning *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse
-func (c *ClientWithResponses) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error) {
-	rsp, err := c.UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx, sourceConnectionId, contentType, body, reqEditors...)
+func (c *ClientWithResponses) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, params *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error) {
+	rsp, err := c.UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx, sourceConnectionId, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -18048,7 +20713,7 @@ func ParseApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse(rsp *http.Re
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		var dest AiAssistantGenerateResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -18081,7 +20746,7 @@ func ParseApiAiMemoryBankApiAiAssistantMemoryBankPostResponse(rsp *http.Response
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+		var dest MemoryBankAiAssistantResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -18180,7 +20845,7 @@ func ParseApiAiSolutionApiAiAssistantSolutionPostResponse(rsp *http.Response) (*
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		var dest AiAssistantGenerateResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -18213,7 +20878,7 @@ func ParseApiAiSourceApiAiAssistantSourcePostResponse(rsp *http.Response) (*ApiA
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		var dest AiAssistantGenerateResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -18246,7 +20911,7 @@ func ParseApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse(rsp *http.Re
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiSolutionsAiAssistantAcceptResponse
+		var dest AiAssistantAcceptResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -18885,7 +21550,7 @@ func ParseGovernanceAiGenerateApiGovernanceAiAssistantPostResponse(rsp *http.Res
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiGovernanceGovernanceAiAssistantResponse
+		var dest GovernanceAiAssistantResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -18951,7 +21616,7 @@ func ParseGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResp
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiGovernanceGovernanceAiAcceptResponse
+		var dest GovernanceAiAcceptResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -19153,6 +21818,32 @@ func ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp *ht
 	return response, nil
 }
 
+// ParseGetMeApiMeGetResponse parses an HTTP response from a GetMeApiMeGetWithResponse call
+func ParseGetMeApiMeGetResponse(rsp *http.Response) (*GetMeApiMeGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMeApiMeGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListMemoryBanksApiMemoryBanksGetResponse parses an HTTP response from a ListMemoryBanksApiMemoryBanksGetWithResponse call
 func ParseListMemoryBanksApiMemoryBanksGetResponse(rsp *http.Response) (*ListMemoryBanksApiMemoryBanksGetResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -19234,7 +21925,7 @@ func ParseMemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse(rsp *http.Re
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiMemoryBanksMemoryBankAiAssistantResponse
+		var dest MemoryBankAiAssistantResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -20033,7 +22724,7 @@ func ParseAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRespon
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		var dest AiAssistantGenerateResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -20066,7 +22757,7 @@ func ParseAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBase
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		var dest AiAssistantGenerateResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -20099,7 +22790,7 @@ func ParseAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse(r
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiSolutionsAiAssistantGenerateResponse
+		var dest AiAssistantGenerateResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -20132,7 +22823,7 @@ func ParseAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAccept
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RoutersApiSolutionsAiAssistantAcceptResponse
+		var dest AiAssistantAcceptResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -65,6 +65,10 @@ func main() {
 | `DefaultHeaders` | — | `nil` |
 | `HTTPClient` | — | `&http.Client{Timeout: 30s}` |
 
+> At least one credential must be provided via the options above, the
+> `SECLAI_API_KEY` environment variable, or an SSO profile
+> (see [Authentication](#authentication) below).
+
 ### Authentication
 
 Credentials are resolved via a chain (first match wins):
