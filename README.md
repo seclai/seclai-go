@@ -53,7 +53,7 @@ func main() {
 
 | Option | Environment variable | Default |
 | --- | --- | --- |
-| `APIKey` | `SECLAI_API_KEY` | *required* |
+| `APIKey` | `SECLAI_API_KEY` | — |
 | `BaseURL` | `SECLAI_API_URL` | `https://seclai.com` |
 | `APIKeyHeader` | — | `x-api-key` |
 | `DefaultHeaders` | — | `nil` |
@@ -66,6 +66,16 @@ client, err := seclai.NewClient(seclai.Options{
 	DefaultHeaders: map[string]string{"X-Custom": "value"},
 })
 ```
+
+### Authentication
+
+The Go SDK currently supports API key authentication.
+Set the `SECLAI_API_KEY` environment variable or pass `APIKey` in `Options`.
+
+For SSO / OAuth2 bearer token authentication, use the
+[Seclai CLI](https://www.npmjs.com/package/seclai) or one of the other SDKs
+(JavaScript, Python, C#) which include full SSO support with automatic token
+refresh.
 
 ## API documentation
 
