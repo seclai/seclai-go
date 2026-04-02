@@ -8994,7 +8994,7 @@
     },
     "/agents/{agent_id}/export": {
       "get": {
-        "description": "Export an agent definition as a portable JSON snapshot.\n\nThe response contains the full definition, trigger configuration with schedules, alert configs, evaluation criteria, agent-scoped governance policies, and a resolved dependency manifest that maps every referenced external entity UUID to its human-readable name.\n\nResponse shape:\n- `export_version`: schema version (currently `\"2\"`)\n- `exported_at`: ISO-8601 timestamp\n- `agent`: name, description, schema_version, definition, timestamps\n- `trigger`: trigger type, input template, schedules\n- `alert_configs`: alert type, thresholds, recipients\n- `evaluation_criteria`: evaluation settings per step\n- `governance_policies`: agent-scoped governance policies\n- `dependencies`: knowledge_bases, memory_banks, source_connections, agents, users\n\nQuery params:\n- `download` (default true): when true, sets `Content-Disposition: attachment` so clients treat the response as a file download.\n\nAuth & scoping:\n- Requires `X-API-Key`. You can only export agents belonging to your account.",
+        "description": "Export an agent definition as a portable JSON snapshot.\n\nThe response contains the full definition, trigger configuration with schedules, alert configs, evaluation criteria, agent-scoped governance policies, and a resolved dependency manifest that maps every referenced external entity UUID to its human-readable name.\n\nResponse shape:\n- `export_version`: schema version (currently `\"2\"`)\n- `exported_at`: ISO-8601 timestamp\n- `agent`: name, description, schema_version, definition, timestamps\n- `trigger`: trigger type, input template, schedules\n- `alert_configs`: alert type, thresholds, recipients\n- `evaluation_criteria`: evaluation settings per step\n- `governance_policies`: agent-scoped governance policies\n- `dependencies`: knowledge_bases, memory_banks, source_connections, agents, users\n\nQuery params:\n- `download` (default true): when true, sets `Content-Disposition: attachment` so clients treat the response as a file download.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- When using OAuth, you may target a different organization account with `X-Account-Id`; for API keys, the key's account is always used.\n- You can only export agents belonging to the resolved account.",
         "operationId": "export_agent_api_agents__agent_id__export_get",
         "parameters": [
           {
@@ -11469,7 +11469,7 @@
     },
     "/me": {
       "get": {
-        "description": "Returns the authenticated user's personal account ID and a list of organisations they belong to.  Each organisation entry includes the organisation's own id, display name, and account_id.  Useful for CLI tooling that needs to let the user pick an org context.",
+        "description": "Returns the authenticated user's personal account ID and a list of organizations they belong to. Each organization entry includes the organization's id, name, and account_id. Useful for CLI tooling that needs to let the user pick an organization context.",
         "operationId": "get_me_api_me_get",
         "parameters": [
           {

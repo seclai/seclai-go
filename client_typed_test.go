@@ -588,6 +588,49 @@ func TestClient_DeleteAgent(t *testing.T) {
 	}
 }
 
+// ── Agent Export tests ──────────────────────────────────────────────────────
+
+func TestClient_ExportAgent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/a_1/export" {
+			w.WriteHeader(404)
+			return
+		}
+		if r.URL.Query().Get("download") != "true" {
+			t.Errorf("expected download=true, got %q", r.URL.Query().Get("download"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"export_version":"2","exported_at":"2026-01-01T00:00:00Z","software_version":"1.0.0","agent":{"name":"test"}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	resp, err := c.ExportAgent(context.Background(), "a_1", true)
+	if err != nil {
+		t.Fatalf("ExportAgent: %v", err)
+	}
+	if resp.ExportVersion != "2" {
+		t.Fatalf("expected export_version 2, got %q", resp.ExportVersion)
+	}
+}
+
+func TestClient_ExportAgent_DownloadFalse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("download") != "false" {
+			t.Errorf("expected download=false, got %q", r.URL.Query().Get("download"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"export_version":"2","exported_at":"2026-01-01T00:00:00Z","software_version":"1.0.0","agent":{"name":"test"}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	_, err := c.ExportAgent(context.Background(), "a_1", false)
+	if err != nil {
+		t.Fatalf("ExportAgent download=false: %v", err)
+	}
+}
+
 // ── Agent Definition tests ──────────────────────────────────────────────────
 
 func TestClient_GetAgentDefinition(t *testing.T) {
