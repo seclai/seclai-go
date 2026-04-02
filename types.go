@@ -47,6 +47,9 @@ type UpdateAgentRequest = generated.RoutersApiAgentsUpdateAgentRequest
 // AgentDefinitionResponse is the agent's step workflow definition.
 type AgentDefinitionResponse = generated.AgentDefinitionResponse
 
+// AgentExportResponse is a portable JSON snapshot of an agent definition.
+type AgentExportResponse = generated.AgentExportResponse
+
 // UpdateAgentDefinitionRequest is the request body for updating an agent definition.
 type UpdateAgentDefinitionRequest = generated.UpdateAgentDefinitionRequest
 

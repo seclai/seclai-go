@@ -99,6 +99,36 @@ type AgentDefinitionResponse struct {
 //	THOROUGH  → "Slow and thorough"
 type AgentEvaluationTier string
 
+// AgentExportResponse Portable JSON snapshot of an agent definition.
+type AgentExportResponse struct {
+	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, created_at, updated_at.
+	Agent map[string]interface{} `json:"agent"`
+
+	// AlertConfigs Alert configurations.
+	AlertConfigs *[]map[string]interface{} `json:"alert_configs"`
+
+	// Dependencies Resolved dependency manifest. Keys: knowledge_bases, memory_banks, source_connections, agents, users — each a list of {id, name, description, …}.
+	Dependencies *map[string]interface{} `json:"dependencies"`
+
+	// EvaluationCriteria Evaluation criteria for agent steps.
+	EvaluationCriteria *[]map[string]interface{} `json:"evaluation_criteria"`
+
+	// ExportVersion Schema version of the export format (currently "2").
+	ExportVersion string `json:"export_version"`
+
+	// ExportedAt ISO-8601 timestamp of when the export was generated.
+	ExportedAt string `json:"exported_at"`
+
+	// GovernancePolicies Agent-scoped governance policies.
+	GovernancePolicies *[]map[string]interface{} `json:"governance_policies"`
+
+	// SoftwareVersion Application version that produced this export.
+	SoftwareVersion string `json:"software_version"`
+
+	// Trigger Trigger configuration with schedules.
+	Trigger *map[string]interface{} `json:"trigger"`
+}
+
 // AgentRunAttemptResponse defines model for AgentRunAttemptResponse.
 type AgentRunAttemptResponse struct {
 	// Duration Duration of the attempt in seconds.
@@ -171,6 +201,9 @@ type AgentRunStepResponse struct {
 
 	// EndedAt Timestamp when the step attempt ended.
 	EndedAt *string `json:"ended_at"`
+
+	// Input Input provided to the step, if any.
+	Input *string `json:"input"`
 
 	// Output Output produced by the step, if any.
 	Output *string `json:"output"`
@@ -2433,6 +2466,15 @@ type ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams struct {
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
+// ExportAgentApiAgentsAgentIdExportGetParams defines parameters for ExportAgentApiAgentsAgentIdExportGet.
+type ExportAgentApiAgentsAgentIdExportGetParams struct {
+	// Download Return as file download
+	Download *bool `form:"download,omitempty" json:"download,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
 // ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams defines parameters for ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet.
 type ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -2753,6 +2795,12 @@ type GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams struct {
 
 // UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams defines parameters for UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut.
 type UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetMeApiMeGetParams defines parameters for GetMeApiMeGet.
+type GetMeApiMeGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -3093,7 +3141,7 @@ type ListSourcesApiSourcesGetParams struct {
 	// Order Sort order
 	Order *string `form:"order,omitempty" json:"order,omitempty"`
 
-	// AccountId List sources for the given account. Defaults to the api key's account.
+	// AccountId List sources for the given account. Defaults to the caller's account.
 	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -3602,6 +3650,9 @@ type ClientInterface interface {
 	// ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet request
 	ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ExportAgentApiAgentsAgentIdExportGet request
+	ExportAgentApiAgentsAgentIdExportGet(ctx context.Context, agentId string, params *ExportAgentApiAgentsAgentIdExportGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet request
 	ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx context.Context, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3765,7 +3816,7 @@ type ClientInterface interface {
 	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMeApiMeGet request
-	GetMeApiMeGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetMeApiMeGet(ctx context.Context, params *GetMeApiMeGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListMemoryBanksApiMemoryBanksGet request
 	ListMemoryBanksApiMemoryBanksGet(ctx context.Context, params *ListMemoryBanksApiMemoryBanksGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4437,6 +4488,18 @@ func (c *Client) ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet(
 
 func (c *Client) ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetRequest(c.Server, agentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ExportAgentApiAgentsAgentIdExportGet(ctx context.Context, agentId string, params *ExportAgentApiAgentsAgentIdExportGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExportAgentApiAgentsAgentIdExportGetRequest(c.Server, agentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5167,8 +5230,8 @@ func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx cont
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetMeApiMeGet(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetMeApiMeGetRequest(c.Server)
+func (c *Client) GetMeApiMeGet(ctx context.Context, params *GetMeApiMeGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMeApiMeGetRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -8176,6 +8239,77 @@ func NewListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetRequest(server string
 	return req, nil
 }
 
+// NewExportAgentApiAgentsAgentIdExportGetRequest generates requests for ExportAgentApiAgentsAgentIdExportGet
+func NewExportAgentApiAgentsAgentIdExportGetRequest(server string, agentId string, params *ExportAgentApiAgentsAgentIdExportGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/export", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Download != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "download", runtime.ParamLocationQuery, *params.Download); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest generates requests for ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet
 func NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRequest(server string, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams) (*http.Request, error) {
 	var err error
@@ -10864,7 +10998,7 @@ func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(se
 }
 
 // NewGetMeApiMeGetRequest generates requests for GetMeApiMeGet
-func NewGetMeApiMeGetRequest(server string) (*http.Request, error) {
+func NewGetMeApiMeGetRequest(server string, params *GetMeApiMeGetParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -10885,6 +11019,21 @@ func NewGetMeApiMeGetRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -14714,6 +14863,9 @@ type ClientWithResponsesInterface interface {
 	// ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetWithResponse request
 	ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetWithResponse(ctx context.Context, agentId string, params *ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse, error)
 
+	// ExportAgentApiAgentsAgentIdExportGetWithResponse request
+	ExportAgentApiAgentsAgentIdExportGetWithResponse(ctx context.Context, agentId string, params *ExportAgentApiAgentsAgentIdExportGetParams, reqEditors ...RequestEditorFn) (*ExportAgentApiAgentsAgentIdExportGetResponse, error)
+
 	// ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse request
 	ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse(ctx context.Context, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams, reqEditors ...RequestEditorFn) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error)
 
@@ -14877,7 +15029,7 @@ type ClientWithResponsesInterface interface {
 	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
 
 	// GetMeApiMeGetWithResponse request
-	GetMeApiMeGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMeApiMeGetResponse, error)
+	GetMeApiMeGetWithResponse(ctx context.Context, params *GetMeApiMeGetParams, reqEditors ...RequestEditorFn) (*GetMeApiMeGetResponse, error)
 
 	// ListMemoryBanksApiMemoryBanksGetWithResponse request
 	ListMemoryBanksApiMemoryBanksGetWithResponse(ctx context.Context, params *ListMemoryBanksApiMemoryBanksGetParams, reqEditors ...RequestEditorFn) (*ListMemoryBanksApiMemoryBanksGetResponse, error)
@@ -15716,6 +15868,29 @@ func (r ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse) Status() st
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ExportAgentApiAgentsAgentIdExportGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentExportResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ExportAgentApiAgentsAgentIdExportGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExportAgentApiAgentsAgentIdExportGetResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -18335,6 +18510,15 @@ func (c *ClientWithResponses) ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGe
 	return ParseListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse(rsp)
 }
 
+// ExportAgentApiAgentsAgentIdExportGetWithResponse request returning *ExportAgentApiAgentsAgentIdExportGetResponse
+func (c *ClientWithResponses) ExportAgentApiAgentsAgentIdExportGetWithResponse(ctx context.Context, agentId string, params *ExportAgentApiAgentsAgentIdExportGetParams, reqEditors ...RequestEditorFn) (*ExportAgentApiAgentsAgentIdExportGetResponse, error) {
+	rsp, err := c.ExportAgentApiAgentsAgentIdExportGet(ctx, agentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExportAgentApiAgentsAgentIdExportGetResponse(rsp)
+}
+
 // ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse request returning *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse
 func (c *ClientWithResponses) ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetWithResponse(ctx context.Context, agentId string, uploadId string, params *ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams, reqEditors ...RequestEditorFn) (*ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse, error) {
 	rsp, err := c.ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet(ctx, agentId, uploadId, params, reqEditors...)
@@ -18858,8 +19042,8 @@ func (c *ClientWithResponses) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseI
 }
 
 // GetMeApiMeGetWithResponse request returning *GetMeApiMeGetResponse
-func (c *ClientWithResponses) GetMeApiMeGetWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMeApiMeGetResponse, error) {
-	rsp, err := c.GetMeApiMeGet(ctx, reqEditors...)
+func (c *ClientWithResponses) GetMeApiMeGetWithResponse(ctx context.Context, params *GetMeApiMeGetParams, reqEditors ...RequestEditorFn) (*GetMeApiMeGetResponse, error) {
+	rsp, err := c.GetMeApiMeGet(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -20447,6 +20631,39 @@ func ParseListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse(rsp *http.
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest EvaluationRunSummaryListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseExportAgentApiAgentsAgentIdExportGetResponse parses an HTTP response from a ExportAgentApiAgentsAgentIdExportGetWithResponse call
+func ParseExportAgentApiAgentsAgentIdExportGetResponse(rsp *http.Response) (*ExportAgentApiAgentsAgentIdExportGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExportAgentApiAgentsAgentIdExportGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentExportResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

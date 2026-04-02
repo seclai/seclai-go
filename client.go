@@ -313,6 +313,18 @@ func (c *Client) DeleteAgent(ctx context.Context, agentID string) error {
 	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/%s", url.PathEscape(agentID)), nil, nil, nil, nil)
 }
 
+// ── Agent Export ────────────────────────────────────────────────────────────
+
+// ExportAgent exports an agent definition as a portable JSON snapshot.
+func (c *Client) ExportAgent(ctx context.Context, agentID string, download bool) (*AgentExportResponse, error) {
+	query := map[string]string{"download": fmt.Sprintf("%t", download)}
+	var out AgentExportResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/export", url.PathEscape(agentID)), query, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ── Agent Definitions ───────────────────────────────────────────────────────
 
 // GetAgentDefinition retrieves the definition (step configuration) for an agent.
