@@ -107,6 +107,114 @@
         "title": "AgentEvaluationTier",
         "type": "string"
       },
+      "AgentExportResponse": {
+        "description": "Portable JSON snapshot of an agent definition.",
+        "properties": {
+          "agent": {
+            "additionalProperties": true,
+            "description": "Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, created_at, updated_at.",
+            "title": "Agent",
+            "type": "object"
+          },
+          "alert_configs": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Alert configurations.",
+            "title": "Alert Configs"
+          },
+          "dependencies": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Resolved dependency manifest. Keys: knowledge_bases, memory_banks, source_connections, agents, users \u2014 each a list of {id, name, description, \u2026}.",
+            "title": "Dependencies"
+          },
+          "evaluation_criteria": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Evaluation criteria for agent steps.",
+            "title": "Evaluation Criteria"
+          },
+          "export_version": {
+            "description": "Schema version of the export format (currently \"2\").",
+            "title": "Export Version",
+            "type": "string"
+          },
+          "exported_at": {
+            "description": "ISO-8601 timestamp of when the export was generated.",
+            "title": "Exported At",
+            "type": "string"
+          },
+          "governance_policies": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Agent-scoped governance policies.",
+            "title": "Governance Policies"
+          },
+          "software_version": {
+            "description": "Application version that produced this export.",
+            "title": "Software Version",
+            "type": "string"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trigger configuration with schedules.",
+            "title": "Trigger"
+          }
+        },
+        "required": [
+          "export_version",
+          "exported_at",
+          "software_version",
+          "agent"
+        ],
+        "title": "AgentExportResponse",
+        "type": "object"
+      },
       "AgentRunAttemptResponse": {
         "properties": {
           "duration": {
@@ -354,6 +462,18 @@
             "description": "Timestamp when the step attempt ended.",
             "title": "Ended At"
           },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Input provided to the step, if any.",
+            "title": "Input"
+          },
           "output": {
             "anyOf": [
               {
@@ -404,6 +524,7 @@
           "agent_step_id",
           "step_type",
           "status",
+          "input",
           "output",
           "output_content_type",
           "started_at",
@@ -8868,6 +8989,64 @@
         "summary": "List Evaluation Runs",
         "tags": [
           "agent-evaluations"
+        ]
+      }
+    },
+    "/agents/{agent_id}/export": {
+      "get": {
+        "description": "Export an agent definition as a portable JSON snapshot.\n\nThe response contains the full definition, trigger configuration with schedules, alert configs, evaluation criteria, agent-scoped governance policies, and a resolved dependency manifest that maps every referenced external entity UUID to its human-readable name.\n\nResponse shape:\n- `export_version`: schema version (currently `\"2\"`)\n- `exported_at`: ISO-8601 timestamp\n- `agent`: name, description, schema_version, definition, timestamps\n- `trigger`: trigger type, input template, schedules\n- `alert_configs`: alert type, thresholds, recipients\n- `evaluation_criteria`: evaluation settings per step\n- `governance_policies`: agent-scoped governance policies\n- `dependencies`: knowledge_bases, memory_banks, source_connections, agents, users\n\nQuery params:\n- `download` (default true): when true, sets `Content-Disposition: attachment` so clients treat the response as a file download.\n\nAuth & scoping:\n- Requires `X-API-Key`. You can only export agents belonging to your account.",
+        "operationId": "export_agent_api_agents__agent_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Return as file download",
+            "in": "query",
+            "name": "download",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Return as file download",
+              "title": "Download",
+              "type": "boolean"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentExportResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export agent definition",
+        "tags": [
+          "agents"
         ]
       }
     },
