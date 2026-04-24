@@ -1856,6 +1856,112 @@ func (c *Client) GetModelRecommendations(ctx context.Context, modelID string) (j
 	return out, nil
 }
 
+// ListModelsOptions controls query parameters for the ListModels endpoint.
+type ListModelsOptions struct {
+	// Provider filters by provider name (e.g. "anthropic", "openai").
+	Provider string
+	// SupportsToolUse filters to models with tool calling support.
+	SupportsToolUse *bool
+	// SupportsThinking filters to models with extended thinking support.
+	SupportsThinking *bool
+}
+
+// ListModels lists all enabled LLM models grouped by provider.
+func (c *Client) ListModels(ctx context.Context, opts ListModelsOptions) ([]ProviderGroupResponse, error) {
+	q := map[string]string{}
+	if opts.Provider != "" {
+		q["provider"] = opts.Provider
+	}
+	if opts.SupportsToolUse != nil {
+		q["supports_tool_use"] = fmt.Sprintf("%t", *opts.SupportsToolUse)
+	}
+	if opts.SupportsThinking != nil {
+		q["supports_thinking"] = fmt.Sprintf("%t", *opts.SupportsThinking)
+	}
+	var out []ProviderGroupResponse
+	if err := c.Do(ctx, http.MethodGet, "/models", q, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// GetModel retrieves full details for a specific model.
+func (c *Client) GetModel(ctx context.Context, modelID string) (*PromptModelResponse, error) {
+	var out PromptModelResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/models/%s/details", url.PathEscape(modelID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ── Model Playground Experiments ────────────────────────────────────────────
+
+// ListExperimentsOptions controls query parameters for the ListExperiments endpoint.
+type ListExperimentsOptions struct {
+	// Days is the look-back window in days (1-730, default 30).
+	Days int
+	// StartDate filters by start date (YYYY-MM-DD).
+	StartDate string
+	// EndDate filters by end date (YYYY-MM-DD).
+	EndDate string
+	// Limit is the maximum number of results.
+	Limit int
+	// Offset is the pagination offset.
+	Offset int
+}
+
+// ListExperiments lists model playground experiments.
+func (c *Client) ListExperiments(ctx context.Context, opts ListExperimentsOptions) (json.RawMessage, error) {
+	q := map[string]string{}
+	if opts.Days > 0 {
+		q["days"] = fmt.Sprintf("%d", opts.Days)
+	}
+	if opts.StartDate != "" {
+		q["start_date"] = opts.StartDate
+	}
+	if opts.EndDate != "" {
+		q["end_date"] = opts.EndDate
+	}
+	if opts.Limit > 0 {
+		q["limit"] = fmt.Sprintf("%d", opts.Limit)
+	}
+	if opts.Offset > 0 {
+		q["offset"] = fmt.Sprintf("%d", opts.Offset)
+	}
+	var out json.RawMessage
+	if err := c.Do(ctx, http.MethodGet, "/models/playground/experiments", q, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CreateExperiment creates a model playground experiment.
+func (c *Client) CreateExperiment(ctx context.Context, body PlaygroundCreateRequest) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(ctx, http.MethodPost, "/models/playground/experiments", nil, body, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// GetExperiment retrieves a model playground experiment by ID.
+func (c *Client) GetExperiment(ctx context.Context, experimentID string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/models/playground/experiments/%s", url.PathEscape(experimentID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CancelExperiment cancels a running model playground experiment.
+func (c *Client) CancelExperiment(ctx context.Context, experimentID string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/models/playground/experiments/%s/cancel", url.PathEscape(experimentID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ── General Search ──────────────────────────────────────────────────────────
 
 // SearchOptions controls query parameters for the general Search endpoint.

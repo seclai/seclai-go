@@ -25,9 +25,9 @@ const (
 
 // Defines values for AgentEvaluationTier.
 const (
-	Balanced AgentEvaluationTier = "balanced"
-	Fast     AgentEvaluationTier = "fast"
-	Thorough AgentEvaluationTier = "thorough"
+	AgentEvaluationTierBalanced AgentEvaluationTier = "balanced"
+	AgentEvaluationTierFast     AgentEvaluationTier = "fast"
+	AgentEvaluationTierThorough AgentEvaluationTier = "thorough"
 )
 
 // Defines values for EvaluationStatus.
@@ -55,12 +55,33 @@ const (
 	PendingProcessingCompletedFailedStatusProcessing PendingProcessingCompletedFailedStatus = "processing"
 )
 
+// Defines values for PlaygroundCreateRequestEvaluationComplexity.
+const (
+	Complex PlaygroundCreateRequestEvaluationComplexity = "complex"
+	Medium  PlaygroundCreateRequestEvaluationComplexity = "medium"
+	Simple  PlaygroundCreateRequestEvaluationComplexity = "simple"
+)
+
+// Defines values for PlaygroundCreateRequestEvaluationMode.
+const (
+	Manual PlaygroundCreateRequestEvaluationMode = "manual"
+	Prompt PlaygroundCreateRequestEvaluationMode = "prompt"
+)
+
 // Defines values for PromptModelAutoUpgradeStrategy.
 const (
 	CautiousAdopter PromptModelAutoUpgradeStrategy = "cautious_adopter"
 	EarlyAdopter    PromptModelAutoUpgradeStrategy = "early_adopter"
 	MiddleOfRoad    PromptModelAutoUpgradeStrategy = "middle_of_road"
 	None            PromptModelAutoUpgradeStrategy = "none"
+)
+
+// Defines values for SourceIndexMode.
+const (
+	SourceIndexModeBalanced        SourceIndexMode = "balanced"
+	SourceIndexModeCustom          SourceIndexMode = "custom"
+	SourceIndexModeFastAndCheap    SourceIndexMode = "fast_and_cheap"
+	SourceIndexModeSlowAndThorough SourceIndexMode = "slow_and_thorough"
 )
 
 // AddConversationTurnRequest defines model for AddConversationTurnRequest.
@@ -80,7 +101,7 @@ type AgentDefinitionResponse struct {
 	// ChangeId Current change ID (use as expected_change_id when updating).
 	ChangeId string `json:"change_id"`
 
-	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, transform, gate, retry, evaluate_step, insight, extract_json, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, and others.
+	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, transform, gate, retry, evaluate_step, insight, extract_content, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, and others.
 	Definition map[string]interface{} `json:"definition"`
 
 	// SchemaVersion Agent schema version.
@@ -665,6 +686,19 @@ type CreateSourceBody struct {
 	// EmbeddingModel Embedding model override.
 	EmbeddingModel *string `json:"embedding_model"`
 
+	// IndexMode Embedding quality / cost trade-off preset for custom_index sources.
+	//
+	// Each preset controls the default embedding dimensions, chunk size, and
+	// chunk overlap.  The embedding model is always the account-level default
+	// (currently ``AWS_BEDROCK_AMAZON_NOVA_2_MULTIMODAL``).
+	//
+	// Presets:
+	//     FAST_AND_CHEAP: 256 dimensions, 3 000 char chunks, 500 char overlap.
+	//     BALANCED: 384 dimensions, 1 500 char chunks, 300 char overlap.
+	//     SLOW_AND_THOROUGH: 1 024 dimensions, 1 000 char chunks, 200 char overlap.
+	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
+	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
+
 	// Name Source name.
 	Name string `json:"name"`
 
@@ -680,7 +714,7 @@ type CreateSourceBody struct {
 	// Retention Retention period in days.
 	Retention *int `json:"retention"`
 
-	// SourceType Source type: rss, website, file_uploads, or custom_index.
+	// SourceType Source type: rss, website, or custom_index. The legacy value 'file_uploads' is accepted as an alias for custom_index.
 	SourceType string `json:"source_type"`
 
 	// UrlId URL record ID (required for rss/website sources).
@@ -1222,8 +1256,58 @@ type PaginationResponse struct {
 // PendingProcessingCompletedFailedStatus defines model for PendingProcessingCompletedFailedStatus.
 type PendingProcessingCompletedFailedStatus string
 
+// PlaygroundCreateRequest Create a model playground experiment via the public API.
+type PlaygroundCreateRequest struct {
+	// EvaluationComplexity simple, medium, or complex
+	EvaluationComplexity *PlaygroundCreateRequestEvaluationComplexity `json:"evaluation_complexity,omitempty"`
+
+	// EvaluationMode manual or prompt
+	EvaluationMode *PlaygroundCreateRequestEvaluationMode `json:"evaluation_mode,omitempty"`
+
+	// EvaluatorModelId Evaluator model ID when evaluation_mode is prompt.
+	EvaluatorModelId *string `json:"evaluator_model_id"`
+
+	// IncludeStepOutputInEvaluation Whether to include selected step output as evaluator context.
+	IncludeStepOutputInEvaluation *bool `json:"include_step_output_in_evaluation,omitempty"`
+
+	// JsonTemplate Optional JSON template for advanced mode.
+	JsonTemplate *string `json:"json_template"`
+
+	// ModelIds Selected model IDs (1-10).
+	ModelIds []string `json:"model_ids"`
+
+	// Prompt Prompt text for the experiment.
+	Prompt string `json:"prompt"`
+
+	// SelectedStepOutput Optional step output text for evaluator context.
+	SelectedStepOutput *string `json:"selected_step_output"`
+
+	// SystemPrompt Optional system prompt.
+	SystemPrompt *string `json:"system_prompt,omitempty"`
+}
+
+// PlaygroundCreateRequestEvaluationComplexity simple, medium, or complex
+type PlaygroundCreateRequestEvaluationComplexity string
+
+// PlaygroundCreateRequestEvaluationMode manual or prompt
+type PlaygroundCreateRequestEvaluationMode string
+
 // PromptModelAutoUpgradeStrategy defines model for PromptModelAutoUpgradeStrategy.
 type PromptModelAutoUpgradeStrategy string
+
+// PromptToolResponse Response model for a prompt tool.
+type PromptToolResponse struct {
+	Description      *string            `json:"description"`
+	DocumentationUrl *string            `json:"documentation_url"`
+	Example          *string            `json:"example"`
+	Headers          *map[string]string `json:"headers"`
+	Id               string             `json:"id"`
+	Name             string             `json:"name"`
+	Notes            *string            `json:"notes"`
+	ToolName         *string            `json:"tool_name"`
+	ToolType         string             `json:"tool_type"`
+	ToolTypePattern  *string            `json:"tool_type_pattern"`
+}
 
 // ProposedActionResponse A single proposed action.
 type ProposedActionResponse struct {
@@ -1328,6 +1412,20 @@ type SourceEmbeddingMigrationResponse struct {
 	UpdatedAt              string    `json:"updated_at"`
 }
 
+// SourceIndexMode Embedding quality / cost trade-off preset for custom_index sources.
+//
+// Each preset controls the default embedding dimensions, chunk size, and
+// chunk overlap.  The embedding model is always the account-level default
+// (currently “AWS_BEDROCK_AMAZON_NOVA_2_MULTIMODAL“).
+//
+// Presets:
+//
+//	FAST_AND_CHEAP: 256 dimensions, 3 000 char chunks, 500 char overlap.
+//	BALANCED: 384 dimensions, 1 500 char chunks, 300 char overlap.
+//	SLOW_AND_THOROUGH: 1 024 dimensions, 1 000 char chunks, 200 char overlap.
+//	CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
+type SourceIndexMode string
+
 // SourceResponse Response model for source data.
 type SourceResponse struct {
 	// AccountId Account ID associated with the source.
@@ -1380,6 +1478,19 @@ type SourceResponse struct {
 
 	// Id Unique identifier for the source connection.
 	Id string `json:"id"`
+
+	// IndexMode Embedding quality / cost trade-off preset for custom_index sources.
+	//
+	// Each preset controls the default embedding dimensions, chunk size, and
+	// chunk overlap.  The embedding model is always the account-level default
+	// (currently ``AWS_BEDROCK_AMAZON_NOVA_2_MULTIMODAL``).
+	//
+	// Presets:
+	//     FAST_AND_CHEAP: 256 dimensions, 3 000 char chunks, 500 char overlap.
+	//     BALANCED: 384 dimensions, 1 500 char chunks, 300 char overlap.
+	//     SLOW_AND_THOROUGH: 1 024 dimensions, 1 000 char chunks, 200 char overlap.
+	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
+	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
 
 	// Name Name of the source connection.
 	Name string `json:"name"`
@@ -1689,6 +1800,32 @@ type ValidationErrorLoc1 = int
 // ValidationError_Loc_Item defines model for ValidationError.loc.Item.
 type ValidationError_Loc_Item struct {
 	union json.RawMessage
+}
+
+// VariantCategoryResponse Response model for a variant category
+type VariantCategoryResponse struct {
+	Category     string                  `json:"category"`
+	Configurable bool                    `json:"configurable"`
+	Description  string                  `json:"description"`
+	Options      []VariantOptionResponse `json:"options"`
+	Title        string                  `json:"title"`
+}
+
+// VariantOptionResponse Response model for a variant option
+type VariantOptionResponse struct {
+	Default                                      bool     `json:"default"`
+	Description                                  *string  `json:"description"`
+	Input1hCacheWriteCreditsPer1000Tokens        *float32 `json:"input_1h_cache_write_credits_per_1000_tokens"`
+	Input5mCacheWriteCreditsPer1000Tokens        *float32 `json:"input_5m_cache_write_credits_per_1000_tokens"`
+	InputCacheHitCreditsPer1000Tokens            *float32 `json:"input_cache_hit_credits_per_1000_tokens"`
+	InputCreditsPer1000Tokens                    *float32 `json:"input_credits_per_1000_tokens"`
+	LongContextInputCacheHitCreditsPer1000Tokens *float32 `json:"long_context_input_cache_hit_credits_per_1000_tokens"`
+	LongContextInputCreditsPer1000Tokens         *float32 `json:"long_context_input_credits_per_1000_tokens"`
+	LongContextOutputCreditsPer1000Tokens        *float32 `json:"long_context_output_credits_per_1000_tokens"`
+	LongContextThreshold                         *int     `json:"long_context_threshold"`
+	OutputCreditsPer1000Tokens                   *float32 `json:"output_credits_per_1000_tokens"`
+	Title                                        string   `json:"title"`
+	Value                                        string   `json:"value"`
 }
 
 // RoutersApiAgentsAgentListResponse defines model for routers__api__agents__AgentListResponse.
@@ -2226,6 +2363,63 @@ type RoutersApiSourcesSourceListResponse struct {
 
 	// Pagination Pagination information.
 	Pagination PaginationResponse `json:"pagination"`
+}
+
+// SchemasModelResponsesPromptModelResponse Response model for prompt model data
+type SchemasModelResponsesPromptModelResponse struct {
+	Default                               bool       `json:"default"`
+	DeprecatedAt                          *time.Time `json:"deprecated_at"`
+	Description                           string     `json:"description"`
+	Enabled                               bool       `json:"enabled"`
+	Family                                *string    `json:"family"`
+	FamilyGeneration                      *float32   `json:"family_generation"`
+	Id                                    string     `json:"id"`
+	Input1hCacheWriteCreditsPer1000Tokens *float32   `json:"input_1h_cache_write_credits_per_1000_tokens"`
+	Input5mCacheWriteCreditsPer1000Tokens *float32   `json:"input_5m_cache_write_credits_per_1000_tokens"`
+	InputCacheHitCreditsPer1000Tokens     *float32   `json:"input_cache_hit_credits_per_1000_tokens"`
+	InputCreditsPer1000Tokens             *float32   `json:"input_credits_per_1000_tokens"`
+	IsNew                                 *bool      `json:"is_new,omitempty"`
+	LastUsed                              *bool      `json:"last_used,omitempty"`
+	MaxContextTokens                      int        `json:"max_context_tokens"`
+	MaxConversationLength                 int        `json:"max_conversation_length"`
+	MaxOutputTokens                       int        `json:"max_output_tokens"`
+	ModelId                               string     `json:"model_id"`
+	Name                                  string     `json:"name"`
+	OutputCreditsPer1000Tokens            *float32   `json:"output_credits_per_1000_tokens"`
+
+	// PayloadSchema Model-specific JSON schema for advanced prompt_call json_template payloads.
+	PayloadSchema *map[string]interface{} `json:"payload_schema"`
+
+	// PayloadSchemaSourceUrl Source URL used to derive payload_schema guidance for this model.
+	PayloadSchemaSourceUrl *string    `json:"payload_schema_source_url"`
+	Provider               string     `json:"provider"`
+	ReleasedAt             *time.Time `json:"released_at"`
+
+	// SchemaDocumentationUrl Model documentation URL with request/response payload details.
+	SchemaDocumentationUrl *string `json:"schema_documentation_url"`
+
+	// SchemaNotes Human-readable notes about request payload compatibility.
+	SchemaNotes              *string                    `json:"schema_notes"`
+	SuccessorModelId         *string                    `json:"successor_model_id"`
+	SunsetAt                 *time.Time                 `json:"sunset_at"`
+	SupportedInputMedia      *[]string                  `json:"supported_input_media"`
+	SupportedLanguages       *[]string                  `json:"supported_languages"`
+	SupportsOpenaiArguments  *bool                      `json:"supports_openai_arguments,omitempty"`
+	SupportsStreaming        *bool                      `json:"supports_streaming,omitempty"`
+	SupportsStructuredOutput *bool                      `json:"supports_structured_output,omitempty"`
+	SupportsThinking         *bool                      `json:"supports_thinking,omitempty"`
+	SupportsToolUse          *bool                      `json:"supports_tool_use,omitempty"`
+	ToolsDisabled            *[]PromptToolResponse      `json:"tools_disabled,omitempty"`
+	ToolsEnabled             *[]PromptToolResponse      `json:"tools_enabled,omitempty"`
+	TrainingCutoffAt         *time.Time                 `json:"training_cutoff_at"`
+	Url                      *string                    `json:"url"`
+	Variants                 *[]VariantCategoryResponse `json:"variants"`
+}
+
+// SchemasModelResponsesProviderGroupResponse Response model for provider group with models
+type SchemasModelResponsesProviderGroupResponse struct {
+	Models   []SchemasModelResponsesPromptModelResponse `json:"models"`
+	Provider string                                     `json:"provider"`
 }
 
 // SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse Per-mode rollup for evaluation activity.
@@ -2920,6 +3114,21 @@ type TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams stru
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
+// ListModelsApiModelsGetParams defines parameters for ListModelsApiModelsGet.
+type ListModelsApiModelsGetParams struct {
+	// Provider Filter by provider name
+	Provider *string `form:"provider,omitempty" json:"provider,omitempty"`
+
+	// SupportsToolUse Filter to models that support tool use
+	SupportsToolUse *bool `form:"supports_tool_use,omitempty" json:"supports_tool_use,omitempty"`
+
+	// SupportsThinking Filter to models that support extended thinking
+	SupportsThinking *bool `form:"supports_thinking,omitempty" json:"supports_thinking,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
 // ListAlertsApiModelsAlertsGetParams defines parameters for ListAlertsApiModelsAlertsGet.
 type ListAlertsApiModelsAlertsGetParams struct {
 	// AgentId Filter alerts to a specific agent UUID.
@@ -2952,6 +3161,51 @@ type GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams struct {
 
 // MarkReadApiModelsAlertsAlertIdReadPatchParams defines parameters for MarkReadApiModelsAlertsAlertIdReadPatch.
 type MarkReadApiModelsAlertsAlertIdReadPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ListExperimentsApiModelsPlaygroundExperimentsGetParams defines parameters for ListExperimentsApiModelsPlaygroundExperimentsGet.
+type ListExperimentsApiModelsPlaygroundExperimentsGetParams struct {
+	// Days Look-back window in days.
+	Days *int `form:"days,omitempty" json:"days,omitempty"`
+
+	// StartDate Explicit start date (overrides days).
+	StartDate *openapi_types.Date `form:"start_date,omitempty" json:"start_date,omitempty"`
+
+	// EndDate Explicit end date (overrides days).
+	EndDate *openapi_types.Date `form:"end_date,omitempty" json:"end_date,omitempty"`
+
+	// Limit Page size.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Pagination offset.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CreateExperimentApiModelsPlaygroundExperimentsPostParams defines parameters for CreateExperimentApiModelsPlaygroundExperimentsPost.
+type CreateExperimentApiModelsPlaygroundExperimentsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams defines parameters for GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet.
+type GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams defines parameters for CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost.
+type CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetModelApiModelsModelIdDetailsGetParams defines parameters for GetModelApiModelsModelIdDetailsGet.
+type GetModelApiModelsModelIdDetailsGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -3348,6 +3602,9 @@ type UpdateMemoryBankApiMemoryBanksMemoryBankIdPutJSONRequestBody = UpdateMemory
 
 // TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody defines body for TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost for application/json ContentType.
 type TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody = TestCompactionRequest
+
+// CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody defines body for CreateExperimentApiModelsPlaygroundExperimentsPost for application/json ContentType.
+type CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody = PlaygroundCreateRequest
 
 // CreateSolutionApiSolutionsPostJSONRequestBody defines body for CreateSolutionApiSolutionsPost for application/json ContentType.
 type CreateSolutionApiSolutionsPostJSONRequestBody = CreateSolutionRequest
@@ -3875,6 +4132,9 @@ type ClientInterface interface {
 
 	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListModelsApiModelsGet request
+	ListModelsApiModelsGet(ctx context.Context, params *ListModelsApiModelsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAlertsApiModelsAlertsGet request
 	ListAlertsApiModelsAlertsGet(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3886,6 +4146,23 @@ type ClientInterface interface {
 
 	// MarkReadApiModelsAlertsAlertIdReadPatch request
 	MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListExperimentsApiModelsPlaygroundExperimentsGet request
+	ListExperimentsApiModelsPlaygroundExperimentsGet(ctx context.Context, params *ListExperimentsApiModelsPlaygroundExperimentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateExperimentApiModelsPlaygroundExperimentsPostWithBody request with any body
+	CreateExperimentApiModelsPlaygroundExperimentsPostWithBody(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateExperimentApiModelsPlaygroundExperimentsPost(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, body CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet request
+	GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet(ctx context.Context, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost request
+	CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost(ctx context.Context, experimentId openapi_types.UUID, params *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetModelApiModelsModelIdDetailsGet request
+	GetModelApiModelsModelIdDetailsGet(ctx context.Context, modelId string, params *GetModelApiModelsModelIdDetailsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRecommendationsApiModelsModelIdRecommendationsGet request
 	GetRecommendationsApiModelsModelIdRecommendationsGet(ctx context.Context, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5494,6 +5771,18 @@ func (c *Client) TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPos
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListModelsApiModelsGet(ctx context.Context, params *ListModelsApiModelsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListModelsApiModelsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListAlertsApiModelsAlertsGet(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAlertsApiModelsAlertsGetRequest(c.Server, params)
 	if err != nil {
@@ -5532,6 +5821,78 @@ func (c *Client) GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Co
 
 func (c *Client) MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(c.Server, alertId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListExperimentsApiModelsPlaygroundExperimentsGet(ctx context.Context, params *ListExperimentsApiModelsPlaygroundExperimentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListExperimentsApiModelsPlaygroundExperimentsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateExperimentApiModelsPlaygroundExperimentsPostWithBody(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateExperimentApiModelsPlaygroundExperimentsPostRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateExperimentApiModelsPlaygroundExperimentsPost(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, body CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateExperimentApiModelsPlaygroundExperimentsPostRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet(ctx context.Context, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetRequest(c.Server, experimentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost(ctx context.Context, experimentId openapi_types.UUID, params *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostRequest(c.Server, experimentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetModelApiModelsModelIdDetailsGet(ctx context.Context, modelId string, params *GetModelApiModelsModelIdDetailsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetModelApiModelsModelIdDetailsGetRequest(c.Server, modelId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -11988,6 +12349,102 @@ func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestW
 	return req, nil
 }
 
+// NewListModelsApiModelsGetRequest generates requests for ListModelsApiModelsGet
+func NewListModelsApiModelsGetRequest(server string, params *ListModelsApiModelsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Provider != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "provider", runtime.ParamLocationQuery, *params.Provider); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.SupportsToolUse != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "supports_tool_use", runtime.ParamLocationQuery, *params.SupportsToolUse); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.SupportsThinking != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "supports_thinking", runtime.ParamLocationQuery, *params.SupportsThinking); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListAlertsApiModelsAlertsGetRequest generates requests for ListAlertsApiModelsAlertsGet
 func NewListAlertsApiModelsAlertsGetRequest(server string, params *ListAlertsApiModelsAlertsGetParams) (*http.Request, error) {
 	var err error
@@ -12211,6 +12668,336 @@ func NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(server string, alertId op
 	}
 
 	req, err := http.NewRequest("PATCH", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListExperimentsApiModelsPlaygroundExperimentsGetRequest generates requests for ListExperimentsApiModelsPlaygroundExperimentsGet
+func NewListExperimentsApiModelsPlaygroundExperimentsGetRequest(server string, params *ListExperimentsApiModelsPlaygroundExperimentsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/playground/experiments")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Days != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "days", runtime.ParamLocationQuery, *params.Days); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.StartDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "start_date", runtime.ParamLocationQuery, *params.StartDate); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.EndDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "end_date", runtime.ParamLocationQuery, *params.EndDate); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "offset", runtime.ParamLocationQuery, *params.Offset); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewCreateExperimentApiModelsPlaygroundExperimentsPostRequest calls the generic CreateExperimentApiModelsPlaygroundExperimentsPost builder with application/json body
+func NewCreateExperimentApiModelsPlaygroundExperimentsPostRequest(server string, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, body CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateExperimentApiModelsPlaygroundExperimentsPostRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateExperimentApiModelsPlaygroundExperimentsPostRequestWithBody generates requests for CreateExperimentApiModelsPlaygroundExperimentsPost with any type of body
+func NewCreateExperimentApiModelsPlaygroundExperimentsPostRequestWithBody(server string, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/playground/experiments")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetRequest generates requests for GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet
+func NewGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetRequest(server string, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "experiment_id", runtime.ParamLocationPath, experimentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/playground/experiments/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostRequest generates requests for CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost
+func NewCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostRequest(server string, experimentId openapi_types.UUID, params *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "experiment_id", runtime.ParamLocationPath, experimentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/playground/experiments/%s/cancel", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetModelApiModelsModelIdDetailsGetRequest generates requests for GetModelApiModelsModelIdDetailsGet
+func NewGetModelApiModelsModelIdDetailsGetRequest(server string, modelId string, params *GetModelApiModelsModelIdDetailsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "model_id", runtime.ParamLocationPath, modelId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/%s/details", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -15088,6 +15875,9 @@ type ClientWithResponsesInterface interface {
 
 	TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostWithResponse(ctx context.Context, memoryBankId string, params *TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams, body TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostJSONRequestBody, reqEditors ...RequestEditorFn) (*TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse, error)
 
+	// ListModelsApiModelsGetWithResponse request
+	ListModelsApiModelsGetWithResponse(ctx context.Context, params *ListModelsApiModelsGetParams, reqEditors ...RequestEditorFn) (*ListModelsApiModelsGetResponse, error)
+
 	// ListAlertsApiModelsAlertsGetWithResponse request
 	ListAlertsApiModelsAlertsGetWithResponse(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*ListAlertsApiModelsAlertsGetResponse, error)
 
@@ -15099,6 +15889,23 @@ type ClientWithResponsesInterface interface {
 
 	// MarkReadApiModelsAlertsAlertIdReadPatchWithResponse request
 	MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error)
+
+	// ListExperimentsApiModelsPlaygroundExperimentsGetWithResponse request
+	ListExperimentsApiModelsPlaygroundExperimentsGetWithResponse(ctx context.Context, params *ListExperimentsApiModelsPlaygroundExperimentsGetParams, reqEditors ...RequestEditorFn) (*ListExperimentsApiModelsPlaygroundExperimentsGetResponse, error)
+
+	// CreateExperimentApiModelsPlaygroundExperimentsPostWithBodyWithResponse request with any body
+	CreateExperimentApiModelsPlaygroundExperimentsPostWithBodyWithResponse(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateExperimentApiModelsPlaygroundExperimentsPostResponse, error)
+
+	CreateExperimentApiModelsPlaygroundExperimentsPostWithResponse(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, body CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateExperimentApiModelsPlaygroundExperimentsPostResponse, error)
+
+	// GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse request
+	GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams, reqEditors ...RequestEditorFn) (*GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse, error)
+
+	// CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostWithResponse request
+	CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams, reqEditors ...RequestEditorFn) (*CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse, error)
+
+	// GetModelApiModelsModelIdDetailsGetWithResponse request
+	GetModelApiModelsModelIdDetailsGetWithResponse(ctx context.Context, modelId string, params *GetModelApiModelsModelIdDetailsGetParams, reqEditors ...RequestEditorFn) (*GetModelApiModelsModelIdDetailsGetResponse, error)
 
 	// GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse request
 	GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse(ctx context.Context, modelId string, params *GetRecommendationsApiModelsModelIdRecommendationsGetParams, reqEditors ...RequestEditorFn) (*GetRecommendationsApiModelsModelIdRecommendationsGetResponse, error)
@@ -17222,6 +18029,29 @@ func (r TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse
 	return 0
 }
 
+type ListModelsApiModelsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]SchemasModelResponsesProviderGroupResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListModelsApiModelsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListModelsApiModelsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListAlertsApiModelsAlertsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17304,6 +18134,121 @@ func (r MarkReadApiModelsAlertsAlertIdReadPatchResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r MarkReadApiModelsAlertsAlertIdReadPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListExperimentsApiModelsPlaygroundExperimentsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListExperimentsApiModelsPlaygroundExperimentsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListExperimentsApiModelsPlaygroundExperimentsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateExperimentApiModelsPlaygroundExperimentsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateExperimentApiModelsPlaygroundExperimentsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateExperimentApiModelsPlaygroundExperimentsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetModelApiModelsModelIdDetailsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SchemasModelResponsesPromptModelResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetModelApiModelsModelIdDetailsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetModelApiModelsModelIdDetailsGetResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -19233,6 +20178,15 @@ func (c *ClientWithResponses) TestCompactionPromptApiMemoryBanksMemoryBankIdTest
 	return ParseTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse(rsp)
 }
 
+// ListModelsApiModelsGetWithResponse request returning *ListModelsApiModelsGetResponse
+func (c *ClientWithResponses) ListModelsApiModelsGetWithResponse(ctx context.Context, params *ListModelsApiModelsGetParams, reqEditors ...RequestEditorFn) (*ListModelsApiModelsGetResponse, error) {
+	rsp, err := c.ListModelsApiModelsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListModelsApiModelsGetResponse(rsp)
+}
+
 // ListAlertsApiModelsAlertsGetWithResponse request returning *ListAlertsApiModelsAlertsGetResponse
 func (c *ClientWithResponses) ListAlertsApiModelsAlertsGetWithResponse(ctx context.Context, params *ListAlertsApiModelsAlertsGetParams, reqEditors ...RequestEditorFn) (*ListAlertsApiModelsAlertsGetResponse, error) {
 	rsp, err := c.ListAlertsApiModelsAlertsGet(ctx, params, reqEditors...)
@@ -19267,6 +20221,59 @@ func (c *ClientWithResponses) MarkReadApiModelsAlertsAlertIdReadPatchWithRespons
 		return nil, err
 	}
 	return ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse(rsp)
+}
+
+// ListExperimentsApiModelsPlaygroundExperimentsGetWithResponse request returning *ListExperimentsApiModelsPlaygroundExperimentsGetResponse
+func (c *ClientWithResponses) ListExperimentsApiModelsPlaygroundExperimentsGetWithResponse(ctx context.Context, params *ListExperimentsApiModelsPlaygroundExperimentsGetParams, reqEditors ...RequestEditorFn) (*ListExperimentsApiModelsPlaygroundExperimentsGetResponse, error) {
+	rsp, err := c.ListExperimentsApiModelsPlaygroundExperimentsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListExperimentsApiModelsPlaygroundExperimentsGetResponse(rsp)
+}
+
+// CreateExperimentApiModelsPlaygroundExperimentsPostWithBodyWithResponse request with arbitrary body returning *CreateExperimentApiModelsPlaygroundExperimentsPostResponse
+func (c *ClientWithResponses) CreateExperimentApiModelsPlaygroundExperimentsPostWithBodyWithResponse(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateExperimentApiModelsPlaygroundExperimentsPostResponse, error) {
+	rsp, err := c.CreateExperimentApiModelsPlaygroundExperimentsPostWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateExperimentApiModelsPlaygroundExperimentsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateExperimentApiModelsPlaygroundExperimentsPostWithResponse(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, body CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateExperimentApiModelsPlaygroundExperimentsPostResponse, error) {
+	rsp, err := c.CreateExperimentApiModelsPlaygroundExperimentsPost(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateExperimentApiModelsPlaygroundExperimentsPostResponse(rsp)
+}
+
+// GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse request returning *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse
+func (c *ClientWithResponses) GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams, reqEditors ...RequestEditorFn) (*GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse, error) {
+	rsp, err := c.GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet(ctx, experimentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse(rsp)
+}
+
+// CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostWithResponse request returning *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse
+func (c *ClientWithResponses) CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams, reqEditors ...RequestEditorFn) (*CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse, error) {
+	rsp, err := c.CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost(ctx, experimentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse(rsp)
+}
+
+// GetModelApiModelsModelIdDetailsGetWithResponse request returning *GetModelApiModelsModelIdDetailsGetResponse
+func (c *ClientWithResponses) GetModelApiModelsModelIdDetailsGetWithResponse(ctx context.Context, modelId string, params *GetModelApiModelsModelIdDetailsGetParams, reqEditors ...RequestEditorFn) (*GetModelApiModelsModelIdDetailsGetResponse, error) {
+	rsp, err := c.GetModelApiModelsModelIdDetailsGet(ctx, modelId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetModelApiModelsModelIdDetailsGetResponse(rsp)
 }
 
 // GetRecommendationsApiModelsModelIdRecommendationsGetWithResponse request returning *GetRecommendationsApiModelsModelIdRecommendationsGetResponse
@@ -22535,6 +23542,39 @@ func ParseTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRespon
 	return response, nil
 }
 
+// ParseListModelsApiModelsGetResponse parses an HTTP response from a ListModelsApiModelsGetWithResponse call
+func ParseListModelsApiModelsGetResponse(rsp *http.Response) (*ListModelsApiModelsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListModelsApiModelsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []SchemasModelResponsesProviderGroupResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListAlertsApiModelsAlertsGetResponse parses an HTTP response from a ListAlertsApiModelsAlertsGetWithResponse call
 func ParseListAlertsApiModelsAlertsGetResponse(rsp *http.Response) (*ListAlertsApiModelsAlertsGetResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -22624,6 +23664,171 @@ func ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse(rsp *http.Response) (*
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListExperimentsApiModelsPlaygroundExperimentsGetResponse parses an HTTP response from a ListExperimentsApiModelsPlaygroundExperimentsGetWithResponse call
+func ParseListExperimentsApiModelsPlaygroundExperimentsGetResponse(rsp *http.Response) (*ListExperimentsApiModelsPlaygroundExperimentsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListExperimentsApiModelsPlaygroundExperimentsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateExperimentApiModelsPlaygroundExperimentsPostResponse parses an HTTP response from a CreateExperimentApiModelsPlaygroundExperimentsPostWithResponse call
+func ParseCreateExperimentApiModelsPlaygroundExperimentsPostResponse(rsp *http.Response) (*CreateExperimentApiModelsPlaygroundExperimentsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateExperimentApiModelsPlaygroundExperimentsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse parses an HTTP response from a GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse call
+func ParseGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse(rsp *http.Response) (*GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse parses an HTTP response from a CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostWithResponse call
+func ParseCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse(rsp *http.Response) (*CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetModelApiModelsModelIdDetailsGetResponse parses an HTTP response from a GetModelApiModelsModelIdDetailsGetWithResponse call
+func ParseGetModelApiModelsModelIdDetailsGetResponse(rsp *http.Response) (*GetModelApiModelsModelIdDetailsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetModelApiModelsModelIdDetailsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SchemasModelResponsesPromptModelResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest HTTPValidationError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {

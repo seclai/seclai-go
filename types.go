@@ -399,6 +399,17 @@ type AiAssistantFeedbackRequest = generated.RoutersApiAiAssistantAiAssistantFeed
 // AiAssistantFeedbackResponse is the response from submitting AI assistant feedback.
 type AiAssistantFeedbackResponse = generated.AiAssistantFeedbackResponse
 
+// ── Models ──────────────────────────────────────────────────────────────────
+
+// ProviderGroupResponse is a group of models from a single provider.
+type ProviderGroupResponse = generated.SchemasModelResponsesProviderGroupResponse
+
+// PromptModelResponse is the full detail response for a single model.
+type PromptModelResponse = generated.SchemasModelResponsesPromptModelResponse
+
+// PlaygroundCreateRequest is the request body for creating a model playground experiment.
+type PlaygroundCreateRequest = generated.PlaygroundCreateRequest
+
 // ── Identity ────────────────────────────────────────────────────────────────
 
 // MeResponse is the response from the GET /me identity endpoint.
