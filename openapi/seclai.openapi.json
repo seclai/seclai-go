@@ -61,7 +61,7 @@
           },
           "definition": {
             "additionalProperties": true,
-            "description": "The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, transform, gate, retry, evaluate_step, insight, extract_json, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, and others.",
+            "description": "The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, transform, gate, retry, evaluate_step, insight, extract_content, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, and others.",
             "title": "Definition",
             "type": "object"
           },
@@ -2048,6 +2048,17 @@
             "description": "Embedding model override.",
             "title": "Embedding Model"
           },
+          "index_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceIndexMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Index mode for custom_index sources: fast_and_cheap (default), balanced, slow_and_thorough, or custom."
+          },
           "name": {
             "description": "Source name.",
             "maxLength": 255,
@@ -2106,7 +2117,7 @@
             "title": "Retention"
           },
           "source_type": {
-            "description": "Source type: rss, website, file_uploads, or custom_index.",
+            "description": "Source type: rss, website, or custom_index. The legacy value 'file_uploads' is accepted as an alias for custom_index.",
             "title": "Source Type",
             "type": "string"
           },
@@ -3918,6 +3929,101 @@
         "title": "PendingProcessingCompletedFailedStatus",
         "type": "string"
       },
+      "PlaygroundCreateRequest": {
+        "description": "Create a model playground experiment via the public API.",
+        "properties": {
+          "evaluation_complexity": {
+            "default": "medium",
+            "description": "simple, medium, or complex",
+            "enum": [
+              "simple",
+              "medium",
+              "complex"
+            ],
+            "title": "Evaluation Complexity",
+            "type": "string"
+          },
+          "evaluation_mode": {
+            "default": "manual",
+            "description": "manual or prompt",
+            "enum": [
+              "manual",
+              "prompt"
+            ],
+            "title": "Evaluation Mode",
+            "type": "string"
+          },
+          "evaluator_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Evaluator model ID when evaluation_mode is prompt.",
+            "title": "Evaluator Model Id"
+          },
+          "include_step_output_in_evaluation": {
+            "default": false,
+            "description": "Whether to include selected step output as evaluator context.",
+            "title": "Include Step Output In Evaluation",
+            "type": "boolean"
+          },
+          "json_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional JSON template for advanced mode.",
+            "title": "Json Template"
+          },
+          "model_ids": {
+            "description": "Selected model IDs (1-10).",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Model Ids",
+            "type": "array"
+          },
+          "prompt": {
+            "description": "Prompt text for the experiment.",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "selected_step_output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional step output text for evaluator context.",
+            "title": "Selected Step Output"
+          },
+          "system_prompt": {
+            "default": "",
+            "description": "Optional system prompt.",
+            "title": "System Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_ids",
+          "prompt"
+        ],
+        "title": "PlaygroundCreateRequest",
+        "type": "object"
+      },
       "PromptModelAutoUpgradeStrategy": {
         "enum": [
           "none",
@@ -3927,6 +4033,110 @@
         ],
         "title": "PromptModelAutoUpgradeStrategy",
         "type": "string"
+      },
+      "PromptToolResponse": {
+        "description": "Response model for a prompt tool.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "documentation_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documentation Url"
+          },
+          "example": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Example"
+          },
+          "headers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headers"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "tool_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Name"
+          },
+          "tool_type": {
+            "title": "Tool Type",
+            "type": "string"
+          },
+          "tool_type_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Type Pattern"
+          }
+        },
+        "required": [
+          "id",
+          "tool_type",
+          "name"
+        ],
+        "title": "PromptToolResponse",
+        "type": "object"
       },
       "ProposedActionResponse": {
         "description": "A single proposed action.",
@@ -4262,6 +4472,17 @@
         "title": "SourceEmbeddingMigrationResponse",
         "type": "object"
       },
+      "SourceIndexMode": {
+        "description": "Embedding quality / cost trade-off preset for custom_index sources.\n\nEach preset controls the default embedding dimensions, chunk size, and\nchunk overlap.  The embedding model is always the account-level default\n(currently ``AWS_BEDROCK_AMAZON_NOVA_2_MULTIMODAL``).\n\nPresets:\n    FAST_AND_CHEAP: 256 dimensions, 3 000 char chunks, 500 char overlap.\n    BALANCED: 384 dimensions, 1 500 char chunks, 300 char overlap.\n    SLOW_AND_THOROUGH: 1 024 dimensions, 1 000 char chunks, 200 char overlap.\n    CUSTOM: Caller supplies embedding model, dimensions, and chunk config.",
+        "enum": [
+          "fast_and_cheap",
+          "balanced",
+          "slow_and_thorough",
+          "custom"
+        ],
+        "title": "SourceIndexMode",
+        "type": "string"
+      },
       "SourceResponse": {
         "description": "Response model for source data.",
         "properties": {
@@ -4429,6 +4650,17 @@
             "description": "Unique identifier for the source connection.",
             "title": "Id",
             "type": "string"
+          },
+          "index_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceIndexMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Index mode for custom_index sources: fast_and_cheap, balanced, slow_and_thorough, or custom."
           },
           "name": {
             "description": "Name of the source connection.",
@@ -5448,6 +5680,177 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VariantCategoryResponse": {
+        "description": "Response model for a variant category",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "configurable": {
+            "title": "Configurable",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/VariantOptionResponse"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "title",
+          "description",
+          "configurable",
+          "options"
+        ],
+        "title": "VariantCategoryResponse",
+        "type": "object"
+      },
+      "VariantOptionResponse": {
+        "description": "Response model for a variant option",
+        "properties": {
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "input_1h_cache_write_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input 1H Cache Write Credits Per 1000 Tokens"
+          },
+          "input_5m_cache_write_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input 5M Cache Write Credits Per 1000 Tokens"
+          },
+          "input_cache_hit_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Cache Hit Credits Per 1000 Tokens"
+          },
+          "input_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Credits Per 1000 Tokens"
+          },
+          "long_context_input_cache_hit_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Long Context Input Cache Hit Credits Per 1000 Tokens"
+          },
+          "long_context_input_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Long Context Input Credits Per 1000 Tokens"
+          },
+          "long_context_output_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Long Context Output Credits Per 1000 Tokens"
+          },
+          "long_context_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Long Context Threshold"
+          },
+          "output_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Credits Per 1000 Tokens"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "title",
+          "default"
+        ],
+        "title": "VariantOptionResponse",
         "type": "object"
       },
       "routers__api__agents__AgentListResponse": {
@@ -7130,6 +7533,374 @@
         "title": "SourceListResponse",
         "type": "object"
       },
+      "schemas__model_responses__PromptModelResponse": {
+        "description": "Response model for prompt model data",
+        "properties": {
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "deprecated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecated At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "family_generation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family Generation"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_1h_cache_write_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input 1H Cache Write Credits Per 1000 Tokens"
+          },
+          "input_5m_cache_write_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input 5M Cache Write Credits Per 1000 Tokens"
+          },
+          "input_cache_hit_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Cache Hit Credits Per 1000 Tokens"
+          },
+          "input_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Credits Per 1000 Tokens"
+          },
+          "is_new": {
+            "default": false,
+            "title": "Is New",
+            "type": "boolean"
+          },
+          "last_used": {
+            "default": false,
+            "title": "Last Used",
+            "type": "boolean"
+          },
+          "max_context_tokens": {
+            "title": "Max Context Tokens",
+            "type": "integer"
+          },
+          "max_conversation_length": {
+            "title": "Max Conversation Length",
+            "type": "integer"
+          },
+          "max_output_tokens": {
+            "title": "Max Output Tokens",
+            "type": "integer"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "output_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Credits Per 1000 Tokens"
+          },
+          "payload_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model-specific JSON schema for advanced prompt_call json_template payloads.",
+            "title": "Payload Schema"
+          },
+          "payload_schema_source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Source URL used to derive payload_schema guidance for this model.",
+            "title": "Payload Schema Source Url"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "schema_documentation_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model documentation URL with request/response payload details.",
+            "title": "Schema Documentation Url"
+          },
+          "schema_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Human-readable notes about request payload compatibility.",
+            "title": "Schema Notes"
+          },
+          "successor_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Successor Model Id"
+          },
+          "sunset_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sunset At"
+          },
+          "supported_input_media": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supported Input Media"
+          },
+          "supported_languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supported Languages"
+          },
+          "supports_openai_arguments": {
+            "default": false,
+            "title": "Supports Openai Arguments",
+            "type": "boolean"
+          },
+          "supports_streaming": {
+            "default": false,
+            "title": "Supports Streaming",
+            "type": "boolean"
+          },
+          "supports_structured_output": {
+            "default": true,
+            "title": "Supports Structured Output",
+            "type": "boolean"
+          },
+          "supports_thinking": {
+            "default": false,
+            "title": "Supports Thinking",
+            "type": "boolean"
+          },
+          "supports_tool_use": {
+            "default": true,
+            "title": "Supports Tool Use",
+            "type": "boolean"
+          },
+          "tools_disabled": {
+            "items": {
+              "$ref": "#/components/schemas/PromptToolResponse"
+            },
+            "title": "Tools Disabled",
+            "type": "array"
+          },
+          "tools_enabled": {
+            "items": {
+              "$ref": "#/components/schemas/PromptToolResponse"
+            },
+            "title": "Tools Enabled",
+            "type": "array"
+          },
+          "training_cutoff_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Cutoff At"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "variants": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/VariantCategoryResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variants"
+          }
+        },
+        "required": [
+          "id",
+          "model_id",
+          "name",
+          "description",
+          "enabled",
+          "default",
+          "provider",
+          "max_context_tokens",
+          "max_output_tokens",
+          "max_conversation_length"
+        ],
+        "title": "PromptModelResponse",
+        "type": "object"
+      },
+      "schemas__model_responses__ProviderGroupResponse": {
+        "description": "Response model for provider group with models",
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/schemas__model_responses__PromptModelResponse"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "models"
+        ],
+        "title": "ProviderGroupResponse",
+        "type": "object"
+      },
       "schemas__v1__agent_evaluations__NonManualEvaluationModeStatResponse": {
         "description": "Per-mode rollup for evaluation activity.",
         "properties": {
@@ -8458,7 +9229,7 @@
     },
     "/agents/{agent_id}/definition": {
       "get": {
-        "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `transform`: Reshape data with a Liquid template\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `insight`: Progressively read and analyze large input\n- `extract_json` / `extract_html` / `extract_xml`: Extract structured data\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `combinator`: Combine multiple inputs\n- `text`: Static text literal\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
+        "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `transform`: Reshape data with a Liquid template\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `insight`: Progressively read and analyze large input\n- `extract_content`: Extract structured data (JSON, HTML, XML)\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `streaming_result`: Stream LLM tokens in real-time via SSE (must be a direct child of `prompt_call`; requires `dynamic_input` trigger; `priority: true` enables real-time streaming)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `combinator`: Combine multiple inputs\n- `text`: Static text literal\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
         "operationId": "get_agent_definition_api_agents__agent_id__definition_get",
         "parameters": [
           {
@@ -8502,7 +9273,7 @@
         ]
       },
       "put": {
-        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `transform`, `gate`, `retry`, `evaluate_step`, `insight`, `extract_json`, `extract_html`, `extract_xml`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `combinator`, and `text`. Non-composite step types (`display_result`, `join`, `retry`, `evaluate_step`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
+        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `transform`, `gate`, `retry`, `evaluate_step`, `insight`, `extract_content`, `streaming_result`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `combinator`, and `text`. Non-composite step types (`display_result`, `join`, `retry`, `evaluate_step`, `streaming_result`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
         "operationId": "update_agent_definition_api_agents__agent_id__definition_put",
         "parameters": [
           {
@@ -8994,7 +9765,7 @@
     },
     "/agents/{agent_id}/export": {
       "get": {
-        "description": "Export an agent definition as a portable JSON snapshot.\n\nThe response contains the full definition, trigger configuration with schedules, alert configs, evaluation criteria, agent-scoped governance policies, and a resolved dependency manifest that maps every referenced external entity UUID to its human-readable name.\n\nResponse shape:\n- `export_version`: schema version (currently `\"2\"`)\n- `exported_at`: ISO-8601 timestamp\n- `agent`: name, description, schema_version, definition, timestamps\n- `trigger`: trigger type, input template, schedules\n- `alert_configs`: alert type, thresholds, recipients\n- `evaluation_criteria`: evaluation settings per step\n- `governance_policies`: agent-scoped governance policies\n- `dependencies`: knowledge_bases, memory_banks, source_connections, agents, users\n\nQuery params:\n- `download` (default true): when true, sets `Content-Disposition: attachment` so clients treat the response as a file download.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- When using OAuth, you may target a different organization account with `X-Account-Id`; for API keys, the key's account is always used.\n- You can only export agents belonging to the resolved account.",
+        "description": "Export an agent definition as a portable JSON snapshot.\n\nThe response contains the full definition, trigger configuration with schedules, alert configs, evaluation criteria, agent-scoped governance policies, and a resolved dependency manifest that maps every referenced external entity UUID to its human-readable name.\n\nResponse shape:\n- `export_version`: schema version (currently `\"2\"`)\n- `exported_at`: ISO-8601 timestamp\n- `agent`: name, description, schema_version, definition, timestamps\n- `trigger`: trigger type, input template, schedules\n- `alert_configs`: alert type, thresholds, recipients\n- `evaluation_criteria`: evaluation settings per step\n- `governance_policies`: agent-scoped governance policies\n- `dependencies`: knowledge_bases, memory_banks, source_connections, agents, users\n\nQuery params:\n- `download` (default true): when true, sets `Content-Disposition: attachment` so clients treat the response as a file download.\n\nAuth & scoping:\n- Requires `X-API-Key`. You can only export agents belonging to your account.",
         "operationId": "export_agent_api_agents__agent_id__export_get",
         "parameters": [
           {
@@ -9196,7 +9967,7 @@
         ]
       },
       "post": {
-        "description": "Start an agent run.\n\nAn *agent* is an automated workflow that can monitor content from your sources, process it with AI, and trigger actions. This endpoint creates a new run and returns a `run_id` you can poll to retrieve status and output.\n\nWhen to use:\n- Use this endpoint for request/response style integrations where polling is acceptable.\n- Use `POST /agents/{agent_id}/runs/stream` if you need real-time progress via SSE.\n\nKey fields:\n- `input`: text input for agents with a `dynamic_input` trigger.\n- `input_upload_id`: alternatively, reference a file previously uploaded via `POST /agents/{agent_id}/upload-input` (mutually exclusive with `input`).\n- `priority`: set true for latency-sensitive, user-facing work.\n- `metadata`: a JSON object that becomes available to agent steps for string substitution.\n\nAfter starting:\n- Poll `GET /agents/runs/{run_id}` until `status` is `completed` or `failed`.\n- Use `include_step_outputs=true` to include per-step outputs, timing, and credits.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
+        "description": "Start an agent run.\n\nAn *agent* is an automated workflow that can monitor content from your sources, process it with AI, and trigger actions. This endpoint creates a new run and returns a `run_id` you can poll to retrieve status and output.\n\nWhen to use:\n- Use this endpoint for request/response style integrations where polling is acceptable.\n- Use `POST /agents/{agent_id}/runs/stream` if you need real-time progress via SSE.\n\nKey fields:\n- `input`: text input for agents with a `dynamic_input` trigger.\n- `input_upload_id`: alternatively, reference a file previously uploaded via `POST /agents/{agent_id}/upload-input` (mutually exclusive with `input`).\n- `priority`: set true for latency-sensitive, user-facing work. For agents with a `streaming_result` step, set `priority=true` to enable real-time token streaming; otherwise the run still proceeds, but without live token streaming.\n- `metadata`: a JSON object that becomes available to agent steps for string substitution.\n\nAfter starting:\n- Poll `GET /agents/runs/{run_id}` until `status` is `completed` or `failed`.\n- Use `include_step_outputs=true` to include per-step outputs, timing, and credits.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "run_agent_api_agents__agent_id__runs_post",
         "parameters": [
           {
@@ -9233,6 +10004,9 @@
             },
             "description": "Successful Response"
           },
+          "402": {
+            "description": "Insufficient credits \u2014 the account has exhausted its credits. The response body is `{\"detail\": {\"error\": \"insufficient_credits\", \"message\": ..., \"account_id\": ...}}`."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -9252,7 +10026,7 @@
     },
     "/agents/{agent_id}/runs/stream": {
       "post": {
-        "description": "Start a **priority** agent run and stream run events using Server-Sent Events (SSE).\n\nThis is the best option for interactive UIs where you want progress updates as the run executes.\n\nHow it works:\n- The first `init` event contains an `AgentRunResponse` snapshot, including the `run_id`.\n- Subsequent events are forwarded from the run event stream (status changes, step events, etc).\n- The final `done` event contains the terminal snapshot (including `output` and `credits` when available).\n\nInput options (for `dynamic_input` triggers):\n- `input`: text input passed directly.\n- `input_upload_id`: reference a file uploaded via `POST /agents/{agent_id}/upload-input` (mutually exclusive with `input`).\n\nClient guidance:\n- Keep the connection open and handle keepalive comments.\n- On `timeout` or `error`, the payload includes `run_id` so clients can resume by polling `GET /agents/runs/{run_id}`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
+        "description": "Start a **priority** agent run and stream run events using Server-Sent Events (SSE).\n\nThis is the best option for interactive UIs where you want progress updates as the run executes.\n\nHow it works:\n- The first `init` event contains an `AgentRunResponse` snapshot, including the `run_id`.\n- Subsequent events are forwarded from the run event stream (status changes, step events, etc).\n- If the agent contains a `streaming_result` step, `stream_token` events deliver individual LLM tokens (with a `token` field) and a `stream_end` event signals completion.\n- The final `done` event contains the terminal snapshot (including `output` and `credits` when available).\n\nInput options (for `dynamic_input` triggers):\n- `input`: text input passed directly.\n- `input_upload_id`: reference a file uploaded via `POST /agents/{agent_id}/upload-input` (mutually exclusive with `input`).\n\nClient guidance:\n- Keep the connection open and handle keepalive comments.\n- On `timeout` or `error`, the payload includes `run_id` so clients can resume by polling `GET /agents/runs/{run_id}`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "run_streaming_agent_api_agents__agent_id__runs_stream_post",
         "parameters": [
           {
@@ -9292,6 +10066,9 @@
               }
             },
             "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /api/agents/runs/{run_id}`."
+          },
+          "402": {
+            "description": "Insufficient credits \u2014 the account has exhausted its credits. The response body is `{\"detail\": {\"error\": \"insufficient_credits\", \"message\": ..., \"account_id\": ...}}`."
           },
           "422": {
             "content": {
@@ -10930,7 +11707,7 @@
     },
     "/contents/{source_connection_content_version}/upload": {
       "post": {
-        "description": "Upload a new file and replace the content backing an existing `SourceConnectionContentVersion`.\n\nThis behaves like a source file upload, but it targets an existing content version ID. This is useful when you want to correct or update an uploaded document while keeping references stable.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/msword`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only replace content belonging to your account.",
+        "description": "Upload a new file and replace the content backing an existing `SourceConnectionContentVersion`.\n\nThis behaves like a source file upload, but it targets an existing content version ID. This is useful when you want to correct or update an uploaded document while keeping references stable.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only replace content belonging to your account.",
         "operationId": "upload_file_to_content_api_contents__source_connection_content_version__upload_post",
         "parameters": [
           {
@@ -11469,7 +12246,7 @@
     },
     "/me": {
       "get": {
-        "description": "Returns the authenticated user's personal account ID and a list of organizations they belong to. Each organization entry includes the organization's id, name, and account_id. Useful for CLI tooling that needs to let the user pick an organization context.",
+        "description": "Returns the authenticated user's personal account ID and a list of organisations they belong to.  Each organisation entry includes the organisation's own id, display name, and account_id.  Useful for CLI tooling that needs to let the user pick an org context.",
         "operationId": "get_me_api_me_get",
         "parameters": [
           {
@@ -12326,6 +13103,101 @@
         ]
       }
     },
+    "/models": {
+      "get": {
+        "description": "List all enabled LLM models with full details.\n\nReturns models grouped by provider, including capabilities, credit pricing, tool support, variant tiers, and lifecycle status.\n\nOptional query parameters:\n- `provider`: filter by provider (e.g. 'anthropic', 'openai')\n- `supports_tool_use`: filter to models with tool calling support\n- `supports_thinking`: filter to models with extended thinking support\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
+        "operationId": "list_models_api_models_get",
+        "parameters": [
+          {
+            "description": "Filter by provider name",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by provider name",
+              "title": "Provider"
+            }
+          },
+          {
+            "description": "Filter to models that support tool use",
+            "in": "query",
+            "name": "supports_tool_use",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to models that support tool use",
+              "title": "Supports Tool Use"
+            }
+          },
+          {
+            "description": "Filter to models that support extended thinking",
+            "in": "query",
+            "name": "supports_thinking",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to models that support extended thinking",
+              "title": "Supports Thinking"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/schemas__model_responses__ProviderGroupResponse"
+                  },
+                  "title": "Response List Models Api Models Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "models"
+        ]
+      }
+    },
     "/models/alerts": {
       "get": {
         "description": "List model lifecycle alerts for the account.\n\nReturns in-app notifications about model deprecations, sunsets, and newer model availability. Supports filtering by agent, unread-only, and pagination.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Alerts are scoped to the caller's account.",
@@ -12506,6 +13378,315 @@
           }
         },
         "summary": "Mark Read",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/playground/experiments": {
+      "get": {
+        "description": "List model playground experiments for the account.\n\nReturns a paginated, time-filtered list of experiments ordered by creation date descending.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Experiments are scoped to the caller's account.",
+        "operationId": "list_experiments_api_models_playground_experiments_get",
+        "parameters": [
+          {
+            "description": "Look-back window in days.",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Look-back window in days.",
+              "maximum": 730,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Explicit start date (overrides days).",
+            "in": "query",
+            "name": "start_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Explicit start date (overrides days).",
+              "title": "Start Date"
+            }
+          },
+          {
+            "description": "Explicit end date (overrides days).",
+            "in": "query",
+            "name": "end_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Explicit end date (overrides days).",
+              "title": "End Date"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Page size.",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Pagination offset.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "Pagination offset.",
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Experiments Api Models Playground Experiments Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Experiments",
+        "tags": [
+          "models"
+        ]
+      },
+      "post": {
+        "description": "Create and schedule a model playground experiment.\n\nRuns the given prompt against 1-10 models in parallel and optionally evaluates the outputs with an LLM judge.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
+        "operationId": "create_experiment_api_models_playground_experiments_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaygroundCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Experiment Api Models Playground Experiments Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Experiment",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/playground/experiments/{experiment_id}": {
+      "get": {
+        "description": "Get details and results for a specific model playground experiment.\n\nReturns the full experiment payload including prompt, model outputs, and evaluation results (if available).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The experiment must belong to the caller's account.",
+        "operationId": "get_experiment_api_models_playground_experiments__experiment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Experiment Api Models Playground Experiments  Experiment Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Experiment",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/playground/experiments/{experiment_id}/cancel": {
+      "post": {
+        "description": "Cancel a running or pending model playground experiment.\n\nSignals running model calls to abort and marks the experiment as canceled.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The experiment must belong to the caller's account.",
+        "operationId": "cancel_experiment_endpoint_api_models_playground_experiments__experiment_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Experiment Endpoint Api Models Playground Experiments  Experiment Id  Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Experiment Endpoint",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/{model_id}/details": {
+      "get": {
+        "description": "Get detailed information about a specific model.\n\nReturns full model details including capabilities, credit pricing, tool support, variant tiers, and lifecycle status.\n\nThe `model_id` is the model enum identifier (e.g. 'anthropic_claude_opus_4_6').\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
+        "operationId": "get_model_api_models__model_id__details_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/schemas__model_responses__PromptModelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Model",
         "tags": [
           "models"
         ]
@@ -13817,7 +14998,7 @@
     },
     "/sources": {
       "post": {
-        "description": "Create a new content source.\n\nSource types: `rss`, `website`, `file_uploads`, `custom_index`.\n\nFor RSS and website sources, provide the URL. For file upload and custom index sources, the URL is created automatically.",
+        "description": "Create a new content source.\n\nSource types: `rss`, `website`, `custom_index`.\n\nFor RSS and website sources, provide the URL. For custom index sources, the URL is created automatically.\n\nFor custom_index sources, you can optionally specify an `index_mode`: `fast_and_cheap` (default), `balanced`, `slow_and_thorough`, or `custom`. The legacy `file_uploads` source type is accepted as an alias for `custom_index` with `index_mode=fast_and_cheap`.",
         "operationId": "create_source_api_sources_post",
         "parameters": [
           {
@@ -13867,7 +15048,7 @@
     },
     "/sources/": {
       "get": {
-        "description": "List content sources for your account.\n\nA *source* is where Seclai pulls or receives content from (for example RSS feeds, websites, file uploads, or custom indexes). Sources are the inputs that power your agents and knowledge base workflows.\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/updated_at/name) and `order` (asc/desc).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Results are scoped to the caller's account.\n- The optional `account_id` query param is only allowed when it matches the caller's account.",
+        "description": "List content sources for your account.\n\nA *source* is where Seclai pulls or receives content from \u2014 RSS feeds, websites, or content stores (``custom_index``). Content stores support file uploads and API-driven content ingestion with configurable index modes (``fast_and_cheap``, ``balanced``, ``slow_and_thorough``, or ``custom``).\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/updated_at/name) and `order` (asc/desc).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Results are scoped to the caller's account.\n- The optional `account_id` query param is only allowed when it matches the caller's account.",
         "operationId": "list_sources_api_sources__get",
         "parameters": [
           {
@@ -14728,7 +15909,7 @@
     },
     "/sources/{source_connection_id}/upload": {
       "post": {
-        "description": "Upload a file to a content source.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/msword`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"author\":\"Ada\",\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nResponse:\n- `status` is `uploaded` for a new upload, or `duplicate` when the same file already exists for this source.",
+        "description": "Upload a file to a content source.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"author\":\"Ada\",\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nResponse:\n- `status` is `uploaded` for a new upload, or `duplicate` when the same file already exists for this source.",
         "operationId": "upload_file_to_source_api_sources__source_connection_id__upload_post",
         "parameters": [
           {
