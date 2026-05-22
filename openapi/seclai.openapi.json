@@ -52,6 +52,39 @@
         "title": "AddConversationTurnRequest",
         "type": "object"
       },
+      "AgentDefinitionImportErrorResponse": {
+        "description": "422 body for invalid `agent_definition` payloads.\n\nMirrors :py:meth:`AgentDefinitionImportError.to_response_dict`.",
+        "properties": {
+          "error": {
+            "default": "invalid_agent_definition",
+            "title": "Error",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ImportFieldErrorModel"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "source": {
+            "description": "Canonical pretty-printed echo of the supplied payload \u2014 error line/column refer to this string.",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "errors",
+          "source"
+        ],
+        "title": "AgentDefinitionImportErrorResponse",
+        "type": "object"
+      },
       "AgentDefinitionResponse": {
         "properties": {
           "change_id": {
@@ -61,7 +94,7 @@
           },
           "definition": {
             "additionalProperties": true,
-            "description": "The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, transform, gate, retry, evaluate_step, insight, extract_content, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, and others.",
+            "description": "The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, gate, retry, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, and others.",
             "title": "Definition",
             "type": "object"
           },
@@ -342,6 +375,14 @@
             "title": "Attempts",
             "type": "array"
           },
+          "blocked_policies": {
+            "description": "Governance policies that produced at least one BLOCK verdict during this run.  Deduplicated by policy id.",
+            "items": {
+              "$ref": "#/components/schemas/routers__api__agents__GovernancePolicyRefResponse"
+            },
+            "title": "Blocked Policies",
+            "type": "array"
+          },
           "credits": {
             "anyOf": [
               {
@@ -359,6 +400,38 @@
             "title": "Error Count",
             "type": "integer"
           },
+          "flagged_policies": {
+            "description": "Governance policies that produced at least one FLAG verdict during this run.  Deduplicated by policy id.",
+            "items": {
+              "$ref": "#/components/schemas/routers__api__agents__GovernancePolicyRefResponse"
+            },
+            "title": "Flagged Policies",
+            "type": "array"
+          },
+          "governance_input_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Result of the governance input evaluation: safe, blocked, skipped, or timed_out.",
+            "title": "Governance Input Status"
+          },
+          "governance_input_wait_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Milliseconds spent waiting for governance input evaluation.",
+            "title": "Governance Input Wait Ms"
+          },
           "input": {
             "anyOf": [
               {
@@ -370,6 +443,18 @@
             ],
             "description": "Input provided to the agent for this run.",
             "title": "Input"
+          },
+          "input_scan_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Result of the prompt injection scan: safe, unsafe, skipped, timed_out, or error.",
+            "title": "Input Scan Status"
           },
           "output": {
             "anyOf": [
@@ -392,6 +477,18 @@
             "description": "Unique identifier for the agent run.",
             "title": "Run Id",
             "type": "string"
+          },
+          "scan_wait_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Milliseconds spent waiting for prompt injection scan.",
+            "title": "Scan Wait Ms"
           },
           "status": {
             "$ref": "#/components/schemas/PendingProcessingCompletedFailedStatus",
@@ -622,6 +719,21 @@
             "description": "Unique agent identifier.",
             "title": "Id",
             "type": "string"
+          },
+          "import_warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ImportSkipResponse"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One entry per item dropped or substituted during import. Present only on endpoints that accept agent_definition; null on non-import calls; [] when the import had no skips.",
+            "title": "Import Warnings"
           },
           "max_retries": {
             "default": 3,
@@ -2964,7 +3076,7 @@
             "title": "Step Id"
           },
           "step_type": {
-            "description": "The step type to generate config for (e.g. 'transform', 'gate', 'text', 'prompt_call', 'retrieval').",
+            "description": "The step type to generate config for (e.g. 'regex_replace', 'gate', 'text', 'prompt_call', 'retrieval').",
             "title": "Step Type",
             "type": "string"
           },
@@ -3143,6 +3255,66 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImportFieldErrorModel": {
+        "description": "Single agent_definition validation error with source position.",
+        "properties": {
+          "column": {
+            "description": "1-indexed column in `source`.",
+            "title": "Column",
+            "type": "integer"
+          },
+          "line": {
+            "description": "1-indexed line in `source`.",
+            "title": "Line",
+            "type": "integer"
+          },
+          "message": {
+            "description": "Human-readable description of the problem.",
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "description": "Dotted path of the offending field, e.g. `agent.definition.child_steps[0].step_type`.",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "column",
+          "path",
+          "message"
+        ],
+        "title": "ImportFieldErrorModel",
+        "type": "object"
+      },
+      "ImportSkipResponse": {
+        "description": "One item that was not applied during an agent import.\n\nUsed as the element type for ``import_warnings`` on every\nresponse model that accepts an ``agent_definition`` payload.\nSee :py:class:`services.agent_definition_import.AgentImportSkip`\nfor the full category list.\n\nLives here (not on each router) so the authenticated and public\nAPI responses share one definition \u2014 keeping the shape that\nclients (UI modal, MCP, OpenAPI consumers) depend on aligned.",
+        "properties": {
+          "category": {
+            "description": "The kind of item that was skipped or substituted: 'schedule', 'evaluation_criteria', 'alert_config', 'alert_recipient', 'governance_policy', 'governance_kb_link', 'solution_link'.",
+            "title": "Category",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "description": "Category-specific identifiers for the skipped item (step_id, alert_type, kb_name, etc.).  Stable keys per category; absent keys are simply not applicable.",
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "description": "Human-readable explanation of what was skipped and why.",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "message"
+        ],
+        "title": "ImportSkipResponse",
         "type": "object"
       },
       "InlineTextReplaceRequest": {
@@ -4162,6 +4334,19 @@
             "description": "Parameters for the action.",
             "title": "Params",
             "type": "object"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Planning-time dry-run preview attached by the solution AI assistant for create_agent / update_agent actions. Contains ``steps`` (the generated step tree), ``step_count``, ``warnings`` (a mix of heuristic structural issues \u2014 e.g. brittle JSONPath, pass-through ``regex_replace``, ``prompt_call`` missing a model \u2014 and deterministic resource-usage issues: every pre-bound knowledge base / memory bank must be referenced by at least one step, and no step may reference an unknown id), and ``skipped`` / ``skipped_reason`` when preview couldn't run (e.g. the action depends on resources created earlier in the same plan). ``None`` for non-agent actions or when generation failed.",
+            "title": "Preview"
           }
         },
         "required": [
@@ -5853,6 +6038,126 @@
         "title": "VariantOptionResponse",
         "type": "object"
       },
+      "routers__api__agents__AgentImportPreviewRequest": {
+        "description": "Dry-run import request \u2014 same payload shape as the export endpoint.",
+        "properties": {
+          "agent_definition": {
+            "additionalProperties": true,
+            "description": "Payload in the same shape as GET /api/agents/{agent_id}/export.",
+            "title": "Agent Definition",
+            "type": "object"
+          }
+        },
+        "required": [
+          "agent_definition"
+        ],
+        "title": "AgentImportPreviewRequest",
+        "type": "object"
+      },
+      "routers__api__agents__AgentImportPreviewResponse": {
+        "description": "Summary of a successfully validated import payload (no DB writes).\n\nCounts are derived from the validated payload as supplied \u2014 they\nreflect what was requested, not what would eventually be persisted\n(cross-account skips for recipients and KB names happen later, only\non commit).",
+        "properties": {
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Imported agent name, if any.",
+            "title": "Agent Name"
+          },
+          "alert_configs": {
+            "description": "Number of alert configs in the payload.",
+            "title": "Alert Configs",
+            "type": "integer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Imported agent description, if any.",
+            "title": "Description"
+          },
+          "evaluation_criteria": {
+            "description": "Number of evaluation criteria in the payload.",
+            "title": "Evaluation Criteria",
+            "type": "integer"
+          },
+          "governance_policies": {
+            "description": "Number of agent-scoped governance policies in the payload.",
+            "title": "Governance Policies",
+            "type": "integer"
+          },
+          "ok": {
+            "description": "Always true on a 200 response; failures use HTTP 422.",
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "payload_export_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Export-format version the payload claims (or ``null`` for legacy payloads).  When this differs from ``supported_export_version``, fields may have been silently dropped or defaulted on import.",
+            "title": "Payload Export Version"
+          },
+          "schedules": {
+            "description": "Number of trigger schedules in the payload.",
+            "title": "Schedules",
+            "type": "integer"
+          },
+          "solutions": {
+            "default": 0,
+            "description": "Number of solutions the source agent belonged to. On import these are matched by name in the target account; unmatched names are silently skipped.",
+            "title": "Solutions",
+            "type": "integer"
+          },
+          "step_count": {
+            "description": "Total number of steps in the workflow tree (recursive).",
+            "title": "Step Count",
+            "type": "integer"
+          },
+          "supported_export_version": {
+            "default": "2",
+            "description": "Export-format version this server understands.  Compare against ``payload_export_version`` to detect cross-version imports.",
+            "title": "Supported Export Version",
+            "type": "string"
+          },
+          "unresolved_refs": {
+            "description": "Entity references in the imported workflow that don't exist in the target account.  Each entry: {category, ref_id, ref_name?, locations:[step:<id>], alternatives:[{id, name, description?}]}. Pass {source_uuid: target_uuid} as ``entity_remap`` on the create/update call to substitute these references before save.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Unresolved Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "agent_name",
+          "description",
+          "step_count",
+          "schedules",
+          "alert_configs",
+          "evaluation_criteria",
+          "governance_policies"
+        ],
+        "title": "AgentImportPreviewResponse",
+        "type": "object"
+      },
       "routers__api__agents__AgentListResponse": {
         "properties": {
           "data": {
@@ -5955,6 +6260,19 @@
       },
       "routers__api__agents__CreateAgentRequest": {
         "properties": {
+          "agent_definition": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional payload in the same format produced by GET /agents/{id}/export. When provided, replaces any template-derived workflow and pre-fills metadata/trigger fields the request does not specify explicitly. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.",
+            "title": "Agent Definition"
+          },
           "agent_template": {
             "anyOf": [
               {
@@ -5979,6 +6297,21 @@
             "description": "Optional description.",
             "title": "Description"
           },
+          "entity_remap": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional UUID-substitution map applied to the imported workflow before save. Each key is a source-account UUID (as returned by /agents/preview-import's ``unresolved_refs``); each value is the target-account UUID to substitute. Used to relink knowledge bases, memory banks, source connections, and sub-agents on cross-account imports.",
+            "title": "Entity Remap"
+          },
           "name": {
             "description": "Name for the new agent.",
             "title": "Name",
@@ -5997,8 +6330,48 @@
         "title": "CreateAgentRequest",
         "type": "object"
       },
+      "routers__api__agents__GovernancePolicyRefResponse": {
+        "description": "Reference to a governance policy by id and name.",
+        "properties": {
+          "policy_id": {
+            "description": "Governance policy identifier.",
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "policy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Display name of the policy at evaluation time. May be null when the policy has been deleted.",
+            "title": "Policy Name"
+          }
+        },
+        "required": [
+          "policy_id"
+        ],
+        "title": "GovernancePolicyRefResponse",
+        "type": "object"
+      },
       "routers__api__agents__UpdateAgentRequest": {
         "properties": {
+          "agent_definition": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional payload in the same format produced by GET /agents/{id}/export. When provided, agent metadata fields the request does not set explicitly are taken from the payload, and the agent's workflow is replaced from `agent.definition`. The previous version is preserved in history. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.",
+            "title": "Agent Definition"
+          },
           "default_evaluation_tier": {
             "anyOf": [
               {
@@ -6022,6 +6395,21 @@
             ],
             "description": "New description for the agent.",
             "title": "Description"
+          },
+          "entity_remap": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional UUID-substitution map applied to the imported workflow before save (same shape as on POST /agents).",
+            "title": "Entity Remap"
           },
           "evaluation_mode": {
             "anyOf": [
@@ -8079,7 +8467,7 @@
         ]
       },
       "post": {
-        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
+        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
         "operationId": "create_agent_api_agents_post",
         "parameters": [
           {
@@ -8114,11 +8502,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/AgentDefinitionImportErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "The supplied `agent_definition` payload failed validation. The body lists each error with a 1-indexed line/column pointing into the canonical pretty-printed echo of the payload (also returned in `source`)."
           }
         },
         "summary": "Create an agent",
@@ -8658,6 +9046,53 @@
         ]
       }
     },
+    "/agents/preview-import": {
+      "post": {
+        "description": "Validate an `agent_definition` payload (the same shape produced by `GET /api/agents/{agent_id}/export`) without creating or modifying any agent. On success returns a summary the client can show before commit (counts of steps, schedules, alert configs, evaluation criteria, governance policies). On failure returns the same 422 body shape used by `POST /api/agents` and `PUT /api/agents/{id}` so callers can render line/column-anchored errors.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. No DB writes.",
+        "operationId": "preview_import_agent_api_agents_preview_import_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/routers__api__agents__AgentImportPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/routers__api__agents__AgentImportPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentDefinitionImportErrorResponse"
+                }
+              }
+            },
+            "description": "The supplied `agent_definition` payload failed validation. The body lists each error with a 1-indexed line/column pointing into the canonical pretty-printed echo of the payload (also returned in `source`)."
+          }
+        },
+        "summary": "Preview an agent_definition import",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/agents/runs/search": {
       "post": {
         "description": "Search agent traces using semantic similarity.\n\nFinds step-run outputs that are most semantically similar to the query.\nResults include the matching text, agent/step metadata, and a similarity score.\n\nAgent traces are automatically indexed when runs complete. The first 7 days of storage are free; extended retention is billed.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Searches only within your account's traces.",
@@ -8890,7 +9325,7 @@
         ]
       },
       "put": {
-        "description": "Update an agent's name, description, evaluation settings, and model lifecycle settings.\n\nEvaluation settings: `evaluation_mode` ('output_expectation', 'eval_and_retry', 'sample_and_flag'), `default_evaluation_tier` ('fast', 'balanced', 'thorough'), `max_retries`, `retry_on_failure`, `sampling_config`.\n\nModel lifecycle settings: `prompt_model_auto_upgrade_strategy` ('none', 'early_adopter', 'middle_of_road', 'cautious_adopter'), `prompt_model_auto_rollback_enabled`, `prompt_model_auto_rollback_triggers` (list of 'agent_eval_fail', 'governance_flag', 'governance_block', 'agent_run_failed').\n\nAt least one field must be provided.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
+        "description": "Update an agent's name, description, evaluation settings, and model lifecycle settings.\n\nEvaluation settings: `evaluation_mode` ('output_expectation', 'eval_and_retry', 'sample_and_flag'), `default_evaluation_tier` ('fast', 'balanced', 'thorough'), `max_retries`, `retry_on_failure`, `sampling_config`.\n\nModel lifecycle settings: `prompt_model_auto_upgrade_strategy` ('none', 'early_adopter', 'middle_of_road', 'cautious_adopter'), `prompt_model_auto_rollback_enabled`, `prompt_model_auto_rollback_triggers` (list of 'agent_eval_fail', 'governance_flag', 'governance_block', 'agent_run_failed').\n\nReplacing the workflow from an export:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. Update only touches the workflow + agent metadata \u2014 alert_configs, evaluation_criteria, governance_policies, schedules, and solution links from the imported file are NOT applied (use the dedicated endpoints for those, or `POST /agents` to import as a new agent).\n- `entity_remap: {source_uuid: target_uuid}` substitutes workflow entity refs before save (same shape as `POST /agents`).\n\nAt least one field must be provided.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
         "operationId": "update_agent_api_agents__agent_id__put",
         "parameters": [
           {
@@ -8931,11 +9366,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/AgentDefinitionImportErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "The supplied `agent_definition` payload failed validation. The body lists each error with a 1-indexed line/column pointing into the canonical pretty-printed echo of the payload (also returned in `source`)."
           }
         },
         "summary": "Update agent metadata",
@@ -9229,7 +9664,7 @@
     },
     "/agents/{agent_id}/definition": {
       "get": {
-        "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `transform`: Reshape data with a Liquid template\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `insight`: Progressively read and analyze large input\n- `extract_content`: Extract structured data (JSON, HTML, XML)\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `streaming_result`: Stream LLM tokens in real-time via SSE (must be a direct child of `prompt_call`; requires `dynamic_input` trigger; `priority: true` enables real-time streaming)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `combinator`: Combine multiple inputs\n- `text`: Static text literal\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
+        "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `regex_replace`: Reshape text via ordered regex find/replace rules\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `extract_data`: Progressively read and analyze large input\n- `extract_content`: Extract structured data (JSON, HTML, XML)\n- `add_chat_turn` / `load_chat_history`: Record a turn or load running history from a conversation memory bank\n- `add_memory` / `search_memory` / `load_memory`: Write, semantic-search, or load entries on a general memory bank\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `streaming_result`: Stream LLM tokens in real-time via SSE (must be a direct child of `prompt_call`; requires `dynamic_input` or `template_input` trigger; `priority: true` enables real-time streaming)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `merge`: Combine multiple inputs into a single templated output\n- `text`: Static text literal\n- `for_each`: Iterate a body over a list of items (body lives in `body[]`)\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
         "operationId": "get_agent_definition_api_agents__agent_id__definition_get",
         "parameters": [
           {
@@ -9273,7 +9708,7 @@
         ]
       },
       "put": {
-        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `transform`, `gate`, `retry`, `evaluate_step`, `insight`, `extract_content`, `streaming_result`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `combinator`, and `text`. Non-composite step types (`display_result`, `join`, `retry`, `evaluate_step`, `streaming_result`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
+        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `regex_replace`, `gate`, `retry`, `evaluate_step`, `extract_data`, `extract_content`, `add_chat_turn`, `load_chat_history`, `add_memory`, `search_memory`, `load_memory`, `streaming_result`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `merge`, `text`, and `for_each`. Non-composite step types (`display_result`, `join`, `retry`, `streaming_result`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
         "operationId": "update_agent_definition_api_agents__agent_id__definition_put",
         "parameters": [
           {

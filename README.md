@@ -148,6 +148,38 @@ _, _ = client.UpdateAgentDefinition(ctx, "agent_id", seclai.UpdateAgentDefinitio
 	// Steps: ...,
 	// ChangeId: def.ChangeId,
 })
+
+// Export / import an agent
+exported, _ := client.ExportAgent(ctx, "agent_id", false)
+
+// Round-trip the export through a generic map (the import endpoints accept
+// the same shape, but as a `map[string]any`).
+buf, _ := json.Marshal(exported)
+var payload map[string]any
+_ = json.Unmarshal(buf, &payload)
+
+// Validate the payload first to surface unresolved entity refs in this account.
+preview, _ := client.PreviewImportAgent(ctx, seclai.AgentImportPreviewRequest{AgentDefinition: payload})
+entityRemap := map[string]string{}
+if preview.UnresolvedRefs != nil {
+	for _, ref := range *preview.UnresolvedRefs {
+		if id, ok := ref["ref_id"].(string); ok {
+			// Replace "<target-uuid>" with an id from ref["alternatives"]
+			// before calling CreateAgent; empty values are rejected.
+			entityRemap[id] = "<target-uuid>"
+		}
+	}
+}
+
+// Commit — EntityRemap substitutes workflow refs before save.
+trigger := "dynamic_input"
+imported, _ := client.CreateAgent(ctx, seclai.CreateAgentRequest{
+	Name:            "Imported",
+	TriggerType:     &trigger,
+	AgentDefinition: &payload,
+	EntityRemap:     &entityRemap,
+})
+_ = imported.ImportWarnings // items that couldn't be applied, if any
 ```
 
 ### Agent runs

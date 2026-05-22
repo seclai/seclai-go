@@ -53,6 +53,30 @@ type AgentExportResponse = generated.AgentExportResponse
 // UpdateAgentDefinitionRequest is the request body for updating an agent definition.
 type UpdateAgentDefinitionRequest = generated.UpdateAgentDefinitionRequest
 
+// ── Agent Import ────────────────────────────────────────────────────────────
+
+// AgentImportPreviewRequest is the request body for previewing an agent_definition import (dry-run validation).
+type AgentImportPreviewRequest = generated.RoutersApiAgentsAgentImportPreviewRequest
+
+// AgentImportPreviewResponse summarises a successfully validated agent_definition import payload.
+type AgentImportPreviewResponse = generated.RoutersApiAgentsAgentImportPreviewResponse
+
+// AgentDefinitionImportErrorResponse is the 422 body for invalid agent_definition payloads
+// on create / update / preview-import. Errors carry 1-indexed line/column references into
+// the canonical Source echo.
+type AgentDefinitionImportErrorResponse = generated.AgentDefinitionImportErrorResponse
+
+// ImportFieldErrorModel is a single validation error within an [AgentDefinitionImportErrorResponse]
+// (with source position).
+type ImportFieldErrorModel = generated.ImportFieldErrorModel
+
+// ImportSkipResponse is one item dropped or substituted during an agent import (emitted in
+// the ImportWarnings field on responses that accept an agent_definition).
+type ImportSkipResponse = generated.ImportSkipResponse
+
+// GovernancePolicyRefResponse is a reference to a governance policy (id and optional display name).
+type GovernancePolicyRefResponse = generated.RoutersApiAgentsGovernancePolicyRefResponse
+
 // ── Agent Runs ──────────────────────────────────────────────────────────────
 
 // AgentRunRequest is the request body for starting an agent run.

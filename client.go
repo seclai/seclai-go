@@ -211,7 +211,7 @@ func (c *Client) Do(ctx context.Context, method, apiPath string, query map[strin
 		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: text}
 		if resp.StatusCode == 422 {
 			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
 				return &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 			}
 			return &APIValidationError{APIStatusError: statusErr}
@@ -313,13 +313,34 @@ func (c *Client) DeleteAgent(ctx context.Context, agentID string) error {
 	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/%s", url.PathEscape(agentID)), nil, nil, nil, nil)
 }
 
-// ── Agent Export ────────────────────────────────────────────────────────────
+// ── Agent Export / Import ───────────────────────────────────────────────────
 
 // ExportAgent exports an agent definition as a portable JSON snapshot.
 func (c *Client) ExportAgent(ctx context.Context, agentID string, download bool) (*AgentExportResponse, error) {
 	query := map[string]string{"download": fmt.Sprintf("%t", download)}
 	var out AgentExportResponse
 	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/export", url.PathEscape(agentID)), query, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// PreviewImportAgent validates an agent_definition payload (same shape as ExportAgent's
+// response) without creating or modifying any agent.
+//
+// Use this before CreateAgent or UpdateAgent with an AgentDefinition to surface
+// UnresolvedRefs — workflow references to knowledge bases, memory banks, source
+// connections, or sub-agents that don't exist in the target account. Pass the
+// returned ids back in EntityRemap on the commit call to substitute them.
+//
+// On HTTP 422 the response body is an [AgentDefinitionImportErrorResponse] listing
+// each field error with a 1-indexed line/column anchored to a canonical Source echo.
+// It is returned as an [APIValidationError]; the raw body is on
+// APIValidationError.ResponseText (decode with json.Unmarshal into
+// [AgentDefinitionImportErrorResponse]).
+func (c *Client) PreviewImportAgent(ctx context.Context, body AgentImportPreviewRequest) (*AgentImportPreviewResponse, error) {
+	var out AgentImportPreviewResponse
+	if err := c.Do(ctx, http.MethodPost, "/agents/preview-import", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -655,7 +676,7 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
 		if resp.StatusCode == 422 {
 			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
 				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 			}
 			return nil, &APIValidationError{APIStatusError: statusErr}
@@ -810,7 +831,7 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 			statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
 			if resp.StatusCode == 422 {
 				var ve HTTPValidationError
-				if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+				if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
 					errCh <- &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 					return
 				}
@@ -1055,7 +1076,7 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
 		if resp.StatusCode == 422 {
 			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
 				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 			}
 			return nil, &APIValidationError{APIStatusError: statusErr}
