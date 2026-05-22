@@ -96,12 +96,24 @@ type AddConversationTurnRequest struct {
 	UserInput string `json:"user_input"`
 }
 
+// AgentDefinitionImportErrorResponse 422 body for invalid `agent_definition` payloads.
+//
+// Mirrors :py:meth:`AgentDefinitionImportError.to_response_dict`.
+type AgentDefinitionImportErrorResponse struct {
+	Error   *string                 `json:"error,omitempty"`
+	Errors  []ImportFieldErrorModel `json:"errors"`
+	Message string                  `json:"message"`
+
+	// Source Canonical pretty-printed echo of the supplied payload — error line/column refer to this string.
+	Source string `json:"source"`
+}
+
 // AgentDefinitionResponse defines model for AgentDefinitionResponse.
 type AgentDefinitionResponse struct {
 	// ChangeId Current change ID (use as expected_change_id when updating).
 	ChangeId string `json:"change_id"`
 
-	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, transform, gate, retry, evaluate_step, insight, extract_content, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, and others.
+	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, gate, retry, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, and others.
 	Definition map[string]interface{} `json:"definition"`
 
 	// SchemaVersion Agent schema version.
@@ -186,14 +198,29 @@ type AgentRunResponse struct {
 	// Attempts List of attempts made for this agent run.
 	Attempts []AgentRunAttemptResponse `json:"attempts"`
 
+	// BlockedPolicies Governance policies that produced at least one BLOCK verdict during this run.  Deduplicated by policy id.
+	BlockedPolicies *[]RoutersApiAgentsGovernancePolicyRefResponse `json:"blocked_policies,omitempty"`
+
 	// Credits Credits consumed by the agent run, if applicable.
 	Credits *float32 `json:"credits"`
 
 	// ErrorCount Number of errors encountered during the run.
 	ErrorCount int `json:"error_count"`
 
+	// FlaggedPolicies Governance policies that produced at least one FLAG verdict during this run.  Deduplicated by policy id.
+	FlaggedPolicies *[]RoutersApiAgentsGovernancePolicyRefResponse `json:"flagged_policies,omitempty"`
+
+	// GovernanceInputStatus Result of the governance input evaluation: safe, blocked, skipped, or timed_out.
+	GovernanceInputStatus *string `json:"governance_input_status"`
+
+	// GovernanceInputWaitMs Milliseconds spent waiting for governance input evaluation.
+	GovernanceInputWaitMs *int `json:"governance_input_wait_ms"`
+
 	// Input Input provided to the agent for this run.
 	Input *string `json:"input"`
+
+	// InputScanStatus Result of the prompt injection scan: safe, unsafe, skipped, timed_out, or error.
+	InputScanStatus *string `json:"input_scan_status"`
 
 	// Output Output produced by the agent run.
 	Output *string `json:"output"`
@@ -202,8 +229,11 @@ type AgentRunResponse struct {
 	Priority bool `json:"priority"`
 
 	// RunId Unique identifier for the agent run.
-	RunId  string                                 `json:"run_id"`
-	Status PendingProcessingCompletedFailedStatus `json:"status"`
+	RunId string `json:"run_id"`
+
+	// ScanWaitMs Milliseconds spent waiting for prompt injection scan.
+	ScanWaitMs *int                                   `json:"scan_wait_ms"`
+	Status     PendingProcessingCompletedFailedStatus `json:"status"`
 
 	// Steps Step outputs and per-step timing/credits. Only included when requested.
 	Steps *[]AgentRunStepResponse `json:"steps"`
@@ -268,6 +298,9 @@ type AgentSummaryResponse struct {
 
 	// Id Unique agent identifier.
 	Id string `json:"id"`
+
+	// ImportWarnings One entry per item dropped or substituted during import. Present only on endpoints that accept agent_definition; null on non-import calls; [] when the import had no skips.
+	ImportWarnings *[]ImportSkipResponse `json:"import_warnings"`
 
 	// MaxRetries Max retries for eval_and_retry mode.
 	MaxRetries *int `json:"max_retries,omitempty"`
@@ -933,7 +966,7 @@ type GenerateStepConfigRequest struct {
 	// StepId ID of the specific step to refine. Omit for new steps.
 	StepId *string `json:"step_id"`
 
-	// StepType The step type to generate config for (e.g. 'transform', 'gate', 'text', 'prompt_call', 'retrieval').
+	// StepType The step type to generate config for (e.g. 'regex_replace', 'gate', 'text', 'prompt_call', 'retrieval').
 	StepType string `json:"step_type"`
 
 	// UserInput Natural language description of what the step should do.
@@ -1000,6 +1033,42 @@ type GovernanceAiAssistantResponse struct {
 // HTTPValidationError defines model for HTTPValidationError.
 type HTTPValidationError struct {
 	Detail *[]ValidationError `json:"detail,omitempty"`
+}
+
+// ImportFieldErrorModel Single agent_definition validation error with source position.
+type ImportFieldErrorModel struct {
+	// Column 1-indexed column in `source`.
+	Column int `json:"column"`
+
+	// Line 1-indexed line in `source`.
+	Line int `json:"line"`
+
+	// Message Human-readable description of the problem.
+	Message string `json:"message"`
+
+	// Path Dotted path of the offending field, e.g. `agent.definition.child_steps[0].step_type`.
+	Path string `json:"path"`
+}
+
+// ImportSkipResponse One item that was not applied during an agent import.
+//
+// Used as the element type for “import_warnings“ on every
+// response model that accepts an “agent_definition“ payload.
+// See :py:class:`services.agent_definition_import.AgentImportSkip`
+// for the full category list.
+//
+// Lives here (not on each router) so the authenticated and public
+// API responses share one definition — keeping the shape that
+// clients (UI modal, MCP, OpenAPI consumers) depend on aligned.
+type ImportSkipResponse struct {
+	// Category The kind of item that was skipped or substituted: 'schedule', 'evaluation_criteria', 'alert_config', 'alert_recipient', 'governance_policy', 'governance_kb_link', 'solution_link'.
+	Category string `json:"category"`
+
+	// Details Category-specific identifiers for the skipped item (step_id, alert_type, kb_name, etc.).  Stable keys per category; absent keys are simply not applicable.
+	Details *map[string]interface{} `json:"details,omitempty"`
+
+	// Message Human-readable explanation of what was skipped and why.
+	Message string `json:"message"`
 }
 
 // InlineTextReplaceRequest Request model for inline text content replacement.
@@ -1322,6 +1391,9 @@ type ProposedActionResponse struct {
 
 	// Params Parameters for the action.
 	Params map[string]interface{} `json:"params"`
+
+	// Preview Planning-time dry-run preview attached by the solution AI assistant for create_agent / update_agent actions. Contains ``steps`` (the generated step tree), ``step_count``, ``warnings`` (a mix of heuristic structural issues — e.g. brittle JSONPath, pass-through ``regex_replace``, ``prompt_call`` missing a model — and deterministic resource-usage issues: every pre-bound knowledge base / memory bank must be referenced by at least one step, and no step may reference an unknown id), and ``skipped`` / ``skipped_reason`` when preview couldn't run (e.g. the action depends on resources created earlier in the same plan). ``None`` for non-agent actions or when generation failed.
+	Preview *map[string]interface{} `json:"preview"`
 }
 
 // ProposedPolicyActionResponse A single proposed governance policy action.
@@ -1828,6 +1900,56 @@ type VariantOptionResponse struct {
 	Value                                        string   `json:"value"`
 }
 
+// RoutersApiAgentsAgentImportPreviewRequest Dry-run import request — same payload shape as the export endpoint.
+type RoutersApiAgentsAgentImportPreviewRequest struct {
+	// AgentDefinition Payload in the same shape as GET /api/agents/{agent_id}/export.
+	AgentDefinition map[string]interface{} `json:"agent_definition"`
+}
+
+// RoutersApiAgentsAgentImportPreviewResponse Summary of a successfully validated import payload (no DB writes).
+//
+// Counts are derived from the validated payload as supplied — they
+// reflect what was requested, not what would eventually be persisted
+// (cross-account skips for recipients and KB names happen later, only
+// on commit).
+type RoutersApiAgentsAgentImportPreviewResponse struct {
+	// AgentName Imported agent name, if any.
+	AgentName *string `json:"agent_name"`
+
+	// AlertConfigs Number of alert configs in the payload.
+	AlertConfigs int `json:"alert_configs"`
+
+	// Description Imported agent description, if any.
+	Description *string `json:"description"`
+
+	// EvaluationCriteria Number of evaluation criteria in the payload.
+	EvaluationCriteria int `json:"evaluation_criteria"`
+
+	// GovernancePolicies Number of agent-scoped governance policies in the payload.
+	GovernancePolicies int `json:"governance_policies"`
+
+	// Ok Always true on a 200 response; failures use HTTP 422.
+	Ok bool `json:"ok"`
+
+	// PayloadExportVersion Export-format version the payload claims (or ``null`` for legacy payloads).  When this differs from ``supported_export_version``, fields may have been silently dropped or defaulted on import.
+	PayloadExportVersion *string `json:"payload_export_version"`
+
+	// Schedules Number of trigger schedules in the payload.
+	Schedules int `json:"schedules"`
+
+	// Solutions Number of solutions the source agent belonged to. On import these are matched by name in the target account; unmatched names are silently skipped.
+	Solutions *int `json:"solutions,omitempty"`
+
+	// StepCount Total number of steps in the workflow tree (recursive).
+	StepCount int `json:"step_count"`
+
+	// SupportedExportVersion Export-format version this server understands.  Compare against ``payload_export_version`` to detect cross-version imports.
+	SupportedExportVersion *string `json:"supported_export_version,omitempty"`
+
+	// UnresolvedRefs Entity references in the imported workflow that don't exist in the target account.  Each entry: {category, ref_id, ref_name?, locations:[step:<id>], alternatives:[{id, name, description?}]}. Pass {source_uuid: target_uuid} as ``entity_remap`` on the create/update call to substitute these references before save.
+	UnresolvedRefs *[]map[string]interface{} `json:"unresolved_refs,omitempty"`
+}
+
 // RoutersApiAgentsAgentListResponse defines model for routers__api__agents__AgentListResponse.
 type RoutersApiAgentsAgentListResponse struct {
 	// Data List of agents.
@@ -1866,11 +1988,17 @@ type RoutersApiAgentsAgentTraceSearchRequest struct {
 
 // RoutersApiAgentsCreateAgentRequest defines model for routers__api__agents__CreateAgentRequest.
 type RoutersApiAgentsCreateAgentRequest struct {
+	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, replaces any template-derived workflow and pre-fills metadata/trigger fields the request does not specify explicitly. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
+	AgentDefinition *map[string]interface{} `json:"agent_definition"`
+
 	// AgentTemplate Template to initialize the agent from. Values: blank, retrieval_example, simple_qa, summarizer, json_extractor, content_change_notifier, scheduled_report, webhook_pipeline.
 	AgentTemplate *string `json:"agent_template"`
 
 	// Description Optional description.
 	Description *string `json:"description"`
+
+	// EntityRemap Optional UUID-substitution map applied to the imported workflow before save. Each key is a source-account UUID (as returned by /agents/preview-import's ``unresolved_refs``); each value is the target-account UUID to substitute. Used to relink knowledge bases, memory banks, source connections, and sub-agents on cross-account imports.
+	EntityRemap *map[string]string `json:"entity_remap"`
 
 	// Name Name for the new agent.
 	Name string `json:"name"`
@@ -1879,13 +2007,28 @@ type RoutersApiAgentsCreateAgentRequest struct {
 	TriggerType *string `json:"trigger_type,omitempty"`
 }
 
+// RoutersApiAgentsGovernancePolicyRefResponse Reference to a governance policy by id and name.
+type RoutersApiAgentsGovernancePolicyRefResponse struct {
+	// PolicyId Governance policy identifier.
+	PolicyId string `json:"policy_id"`
+
+	// PolicyName Display name of the policy at evaluation time. May be null when the policy has been deleted.
+	PolicyName *string `json:"policy_name"`
+}
+
 // RoutersApiAgentsUpdateAgentRequest defines model for routers__api__agents__UpdateAgentRequest.
 type RoutersApiAgentsUpdateAgentRequest struct {
+	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, agent metadata fields the request does not set explicitly are taken from the payload, and the agent's workflow is replaced from `agent.definition`. The previous version is preserved in history. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
+	AgentDefinition *map[string]interface{} `json:"agent_definition"`
+
 	// DefaultEvaluationTier Default evaluation tier: 'fast', 'balanced', or 'thorough'.
 	DefaultEvaluationTier *string `json:"default_evaluation_tier"`
 
 	// Description New description for the agent.
 	Description *string `json:"description"`
+
+	// EntityRemap Optional UUID-substitution map applied to the imported workflow before save (same shape as on POST /agents).
+	EntityRemap *map[string]string `json:"entity_remap"`
 
 	// EvaluationMode Evaluation mode: 'output_expectation', 'eval_and_retry', or 'sample_and_flag'.
 	EvaluationMode *string `json:"evaluation_mode"`
@@ -2524,6 +2667,12 @@ type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetP
 	StartDate *string `form:"start_date,omitempty" json:"start_date,omitempty"`
 	EndDate   *string `form:"end_date,omitempty" json:"end_date,omitempty"`
 
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// PreviewImportAgentApiAgentsPreviewImportPostParams defines parameters for PreviewImportAgentApiAgentsPreviewImportPost.
+type PreviewImportAgentApiAgentsPreviewImportPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -3504,6 +3653,9 @@ type UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONReque
 // CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody defines body for CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost for application/json ContentType.
 type CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostJSONRequestBody = CreateEvaluationResultRequest
 
+// PreviewImportAgentApiAgentsPreviewImportPostJSONRequestBody defines body for PreviewImportAgentApiAgentsPreviewImportPost for application/json ContentType.
+type PreviewImportAgentApiAgentsPreviewImportPostJSONRequestBody = RoutersApiAgentsAgentImportPreviewRequest
+
 // SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody defines body for SearchAgentRunsApiAgentsRunsSearchPost for application/json ContentType.
 type SearchAgentRunsApiAgentsRunsSearchPostJSONRequestBody = RoutersApiAgentsAgentTraceSearchRequest
 
@@ -3839,6 +3991,11 @@ type ClientInterface interface {
 
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PreviewImportAgentApiAgentsPreviewImportPostWithBody request with any body
+	PreviewImportAgentApiAgentsPreviewImportPostWithBody(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PreviewImportAgentApiAgentsPreviewImportPost(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, body PreviewImportAgentApiAgentsPreviewImportPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SearchAgentRunsApiAgentsRunsSearchPostWithBody request with any body
 	SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4465,6 +4622,30 @@ func (c *Client) GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummar
 
 func (c *Client) GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PreviewImportAgentApiAgentsPreviewImportPostWithBody(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPreviewImportAgentApiAgentsPreviewImportPostRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PreviewImportAgentApiAgentsPreviewImportPost(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, body PreviewImportAgentApiAgentsPreviewImportPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPreviewImportAgentApiAgentsPreviewImportPostRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7336,6 +7517,61 @@ func NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 	if err != nil {
 		return nil, err
 	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewPreviewImportAgentApiAgentsPreviewImportPostRequest calls the generic PreviewImportAgentApiAgentsPreviewImportPost builder with application/json body
+func NewPreviewImportAgentApiAgentsPreviewImportPostRequest(server string, params *PreviewImportAgentApiAgentsPreviewImportPostParams, body PreviewImportAgentApiAgentsPreviewImportPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPreviewImportAgentApiAgentsPreviewImportPostRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewPreviewImportAgentApiAgentsPreviewImportPostRequestWithBody generates requests for PreviewImportAgentApiAgentsPreviewImportPost with any type of body
+func NewPreviewImportAgentApiAgentsPreviewImportPostRequestWithBody(server string, params *PreviewImportAgentApiAgentsPreviewImportPostParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/preview-import")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	if params != nil {
 
@@ -15583,6 +15819,11 @@ type ClientWithResponsesInterface interface {
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse, error)
 
+	// PreviewImportAgentApiAgentsPreviewImportPostWithBodyWithResponse request with any body
+	PreviewImportAgentApiAgentsPreviewImportPostWithBodyWithResponse(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PreviewImportAgentApiAgentsPreviewImportPostResponse, error)
+
+	PreviewImportAgentApiAgentsPreviewImportPostWithResponse(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, body PreviewImportAgentApiAgentsPreviewImportPostJSONRequestBody, reqEditors ...RequestEditorFn) (*PreviewImportAgentApiAgentsPreviewImportPostResponse, error)
+
 	// SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse request with any body
 	SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error)
 
@@ -16089,7 +16330,7 @@ type CreateAgentApiAgentsPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON201      *AgentSummaryResponse
-	JSON422      *HTTPValidationError
+	JSON422      *AgentDefinitionImportErrorResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -16291,6 +16532,29 @@ func (r GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 	return 0
 }
 
+type PreviewImportAgentApiAgentsPreviewImportPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiAgentsAgentImportPreviewResponse
+	JSON422      *AgentDefinitionImportErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r PreviewImportAgentApiAgentsPreviewImportPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PreviewImportAgentApiAgentsPreviewImportPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type SearchAgentRunsApiAgentsRunsSearchPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -16409,7 +16673,7 @@ type UpdateAgentApiAgentsAgentIdPutResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *AgentSummaryResponse
-	JSON422      *HTTPValidationError
+	JSON422      *AgentDefinitionImportErrorResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -19238,6 +19502,23 @@ func (c *ClientWithResponses) GetNonManualEvaluationSummaryApiAgentsEvaluationRe
 	return ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse(rsp)
 }
 
+// PreviewImportAgentApiAgentsPreviewImportPostWithBodyWithResponse request with arbitrary body returning *PreviewImportAgentApiAgentsPreviewImportPostResponse
+func (c *ClientWithResponses) PreviewImportAgentApiAgentsPreviewImportPostWithBodyWithResponse(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PreviewImportAgentApiAgentsPreviewImportPostResponse, error) {
+	rsp, err := c.PreviewImportAgentApiAgentsPreviewImportPostWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePreviewImportAgentApiAgentsPreviewImportPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) PreviewImportAgentApiAgentsPreviewImportPostWithResponse(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, body PreviewImportAgentApiAgentsPreviewImportPostJSONRequestBody, reqEditors ...RequestEditorFn) (*PreviewImportAgentApiAgentsPreviewImportPostResponse, error) {
+	rsp, err := c.PreviewImportAgentApiAgentsPreviewImportPost(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePreviewImportAgentApiAgentsPreviewImportPostResponse(rsp)
+}
+
 // SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse request with arbitrary body returning *SearchAgentRunsApiAgentsRunsSearchPostResponse
 func (c *ClientWithResponses) SearchAgentRunsApiAgentsRunsSearchPostWithBodyWithResponse(ctx context.Context, params *SearchAgentRunsApiAgentsRunsSearchPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
 	rsp, err := c.SearchAgentRunsApiAgentsRunsSearchPostWithBody(ctx, params, contentType, body, reqEditors...)
@@ -20833,7 +21114,7 @@ func ParseCreateAgentApiAgentsPostResponse(rsp *http.Response) (*CreateAgentApiA
 		response.JSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
+		var dest AgentDefinitionImportErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -21101,6 +21382,39 @@ func ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummar
 	return response, nil
 }
 
+// ParsePreviewImportAgentApiAgentsPreviewImportPostResponse parses an HTTP response from a PreviewImportAgentApiAgentsPreviewImportPostWithResponse call
+func ParsePreviewImportAgentApiAgentsPreviewImportPostResponse(rsp *http.Response) (*PreviewImportAgentApiAgentsPreviewImportPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PreviewImportAgentApiAgentsPreviewImportPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiAgentsAgentImportPreviewResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest AgentDefinitionImportErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseSearchAgentRunsApiAgentsRunsSearchPostResponse parses an HTTP response from a SearchAgentRunsApiAgentsRunsSearchPostWithResponse call
 func ParseSearchAgentRunsApiAgentsRunsSearchPostResponse(rsp *http.Response) (*SearchAgentRunsApiAgentsRunsSearchPostResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -21281,7 +21595,7 @@ func ParseUpdateAgentApiAgentsAgentIdPutResponse(rsp *http.Response) (*UpdateAge
 		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
+		var dest AgentDefinitionImportErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

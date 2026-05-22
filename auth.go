@@ -75,10 +75,10 @@ type authState struct {
 }
 
 const (
-	defaultConfigDir    = ".seclai"
-	ssoConfigFile       = "config"
-	ssoCacheDir         = "sso/cache"
-	expiryBuffer = 30 * time.Second
+	defaultConfigDir = ".seclai"
+	ssoConfigFile    = "config"
+	ssoCacheDir      = "sso/cache"
+	expiryBuffer     = 30 * time.Second
 )
 
 // DefaultSsoDomain is the production Cognito domain. Override with SECLAI_SSO_DOMAIN or config file.
@@ -168,9 +168,9 @@ func LoadSsoProfile(configDir, profileName string) (*SsoProfile, error) {
 		if os.IsNotExist(err) {
 			// No config file — return profile with defaults
 			return &SsoProfile{
-				SsoDomain:  envOrDefault("SECLAI_SSO_DOMAIN", "", DefaultSsoDomain),
+				SsoDomain:   envOrDefault("SECLAI_SSO_DOMAIN", "", DefaultSsoDomain),
 				SsoClientID: envOrDefault("SECLAI_SSO_CLIENT_ID", "", DefaultSsoClientID),
-				SsoRegion:  envOrDefault("SECLAI_SSO_REGION", "", DefaultSsoRegion),
+				SsoRegion:   envOrDefault("SECLAI_SSO_REGION", "", DefaultSsoRegion),
 			}, nil
 		}
 		return nil, err

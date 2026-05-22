@@ -631,6 +631,40 @@ func TestClient_ExportAgent_DownloadFalse(t *testing.T) {
 	}
 }
 
+func TestClient_PreviewImportAgent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/agents/preview-import" {
+			w.WriteHeader(404)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		if _, ok := body["agent_definition"].(map[string]any); !ok {
+			t.Errorf("expected agent_definition object in body, got %T", body["agent_definition"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"ok":true,"agent_name":"n","description":null,"step_count":0,"schedules":0,"alert_configs":0,"evaluation_criteria":0,"governance_policies":0}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	resp, err := c.PreviewImportAgent(context.Background(), AgentImportPreviewRequest{
+		AgentDefinition: map[string]any{"agent": map[string]any{"name": "n"}},
+	})
+	if err != nil {
+		t.Fatalf("PreviewImportAgent: %v", err)
+	}
+	if !resp.Ok {
+		t.Fatalf("expected ok=true")
+	}
+	if resp.AgentName == nil || *resp.AgentName != "n" {
+		t.Fatalf("expected agent_name n")
+	}
+}
+
 // ── Agent Definition tests ──────────────────────────────────────────────────
 
 func TestClient_GetAgentDefinition(t *testing.T) {
