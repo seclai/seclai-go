@@ -665,6 +665,49 @@ func TestClient_PreviewImportAgent(t *testing.T) {
 	}
 }
 
+// TestClient_PreviewImportAgent_422 verifies that the import-specific 422 body
+// (AgentDefinitionImportErrorResponse, which has no `detail` field) is delivered
+// intact via APIValidationError.ResponseText, and that ValidationError is left
+// nil because the body is not an HTTPValidationError.
+func TestClient_PreviewImportAgent_422(t *testing.T) {
+	const errBody = `{"error":"invalid_agent_definition","message":"missing required field","errors":[{"line":3,"column":5,"path":"agent.name","message":"required"}],"source":"{\n  \"agent\": {}\n}"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(422)
+		_, _ = io.WriteString(w, errBody)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	_, err := c.PreviewImportAgent(context.Background(), AgentImportPreviewRequest{
+		AgentDefinition: map[string]any{},
+	})
+	if err == nil {
+		t.Fatal("expected error on 422")
+	}
+	var verr *APIValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("expected *APIValidationError, got %T: %v", err, err)
+	}
+	if verr.ValidationError != nil {
+		t.Errorf("ValidationError should be nil for non-HTTPValidationError 422 body, got %+v", verr.ValidationError)
+	}
+	if verr.ResponseText != errBody {
+		t.Errorf("ResponseText mismatch:\nwant: %s\ngot:  %s", errBody, verr.ResponseText)
+	}
+	// Caller decodes the import-error shape themselves.
+	var imp AgentDefinitionImportErrorResponse
+	if err := json.Unmarshal([]byte(verr.ResponseText), &imp); err != nil {
+		t.Fatalf("unmarshal AgentDefinitionImportErrorResponse: %v", err)
+	}
+	if imp.Message != "missing required field" {
+		t.Errorf("unexpected message: %q", imp.Message)
+	}
+	if len(imp.Errors) != 1 || imp.Errors[0].Line != 3 || imp.Errors[0].Column != 5 {
+		t.Errorf("unexpected errors: %+v", imp.Errors)
+	}
+}
+
 // ── Agent Definition tests ──────────────────────────────────────────────────
 
 func TestClient_GetAgentDefinition(t *testing.T) {

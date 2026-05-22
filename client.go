@@ -211,7 +211,7 @@ func (c *Client) Do(ctx context.Context, method, apiPath string, query map[strin
 		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: text}
 		if resp.StatusCode == 422 {
 			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
 				return &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 			}
 			return &APIValidationError{APIStatusError: statusErr}
@@ -676,7 +676,7 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
 		if resp.StatusCode == 422 {
 			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
 				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 			}
 			return nil, &APIValidationError{APIStatusError: statusErr}
@@ -831,7 +831,7 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 			statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
 			if resp.StatusCode == 422 {
 				var ve HTTPValidationError
-				if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+				if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
 					errCh <- &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 					return
 				}
@@ -1076,7 +1076,7 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
 		if resp.StatusCode == 422 {
 			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil {
+			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
 				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 			}
 			return nil, &APIValidationError{APIStatusError: statusErr}

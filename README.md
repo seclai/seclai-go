@@ -164,7 +164,9 @@ entityRemap := map[string]string{}
 if preview.UnresolvedRefs != nil {
 	for _, ref := range *preview.UnresolvedRefs {
 		if id, ok := ref["ref_id"].(string); ok {
-			entityRemap[id] = "" // pick a target UUID from ref["alternatives"]
+			// Replace "<target-uuid>" with an id from ref["alternatives"]
+			// before calling CreateAgent; empty values are rejected.
+			entityRemap[id] = "<target-uuid>"
 		}
 	}
 }
