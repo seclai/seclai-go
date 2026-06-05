@@ -52,11 +52,31 @@
         "title": "AddConversationTurnRequest",
         "type": "object"
       },
+      "AgentAttachmentRefsApiResponse": {
+        "description": "Static attachment-reference contract for an agent.\n\nMirrors the MCP ``get_agent_attachment_references`` tool: returns\nwhat files (if any) an agent's templates expect on a run so API\nconsumers can stage uploads correctly before calling\n``POST /agents/{id}/runs``.",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AttachmentRefsSourceApiSummary",
+            "description": "Aggregated selector summary across all consumer steps. ``exact_names`` entries must each appear in the upload batch; ``indexes_max+1`` is the minimum file count; every ``patterns`` glob must match at least one upload."
+          },
+          "requires_uploads": {
+            "description": "When ``false`` the agent's definition does NOT reference any uploaded attachments \u2014 ``POST /agents/{id}/upload-input`` will reject with HTTP 400. When ``true`` the ``agent`` block lists the specific selectors a run-time batch must satisfy.",
+            "title": "Requires Uploads",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requires_uploads"
+        ],
+        "title": "AgentAttachmentRefsApiResponse",
+        "type": "object"
+      },
       "AgentDefinitionImportErrorResponse": {
-        "description": "422 body for invalid `agent_definition` payloads.\n\nMirrors :py:meth:`AgentDefinitionImportError.to_response_dict`.",
+        "description": "422 body for invalid `agent_definition` payloads.\n\nMirrors `AgentDefinitionImportError.to_response_dict`.",
         "properties": {
           "error": {
-            "default": "invalid_agent_definition",
+            "const": "invalid_agent_definition",
+            "description": "Stable machine-readable error code.",
             "title": "Error",
             "type": "string"
           },
@@ -78,6 +98,7 @@
           }
         },
         "required": [
+          "error",
           "message",
           "errors",
           "source"
@@ -94,7 +115,7 @@
           },
           "definition": {
             "additionalProperties": true,
-            "description": "The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, gate, retry, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, and others.",
+            "description": "The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, gate, retry, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, if_else, switch, and others.",
             "title": "Definition",
             "type": "object"
           },
@@ -337,8 +358,25 @@
                 "type": "null"
               }
             ],
-            "description": "ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field.",
+            "description": "ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field. Use ``input_upload_ids`` to attach multiple files.\n\n**Attachment visibility:** a step only sees the upload when its template references the input \u2014 via ``{{input}}`` / ``{{agent.input}}`` / ``{{step.<id>.input|output}}`` (implicit, all attachments) or the ``{{attachments[\u2026]}}`` family (explicit narrowing \u2014 e.g. ``{{attachments[0]}}``, ``{{attachments[*.pdf]}}``).\n\n**Per-batch validation:** every selector the agent's definition declares must be satisfied or the run is rejected with HTTP 400. Exact-name selectors require that filename to be present; indexed selectors require at least N+1 files; glob patterns require at least one matching filename.",
             "title": "Input Upload Id"
+          },
+          "input_upload_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "IDs of multiple previously uploaded files. Each upload's extracted text is concatenated under a heading; each upload's binary is surfaced as a separate ``MediaAttachment`` so multi-modal prompt steps reason over all files at once. Steps narrow visibility via ``{{attachments[\u2026]}}`` selectors (by index, filename, or fnmatch glob). The batch must satisfy every selector the agent declares \u2014 exact names, indexed references (length must exceed the highest index), and glob patterns (each pattern needs at least one match). Mismatches return HTTP 400 with the unmet requirements listed.  Mutually exclusive with ``input`` and ``input_upload_id`` \u2014 pass exactly one of the three. Max 20 uploads per run.",
+            "title": "Input Upload Ids"
           },
           "metadata": {
             "anyOf": [
@@ -360,6 +398,19 @@
             "description": "If true, the agent run will be treated as priority execution.",
             "title": "Priority",
             "type": "boolean"
+          },
+          "replay_of_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Re-run this agent reusing a prior run's uploaded input files. The files are re-resolved server-side from the source run (which must belong to this account and agent) \u2014 you do not re-upload them. Combine with ``input`` to change the text while keeping the files. A fresh upload batch (``input_upload_id(s)``) takes precedence and disables replay. Binaries swept by retention fall back to their extracted text.",
+            "title": "Replay Of Run Id"
           }
         },
         "title": "AgentRunRequest",
@@ -432,6 +483,18 @@
             "description": "Milliseconds spent waiting for governance input evaluation.",
             "title": "Governance Input Wait Ms"
           },
+          "hitl_wait_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cumulative milliseconds the run was parked waiting for a human decision on a human_in_the_loop step.  Subtracted from active duration in run-detail and duration-stats responses.",
+            "title": "Hitl Wait Ms"
+          },
           "input": {
             "anyOf": [
               {
@@ -467,6 +530,18 @@
             ],
             "description": "Output produced by the agent run.",
             "title": "Output"
+          },
+          "output_content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "MIME type of `output` \u2014 mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` \u2014 fetch each attachment via `GET /authenticated/storage-blobs/{storage_key}`.  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.",
+            "title": "Output Content Type"
           },
           "priority": {
             "description": "Indicates if the run was treated as a priority execution.",
@@ -615,6 +690,14 @@
             "description": "Type of the agent step.",
             "title": "Step Type",
             "type": "string"
+          },
+          "tool_calls": {
+            "description": "LLM tool calls made during this step (prompt_call steps only), ordered by execution. Empty for steps that invoked no tools.",
+            "items": {
+              "$ref": "#/components/schemas/AgentRunToolCallResponse"
+            },
+            "title": "Tool Calls",
+            "type": "array"
           }
         },
         "required": [
@@ -656,8 +739,25 @@
                 "type": "null"
               }
             ],
-            "description": "ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field.",
+            "description": "ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field. Use ``input_upload_ids`` to attach multiple files. Subject to the same per-batch attachment-selector validation as the non-streaming endpoint.",
             "title": "Input Upload Id"
+          },
+          "input_upload_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including per-batch selector validation (exact names, indexed references, and glob patterns must all be satisfied or the run is rejected with HTTP 400). Max 20.",
+            "title": "Input Upload Ids"
           },
           "metadata": {
             "anyOf": [
@@ -673,9 +773,139 @@
             ],
             "description": "Metadata to make available for string substitution expressions in agent tasks.",
             "title": "Metadata"
+          },
+          "replay_of_run_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Re-run reusing a prior run's uploaded input files (re-resolved server-side from the source run, which must belong to this account and agent). A fresh upload batch takes precedence.",
+            "title": "Replay Of Run Id"
           }
         },
         "title": "AgentRunStreamRequest",
+        "type": "object"
+      },
+      "AgentRunToolCallResponse": {
+        "description": "A single LLM tool call made during a prompt_call step.",
+        "properties": {
+          "credits_used": {
+            "default": 0.0,
+            "description": "Credits consumed by this tool call (0 for tools that don't bill).",
+            "title": "Credits Used",
+            "type": "number"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Duration of the tool call in seconds.",
+            "title": "Duration Seconds"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp when the tool call ended.",
+            "title": "Ended At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error message when the tool call failed.",
+            "title": "Error"
+          },
+          "function_name": {
+            "description": "Name of the tool/function invoked.",
+            "title": "Function Name",
+            "type": "string"
+          },
+          "id": {
+            "description": "Tool call identifier.",
+            "title": "Id",
+            "type": "string"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "JSON arguments the LLM passed to the tool, if persisted.",
+            "title": "Input"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "JSON result the tool returned to the LLM, if persisted.",
+            "title": "Output"
+          },
+          "round_index": {
+            "default": 0,
+            "description": "0-based tool-loop round this call belonged to.",
+            "title": "Round Index",
+            "type": "integer"
+          },
+          "sequence": {
+            "default": 0,
+            "description": "0-based ordinal of this call within its step run.",
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Timestamp when the tool call started.",
+            "title": "Started At"
+          },
+          "succeeded": {
+            "default": true,
+            "description": "Whether the tool call completed without error.",
+            "title": "Succeeded",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "function_name"
+        ],
+        "title": "AgentRunToolCallResponse",
         "type": "object"
       },
       "AgentSummaryResponse": {
@@ -814,7 +1044,6 @@
           "id",
           "name",
           "description",
-          "trigger_type",
           "created_at",
           "updated_at"
         ],
@@ -1042,21 +1271,6 @@
         "title": "AiAssistantFeedbackResponse",
         "type": "object"
       },
-      "AiAssistantGenerateRequest": {
-        "description": "Request body for AI assistant generate endpoints.",
-        "properties": {
-          "user_input": {
-            "description": "User input describing what to do",
-            "title": "User Input",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_input"
-        ],
-        "title": "AiAssistantGenerateRequest",
-        "type": "object"
-      },
       "AiAssistantGenerateResponse": {
         "description": "Response from an AI assistant generate endpoint.",
         "properties": {
@@ -1266,6 +1480,45 @@
           "success"
         ],
         "title": "AppliedActionResponse",
+        "type": "object"
+      },
+      "AttachmentRefsSourceApiSummary": {
+        "description": "Per-source attachment-reference summary.",
+        "properties": {
+          "exact_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exact Names",
+            "type": "array"
+          },
+          "indexes_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexes Max"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "patterns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Patterns",
+            "type": "array"
+          }
+        },
+        "title": "AttachmentRefsSourceApiSummary",
         "type": "object"
       },
       "Body_upload_file_to_content_api_contents__source_connection_content_version__upload_post": {
@@ -3291,7 +3544,7 @@
         "type": "object"
       },
       "ImportSkipResponse": {
-        "description": "One item that was not applied during an agent import.\n\nUsed as the element type for ``import_warnings`` on every\nresponse model that accepts an ``agent_definition`` payload.\nSee :py:class:`services.agent_definition_import.AgentImportSkip`\nfor the full category list.\n\nLives here (not on each router) so the authenticated and public\nAPI responses share one definition \u2014 keeping the shape that\nclients (UI modal, MCP, OpenAPI consumers) depend on aligned.",
+        "description": "One item that was not applied during an agent import.\n\nUsed as the element type for ``import_warnings`` on every\nresponse model that accepts an ``agent_definition`` payload.\nSee ``services.agent_definition_import.AgentImportSkip`` for the\nfull category list.\n\nLives here (not on each router) so the authenticated and public\nAPI responses share one definition \u2014 keeping the shape that\nclients (UI modal, MCP, OpenAPI consumers) depend on aligned.",
         "properties": {
           "category": {
             "description": "The kind of item that was skipped or substituted: 'schedule', 'evaluation_criteria', 'alert_config', 'alert_recipient', 'governance_policy', 'governance_kb_link', 'solution_link'.",
@@ -3421,6 +3674,47 @@
           "text"
         ],
         "title": "InlineTextUploadRequest",
+        "type": "object"
+      },
+      "InsufficientCreditsDetail": {
+        "description": "``detail`` body for a 402 ``insufficient_credits`` response.",
+        "properties": {
+          "account_id": {
+            "description": "UUID of the account that ran out of credits.",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "error": {
+            "const": "insufficient_credits",
+            "description": "Stable machine-readable error code.",
+            "title": "Error",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable explanation.",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "account_id"
+        ],
+        "title": "InsufficientCreditsDetail",
+        "type": "object"
+      },
+      "InsufficientCreditsResponse": {
+        "description": "402 envelope returned when the account has exhausted its credits.",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/InsufficientCreditsDetail"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "InsufficientCreditsResponse",
         "type": "object"
       },
       "JsonValue": {},
@@ -4006,6 +4300,42 @@
         "title": "MemoryBank",
         "type": "object"
       },
+      "ModalityRateResponse": {
+        "description": "Per-modality rate for an LLM that prices image/audio/video output\n(or input) at a rate distinct from the default text rate.\n\nExample: Gemini 3.1 Flash Image charges $3/1M output tokens for\ntext but $60/1M output tokens for generated images.  The image rate\nsurfaces here with ``modality=\"image\"`` and ``output_credits_per_1000_tokens``\nset; the default text rate stays on the parent model fields.",
+        "properties": {
+          "input_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Credits Per 1000 Tokens"
+          },
+          "modality": {
+            "title": "Modality",
+            "type": "string"
+          },
+          "output_credits_per_1000_tokens": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Credits Per 1000 Tokens"
+          }
+        },
+        "required": [
+          "modality"
+        ],
+        "title": "ModalityRateResponse",
+        "type": "object"
+      },
       "OrganizationAlertPreferenceListResponse": {
         "properties": {
           "preferences": {
@@ -4096,7 +4426,8 @@
           "pending",
           "processing",
           "completed",
-          "failed"
+          "failed",
+          "waiting_human"
         ],
         "title": "PendingProcessingCompletedFailedStatus",
         "type": "string"
@@ -7051,18 +7382,6 @@
       "routers__api__memory_banks__MemoryBankAiAssistantRequest": {
         "description": "Request body for the memory bank AI assistant.",
         "properties": {
-          "conversation_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Previous conversation ID to continue.",
-            "title": "Conversation Id"
-          },
           "current_config": {
             "anyOf": [
               {
@@ -7075,6 +7394,19 @@
             ],
             "description": "Current configuration to refine, if any.",
             "title": "Current Config"
+          },
+          "history_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional ISO 8601 timestamp.  When set, only conversation turns created at or after this timestamp are loaded as context, scoping history to the current session so the assistant remembers earlier turns in a multi-turn refinement.",
+            "title": "History Since"
           },
           "user_input": {
             "description": "Natural-language description of the memory bank.",
@@ -7238,6 +7570,34 @@
           }
         },
         "title": "AiAssistantAcceptRequest",
+        "type": "object"
+      },
+      "routers__api__solutions__AiAssistantGenerateRequest": {
+        "description": "Request body for AI assistant generate endpoints.",
+        "properties": {
+          "history_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional ISO 8601 timestamp.  When set, only conversation turns created at or after this timestamp are loaded as context, scoping history to the current session so the assistant remembers earlier turns in a create flow.",
+            "title": "History Since"
+          },
+          "user_input": {
+            "description": "User input describing what to do",
+            "title": "User Input",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_input"
+        ],
+        "title": "AiAssistantGenerateRequest",
         "type": "object"
       },
       "routers__api__solutions__SolutionAgentResponse": {
@@ -7868,6 +8228,18 @@
             "description": "ID of the created content version",
             "title": "Content Version Id"
           },
+          "embedder_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the file is non-text but the source's embedder is text-only \u2014 indexing will rely on OCR / transcription and may produce a FAILED row if no text can be extracted.",
+            "title": "Embedder Warning"
+          },
           "filename": {
             "description": "Original filename",
             "title": "Filename",
@@ -8084,6 +8456,13 @@
             "description": "Source URL used to derive payload_schema guidance for this model.",
             "title": "Payload Schema Source Url"
           },
+          "per_modality_rates": {
+            "items": {
+              "$ref": "#/components/schemas/ModalityRateResponse"
+            },
+            "title": "Per Modality Rates",
+            "type": "array"
+          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -8174,6 +8553,20 @@
               }
             ],
             "title": "Supported Languages"
+          },
+          "supported_output_media": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supported Output Media"
           },
           "supports_openai_arguments": {
             "default": false,
@@ -9662,9 +10055,55 @@
         ]
       }
     },
+    "/agents/{agent_id}/attachment-references": {
+      "get": {
+        "description": "Return the static attachment-reference contract for an agent \u2014 what files the agent's definition expects on a run.\n\nCall this BEFORE staging uploads so you know whether the agent accepts files at all (``requires_uploads``), and which specific filenames/indexes/patterns the templates reference. Mismatched batches are rejected at run time with HTTP 400.",
+        "operationId": "api_get_agent_attachment_references_api_agents__agent_id__attachment_references_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentAttachmentRefsApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get agent attachment-reference contract",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/agents/{agent_id}/definition": {
       "get": {
-        "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `regex_replace`: Reshape text via ordered regex find/replace rules\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `extract_data`: Progressively read and analyze large input\n- `extract_content`: Extract structured data (JSON, HTML, XML)\n- `add_chat_turn` / `load_chat_history`: Record a turn or load running history from a conversation memory bank\n- `add_memory` / `search_memory` / `load_memory`: Write, semantic-search, or load entries on a general memory bank\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `streaming_result`: Stream LLM tokens in real-time via SSE (must be a direct child of `prompt_call`; requires `dynamic_input` or `template_input` trigger; `priority: true` enables real-time streaming)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `merge`: Combine multiple inputs into a single templated output\n- `text`: Static text literal\n- `for_each`: Iterate a body over a list of items (body lives in `body[]`)\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
+        "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `regex_replace`: Reshape text via ordered regex find/replace rules\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `extract_data`: Progressively read and analyze large input\n- `extract_content`: Extract structured data (JSON, HTML, XML)\n- `add_chat_turn` / `load_chat_history`: Record a turn or load running history from a conversation memory bank\n- `add_memory` / `search_memory` / `load_memory`: Write, semantic-search, or load entries on a general memory bank\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `streaming_result`: Stream LLM tokens in real-time via SSE (must be a direct child of `prompt_call`; requires `dynamic_input` or `template_input` trigger; `priority: true` enables real-time streaming)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `merge`: Combine multiple inputs into a single templated output\n- `text`: Static text literal\n- `for_each`: Iterate a body over a list of items (body lives in `body[]`)\n- `if_else`: Conditional dispatch. Evaluates `conditions` (same shape as `gate`) and runs `then_steps` on match, otherwise the optional `else_steps`. The chosen branch's output flows to the if_else step's own `child_steps` (post-branch continuation chain). **`display_result` and `streaming_result` are not allowed inside `then_steps` / `else_steps`** \u2014 end each branch with a content-producing step (e.g. `text`, `prompt_call`) and place the single `display_result` in `child_steps`.\n- `switch`: Single-discriminator dispatch. Renders `discriminator` (default `{{input}}`) and routes to the first matching `cases[]` entry (equality by default; pass a list in `match` for `$in` semantics) or to `else_steps` when nothing matches. The chosen case's output flows to the switch step's own `child_steps`. **`display_result` and `streaming_result` are not allowed inside `cases[].steps` or `else_steps`** \u2014 end each case with a content-producing step and place the single `display_result` in `child_steps`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
         "operationId": "get_agent_definition_api_agents__agent_id__definition_get",
         "parameters": [
           {
@@ -9708,7 +10147,7 @@
         ]
       },
       "put": {
-        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `regex_replace`, `gate`, `retry`, `evaluate_step`, `extract_data`, `extract_content`, `add_chat_turn`, `load_chat_history`, `add_memory`, `search_memory`, `load_memory`, `streaming_result`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `merge`, `text`, and `for_each`. Non-composite step types (`display_result`, `join`, `retry`, `streaming_result`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
+        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `regex_replace`, `gate`, `retry`, `evaluate_step`, `extract_data`, `extract_content`, `add_chat_turn`, `load_chat_history`, `add_memory`, `search_memory`, `load_memory`, `streaming_result`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `merge`, `text`, `for_each`, `if_else`, and `switch`. Non-composite step types (`display_result`, `join`, `retry`, `streaming_result`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\n**if_else** runs `then_steps` when its `conditions` (same shape as `gate`) match, otherwise its optional `else_steps`. Either branch's output flows to the if_else step's own `child_steps` (the post-branch continuation chain).\n\n**switch** dispatches on a `discriminator` template (default `{{input}}`) to the first matching case (equality by default; pass a list in `match` for `$in` semantics) or to `else_steps` when no case matches. Cases own their own `steps` subtrees; the chosen branch's output flows to the switch step's own `child_steps`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
         "operationId": "update_agent_definition_api_agents__agent_id__definition_put",
         "parameters": [
           {
@@ -10440,7 +10879,14 @@
             "description": "Successful Response"
           },
           "402": {
-            "description": "Insufficient credits \u2014 the account has exhausted its credits. The response body is `{\"detail\": {\"error\": \"insufficient_credits\", \"message\": ..., \"account_id\": ...}}`."
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientCreditsResponse"
+                }
+              }
+            },
+            "description": "Insufficient credits \u2014 the account has exhausted its credits."
           },
           "422": {
             "content": {
@@ -10503,7 +10949,14 @@
             "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /api/agents/runs/{run_id}`."
           },
           "402": {
-            "description": "Insufficient credits \u2014 the account has exhausted its credits. The response body is `{\"detail\": {\"error\": \"insufficient_credits\", \"message\": ..., \"account_id\": ...}}`."
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientCreditsResponse"
+                }
+              }
+            },
+            "description": "Insufficient credits \u2014 the account has exhausted its credits."
           },
           "422": {
             "content": {
@@ -10583,7 +11036,7 @@
     },
     "/agents/{agent_id}/upload-input": {
       "post": {
-        "description": "Upload a file to use as input for a `dynamic_input` agent run.\n\nSupports the same file types as content source uploads: text, PDF, DOCX, audio, video, images, etc.  Text and document files are processed synchronously; audio/video are submitted for asynchronous transcription.\n\n**Size limit:** 200 MB per file.\n\n**Supported extensions:** txt, html, md, csv, xml, json, pdf, msg, docx, doc, pptx, ppt, xlsx, xls, zip, epub, png, jpg, gif, bmp, tiff, webp, mp3, wav, m4a, flac, ogg, mp4, mov, avi.\n\nAfter uploading, poll `GET /agents/{agent_id}/input-uploads/{upload_id}` until `status` is `ready`, then pass `input_upload_id` to `POST /agents/{agent_id}/runs`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
+        "description": "Upload a file to use as input for a `dynamic_input` agent run.\n\nSupports the same file types as content source uploads: text, PDF, DOCX, audio, video, images, etc.  Text and document files are processed synchronously; audio/video are submitted for asynchronous transcription.\n\n**Size limit:** 200 MB per file.\n\n**Supported extensions:** txt, html, md, csv, xml, json, pdf, msg, docx, doc, pptx, ppt, xlsx, xls, zip, epub, png, jpg, gif, bmp, tiff, webp, mp3, wav, m4a, flac, ogg, mp4, mov, avi.\n\nAfter uploading, poll `GET /agents/{agent_id}/input-uploads/{upload_id}` until `status` is `ready`, then pass `input_upload_id` to `POST /agents/{agent_id}/runs`.\n\n**Multi-modal routing:** non-text uploads (image, audio, video, PDF) are surfaced natively to multi-modal-capable prompt steps; text-only models fall back to the OCR / transcript text counterpart.  Audio originals are preserved past transcription so audio-capable models (Gemini 2.5/3, GPT-5 audio) read them directly; the agent-input-binary janitor sweeps originals once they pass your account's agent-trace retention (the agent-traces source's retention period; free default 7 days).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "api_upload_agent_input_api_agents__agent_id__upload_input_post",
         "parameters": [
           {
@@ -10687,7 +11140,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AiAssistantGenerateRequest"
+                "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateRequest"
               }
             }
           },
@@ -10906,7 +11359,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AiAssistantGenerateRequest"
+                "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateRequest"
               }
             }
           },
@@ -10953,7 +11406,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AiAssistantGenerateRequest"
+                "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateRequest"
               }
             }
           },
@@ -12142,7 +12595,7 @@
     },
     "/contents/{source_connection_content_version}/upload": {
       "post": {
-        "description": "Upload a new file and replace the content backing an existing `SourceConnectionContentVersion`.\n\nThis behaves like a source file upload, but it targets an existing content version ID. This is useful when you want to correct or update an uploaded document while keeping references stable.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only replace content belonging to your account.",
+        "description": "Upload a new file and replace the content backing an existing `SourceConnectionContentVersion`.\n\nThis behaves like a source file upload, but it targets an existing content version ID. This is useful when you want to correct or update an uploaded document while keeping references stable.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/svg+xml`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only replace content belonging to your account.",
         "operationId": "upload_file_to_content_api_contents__source_connection_content_version__upload_post",
         "parameters": [
           {
@@ -13984,6 +14437,44 @@
       }
     },
     "/models/playground/experiments/{experiment_id}": {
+      "delete": {
+        "description": "Soft-delete a model playground experiment.\n\nRemoves the experiment from list/detail views while preserving audit history.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth access token. The experiment must belong to the caller's account.",
+        "operationId": "delete_experiment_endpoint_api_models_playground_experiments__experiment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Experiment Endpoint",
+        "tags": [
+          "models"
+        ]
+      },
       "get": {
         "description": "Get details and results for a specific model playground experiment.\n\nReturns the full experiment payload including prompt, model outputs, and evaluation results (if available).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The experiment must belong to the caller's account.",
         "operationId": "get_experiment_api_models_playground_experiments__experiment_id__get",
@@ -14776,7 +15267,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AiAssistantGenerateRequest"
+                "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateRequest"
               }
             }
           },
@@ -14833,7 +15324,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AiAssistantGenerateRequest"
+                "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateRequest"
               }
             }
           },
@@ -14890,7 +15381,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AiAssistantGenerateRequest"
+                "$ref": "#/components/schemas/routers__api__solutions__AiAssistantGenerateRequest"
               }
             }
           },
@@ -16344,7 +16835,7 @@
     },
     "/sources/{source_connection_id}/upload": {
       "post": {
-        "description": "Upload a file to a content source.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"author\":\"Ada\",\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nResponse:\n- `status` is `uploaded` for a new upload, or `duplicate` when the same file already exists for this source.",
+        "description": "Upload a file to a content source.\n\n**Maximum file size:** 209715200 bytes.\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/svg+xml`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"author\":\"Ada\",\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nResponse:\n- `status` is `uploaded` for a new upload, or `duplicate` when the same file already exists for this source.",
         "operationId": "upload_file_to_source_api_sources__source_connection_id__upload_post",
         "parameters": [
           {
@@ -16395,6 +16886,116 @@
         "summary": "Upload a file to a content source",
         "tags": [
           "sources"
+        ]
+      }
+    },
+    "/v2/agent-runs/{run_id}/attachments/{attachment_id}": {
+      "get": {
+        "description": "Streams the bytes of an attachment emitted by a step in the given agent run.  ``attachment_id`` is the URL-safe-base64-encoded ``storage_key`` (use the encoder shared by webhook + email payload builders).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- The calling account must own ``run_id``; lookup failures (missing run, cross-account run, soft-deleted agent, unreferenced storage_key) all collapse to a single 404 to prevent cross-tenant existence enumeration.\n\nMIME handling:\n- Inline-safe MIMEs (image/*, audio/*, video/*, application/pdf, text/plain, application/vnd.seclai.manifest+json) are served with their declared type.\n- Everything else is served as ``application/octet-stream`` with an attachment disposition to prevent stored-XSS.",
+        "operationId": "serve_agent_run_attachment_api_v2_agent_runs__run_id__attachments__attachment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "download_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Download Name"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/vnd.seclai.manifest+json": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "audio/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "video/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Attachment bytes streamed with the resolved MIME type (inline-safe types keep their declared type; everything else is ``application/octet-stream``)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download an agent-run attachment",
+        "tags": [
+          "agent_run_attachments"
         ]
       }
     }

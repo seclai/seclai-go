@@ -1466,3 +1466,68 @@ func TestStreamingError(t *testing.T) {
 		t.Fatal("expected no run mention without RunID")
 	}
 }
+
+// ── Agent attachment / experiment sync tests ────────────────────────────────
+
+func TestClient_GetAgentAttachmentReferences(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/a_1/attachment-references" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"requires_uploads":true,"agent":{"exact_names":["report.pdf"]}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	resp, err := c.GetAgentAttachmentReferences(context.Background(), "a_1")
+	if err != nil {
+		t.Fatalf("GetAgentAttachmentReferences: %v", err)
+	}
+	if !resp.RequiresUploads {
+		t.Fatalf("expected requires_uploads true")
+	}
+}
+
+func TestClient_DownloadAgentRunAttachment(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v2/agent-runs/run_1/attachments/att_1" {
+			w.WriteHeader(404)
+			return
+		}
+		if got := r.URL.Query().Get("download_name"); got != "report.pdf" {
+			t.Errorf("expected download_name report.pdf, got %q", got)
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write([]byte("file-bytes"))
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	resp, err := c.DownloadAgentRunAttachment(context.Background(), "run_1", "att_1", "report.pdf")
+	if err != nil {
+		t.Fatalf("DownloadAgentRunAttachment: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "file-bytes" {
+		t.Fatalf("expected file-bytes, got %q", string(body))
+	}
+}
+
+func TestClient_DeleteExperiment(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/models/playground/experiments/exp_1" {
+			w.WriteHeader(404)
+			return
+		}
+		w.WriteHeader(204)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err := c.DeleteExperiment(context.Background(), "exp_1"); err != nil {
+		t.Fatalf("DeleteExperiment: %v", err)
+	}
+}

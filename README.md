@@ -243,10 +243,25 @@ result, err := client.RunAgentAndPoll(ctx, "agent_id", seclai.AgentRunRequest{
 ### Agent input uploads
 
 ```go
+// Discover which files (if any) the agent expects before staging uploads.
+refs, _ := client.GetAgentAttachmentReferences(ctx, "agent_id")
+// refs.RequiresUploads reports whether the agent accepts files; refs.Agent lists
+// the exact names / indexes / glob patterns a run-time upload batch must satisfy.
+
 upload, _ := client.UploadAgentInput(ctx, "agent_id", seclai.UploadFileRequest{
 	File: data, FileName: "input.pdf",
 })
 status, _ := client.GetAgentInputUploadStatus(ctx, "agent_id", upload.UploadId)
+```
+
+### Agent run attachments
+
+```go
+// Download a file emitted by a step in an agent run. The attachmentID is the
+// URL-safe-base64 storage_key surfaced in run output manifests / webhooks.
+// Pass "" for downloadName to omit the filename hint. The caller closes the body.
+resp, _ := client.DownloadAgentRunAttachment(ctx, "run_id", "attachment_id", "")
+defer resp.Body.Close() // raw *http.Response — stream or save the bytes
 ```
 
 ### Agent AI assistant
@@ -476,6 +491,13 @@ _ = client.MarkModelAlertRead(ctx, "alert_id")
 _ = client.MarkAllModelAlertsRead(ctx)
 unread, _ := client.GetUnreadModelAlertCount(ctx)
 recs, _ := client.GetModelRecommendations(ctx, "model_id")
+
+// Model playground experiments
+exp, _ := client.CreateExperiment(ctx, seclai.PlaygroundCreateRequest{ /* ... */ })
+experiments, _ := client.ListExperiments(ctx, seclai.ListExperimentsOptions{})
+detail, _ := client.GetExperiment(ctx, "experiment_id")
+_, _ = client.CancelExperiment(ctx, "experiment_id")
+_ = client.DeleteExperiment(ctx, "experiment_id") // soft-delete, preserves audit history
 ```
 
 ### Search

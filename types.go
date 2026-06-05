@@ -28,6 +28,14 @@ type JsonValue = generated.JsonValue
 // File is the upload file type used by the generated client.
 type File = openapi_types.File
 
+// InsufficientCreditsResponse is the 402 envelope returned when an account has
+// exhausted its credits.
+type InsufficientCreditsResponse = generated.InsufficientCreditsResponse
+
+// InsufficientCreditsDetail is the detail body of an [InsufficientCreditsResponse]
+// (error code, message, and account id).
+type InsufficientCreditsDetail = generated.InsufficientCreditsDetail
+
 // ── Agents ──────────────────────────────────────────────────────────────────
 
 // AgentListResponse is a paginated list of agents.
@@ -94,6 +102,10 @@ type AgentRunAttemptResponse = generated.AgentRunAttemptResponse
 // AgentRunStepResponse describes a single step within an agent run.
 type AgentRunStepResponse = generated.AgentRunStepResponse
 
+// AgentRunToolCallResponse is a single LLM tool call made during a prompt_call step
+// (within [AgentRunStepResponse]'s ToolCalls).
+type AgentRunToolCallResponse = generated.AgentRunToolCallResponse
+
 // AgentRunListResponse is a paginated list of agent runs.
 type AgentRunListResponse = generated.RoutersApiAgentsAgentRunListResponse
 
@@ -110,6 +122,15 @@ type AgentTraceMatchResponse = generated.AgentTraceMatchResponse
 
 // UploadAgentInputApiResponse is the response from uploading a file input for an agent run.
 type UploadAgentInputApiResponse = generated.UploadAgentInputApiResponse
+
+// AgentAttachmentRefsApiResponse is the static attachment-reference contract for an
+// agent — what files (if any) its templates expect on a run, so uploads can be
+// staged before starting the run.
+type AgentAttachmentRefsApiResponse = generated.AgentAttachmentRefsApiResponse
+
+// AttachmentRefsSourceApiSummary is the per-source attachment-reference summary
+// (exact names, indexes, glob patterns) within an [AgentAttachmentRefsApiResponse].
+type AttachmentRefsSourceApiSummary = generated.AttachmentRefsSourceApiSummary
 
 // ── Agent AI Assistant ──────────────────────────────────────────────────────
 
@@ -355,7 +376,7 @@ type AddConversationTurnRequest = generated.AddConversationTurnRequest
 type MarkConversationTurnRequest = generated.MarkConversationTurnRequest
 
 // AiAssistantGenerateRequest is the request body for generating an AI assistant plan.
-type AiAssistantGenerateRequest = generated.AiAssistantGenerateRequest
+type AiAssistantGenerateRequest = generated.RoutersApiSolutionsAiAssistantGenerateRequest
 
 // AiAssistantGenerateResponse is the AI assistant generated plan response.
 type AiAssistantGenerateResponse = generated.AiAssistantGenerateResponse
@@ -430,6 +451,10 @@ type ProviderGroupResponse = generated.SchemasModelResponsesProviderGroupRespons
 
 // PromptModelResponse is the full detail response for a single model.
 type PromptModelResponse = generated.SchemasModelResponsesPromptModelResponse
+
+// ModalityRateResponse is a per-modality rate for a model that prices
+// image/audio/video distinctly from its default text rate.
+type ModalityRateResponse = generated.ModalityRateResponse
 
 // PlaygroundCreateRequest is the request body for creating a model playground experiment.
 type PlaygroundCreateRequest = generated.PlaygroundCreateRequest
