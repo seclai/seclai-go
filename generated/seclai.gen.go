@@ -19813,10 +19813,10 @@ func (r UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse) Status
 }
 
 type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *interface{}
-	JSON422      *HTTPValidationError
+	Body                                []byte
+	HTTPResponse                        *http.Response
+	ApplicationvndSeclaiManifestJSON200 *openapi_types.File
+	JSON422                             *HTTPValidationError
 }
 
 // Status returns HTTPResponse.Status
@@ -25936,11 +25936,11 @@ func ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRe
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest interface{}
+		var dest openapi_types.File
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.JSON200 = &dest
+		response.ApplicationvndSeclaiManifestJSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest HTTPValidationError
@@ -25948,6 +25948,9 @@ func ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRe
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case rsp.StatusCode == 200:
+		// Content-type (video/*) unsupported
 
 	}
 
