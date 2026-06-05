@@ -466,6 +466,60 @@ func (c *Client) GetAgentInputUploadStatus(ctx context.Context, agentID, uploadI
 	return &out, nil
 }
 
+// GetAgentAttachmentReferences returns the static attachment-reference contract for
+// an agent — what files (if any) its definition expects on a run.
+//
+// Call this before staging uploads to learn whether the agent accepts files at all
+// (RequiresUploads) and which specific filenames, indexes, or glob patterns its
+// templates reference. A run-time upload batch that does not satisfy every declared
+// selector is rejected with HTTP 400.
+func (c *Client) GetAgentAttachmentReferences(ctx context.Context, agentID string) (*AgentAttachmentRefsApiResponse, error) {
+	var out AgentAttachmentRefsApiResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/attachment-references", url.PathEscape(agentID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DownloadAgentRunAttachment downloads a file attachment emitted by a step in an
+// agent run. Returns the raw HTTP response so the caller can stream the body. The
+// caller must close the response body.
+//
+// attachmentID is the URL-safe-base64-encoded storage_key of the attachment (as
+// surfaced in run output manifests and webhook/email payloads). downloadName is an
+// optional filename hint for the download disposition; pass "" to omit it.
+func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachmentID, downloadName string) (*http.Response, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var query map[string]string
+	if downloadName != "" {
+		query = map[string]string{"download_name": downloadName}
+	}
+	reqURL := c.buildURL(fmt.Sprintf("/v2/agent-runs/%s/attachments/%s", url.PathEscape(runID), url.PathEscape(attachmentID)), query)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range c.defaultHeaders {
+		req.Header.Set(k, v)
+	}
+	if err := c.applyAuth(ctx, req); err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		text := strings.TrimSpace(string(raw))
+		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodGet, URL: reqURL.String(), ResponseText: text}
+	}
+	return resp, nil
+}
+
 // ── Agent AI Assistant ──────────────────────────────────────────────────────
 
 // GenerateAgentSteps uses the AI assistant to generate step configurations for an agent.
@@ -1981,6 +2035,12 @@ func (c *Client) CancelExperiment(ctx context.Context, experimentID string) (jso
 		return nil, err
 	}
 	return out, nil
+}
+
+// DeleteExperiment soft-deletes a model playground experiment, removing it from
+// list/detail views while preserving audit history.
+func (c *Client) DeleteExperiment(ctx context.Context, experimentID string) error {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/models/playground/experiments/%s", url.PathEscape(experimentID)), nil, nil, nil, nil)
 }
 
 // ── General Search ──────────────────────────────────────────────────────────

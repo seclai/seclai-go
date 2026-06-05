@@ -49,10 +49,11 @@ const (
 
 // Defines values for PendingProcessingCompletedFailedStatus.
 const (
-	PendingProcessingCompletedFailedStatusCompleted  PendingProcessingCompletedFailedStatus = "completed"
-	PendingProcessingCompletedFailedStatusFailed     PendingProcessingCompletedFailedStatus = "failed"
-	PendingProcessingCompletedFailedStatusPending    PendingProcessingCompletedFailedStatus = "pending"
-	PendingProcessingCompletedFailedStatusProcessing PendingProcessingCompletedFailedStatus = "processing"
+	PendingProcessingCompletedFailedStatusCompleted    PendingProcessingCompletedFailedStatus = "completed"
+	PendingProcessingCompletedFailedStatusFailed       PendingProcessingCompletedFailedStatus = "failed"
+	PendingProcessingCompletedFailedStatusPending      PendingProcessingCompletedFailedStatus = "pending"
+	PendingProcessingCompletedFailedStatusProcessing   PendingProcessingCompletedFailedStatus = "processing"
+	PendingProcessingCompletedFailedStatusWaitingHuman PendingProcessingCompletedFailedStatus = "waiting_human"
 )
 
 // Defines values for PlaygroundCreateRequestEvaluationComplexity.
@@ -96,11 +97,26 @@ type AddConversationTurnRequest struct {
 	UserInput string `json:"user_input"`
 }
 
+// AgentAttachmentRefsApiResponse Static attachment-reference contract for an agent.
+//
+// Mirrors the MCP “get_agent_attachment_references“ tool: returns
+// what files (if any) an agent's templates expect on a run so API
+// consumers can stage uploads correctly before calling
+// “POST /agents/{id}/runs“.
+type AgentAttachmentRefsApiResponse struct {
+	// Agent Per-source attachment-reference summary.
+	Agent *AttachmentRefsSourceApiSummary `json:"agent,omitempty"`
+
+	// RequiresUploads When ``false`` the agent's definition does NOT reference any uploaded attachments — ``POST /agents/{id}/upload-input`` will reject with HTTP 400. When ``true`` the ``agent`` block lists the specific selectors a run-time batch must satisfy.
+	RequiresUploads bool `json:"requires_uploads"`
+}
+
 // AgentDefinitionImportErrorResponse 422 body for invalid `agent_definition` payloads.
 //
-// Mirrors :py:meth:`AgentDefinitionImportError.to_response_dict`.
+// Mirrors `AgentDefinitionImportError.to_response_dict`.
 type AgentDefinitionImportErrorResponse struct {
-	Error   *string                 `json:"error,omitempty"`
+	// Error Stable machine-readable error code.
+	Error   string                  `json:"error"`
 	Errors  []ImportFieldErrorModel `json:"errors"`
 	Message string                  `json:"message"`
 
@@ -113,7 +129,7 @@ type AgentDefinitionResponse struct {
 	// ChangeId Current change ID (use as expected_change_id when updating).
 	ChangeId string `json:"change_id"`
 
-	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, gate, retry, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, and others.
+	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, gate, retry, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, if_else, switch, and others.
 	Definition map[string]interface{} `json:"definition"`
 
 	// SchemaVersion Agent schema version.
@@ -183,14 +199,24 @@ type AgentRunRequest struct {
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
 	Input *string `json:"input"`
 
-	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field.
+	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field. Use ``input_upload_ids`` to attach multiple files.
+	//
+	// **Attachment visibility:** a step only sees the upload when its template references the input — via ``{{input}}`` / ``{{agent.input}}`` / ``{{step.<id>.input|output}}`` (implicit, all attachments) or the ``{{attachments[…]}}`` family (explicit narrowing — e.g. ``{{attachments[0]}}``, ``{{attachments[*.pdf]}}``).
+	//
+	// **Per-batch validation:** every selector the agent's definition declares must be satisfied or the run is rejected with HTTP 400. Exact-name selectors require that filename to be present; indexed selectors require at least N+1 files; glob patterns require at least one matching filename.
 	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
+
+	// InputUploadIds IDs of multiple previously uploaded files. Each upload's extracted text is concatenated under a heading; each upload's binary is surfaced as a separate ``MediaAttachment`` so multi-modal prompt steps reason over all files at once. Steps narrow visibility via ``{{attachments[…]}}`` selectors (by index, filename, or fnmatch glob). The batch must satisfy every selector the agent declares — exact names, indexed references (length must exceed the highest index), and glob patterns (each pattern needs at least one match). Mismatches return HTTP 400 with the unmet requirements listed.  Mutually exclusive with ``input`` and ``input_upload_id`` — pass exactly one of the three. Max 20 uploads per run.
+	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
 	Metadata *map[string]JsonValue `json:"metadata"`
 
 	// Priority If true, the agent run will be treated as priority execution.
 	Priority *bool `json:"priority,omitempty"`
+
+	// ReplayOfRunId Re-run this agent reusing a prior run's uploaded input files. The files are re-resolved server-side from the source run (which must belong to this account and agent) — you do not re-upload them. Combine with ``input`` to change the text while keeping the files. A fresh upload batch (``input_upload_id(s)``) takes precedence and disables replay. Binaries swept by retention fall back to their extracted text.
+	ReplayOfRunId *openapi_types.UUID `json:"replay_of_run_id"`
 }
 
 // AgentRunResponse defines model for AgentRunResponse.
@@ -216,6 +242,9 @@ type AgentRunResponse struct {
 	// GovernanceInputWaitMs Milliseconds spent waiting for governance input evaluation.
 	GovernanceInputWaitMs *int `json:"governance_input_wait_ms"`
 
+	// HitlWaitMs Cumulative milliseconds the run was parked waiting for a human decision on a human_in_the_loop step.  Subtracted from active duration in run-detail and duration-stats responses.
+	HitlWaitMs *int `json:"hitl_wait_ms"`
+
 	// Input Input provided to the agent for this run.
 	Input *string `json:"input"`
 
@@ -224,6 +253,9 @@ type AgentRunResponse struct {
 
 	// Output Output produced by the agent run.
 	Output *string `json:"output"`
+
+	// OutputContentType MIME type of `output` — mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` — fetch each attachment via `GET /authenticated/storage-blobs/{storage_key}`.  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.
+	OutputContentType *string `json:"output_content_type"`
 
 	// Priority Indicates if the run was treated as a priority execution.
 	Priority bool `json:"priority"`
@@ -268,6 +300,9 @@ type AgentRunStepResponse struct {
 
 	// StepType Type of the agent step.
 	StepType string `json:"step_type"`
+
+	// ToolCalls LLM tool calls made during this step (prompt_call steps only), ordered by execution. Empty for steps that invoked no tools.
+	ToolCalls *[]AgentRunToolCallResponse `json:"tool_calls,omitempty"`
 }
 
 // AgentRunStreamRequest defines model for AgentRunStreamRequest.
@@ -275,11 +310,56 @@ type AgentRunStreamRequest struct {
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
 	Input *string `json:"input"`
 
-	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field.
+	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field. Use ``input_upload_ids`` to attach multiple files. Subject to the same per-batch attachment-selector validation as the non-streaming endpoint.
 	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
+
+	// InputUploadIds IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including per-batch selector validation (exact names, indexed references, and glob patterns must all be satisfied or the run is rejected with HTTP 400). Max 20.
+	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
 	Metadata *map[string]JsonValue `json:"metadata"`
+
+	// ReplayOfRunId Re-run reusing a prior run's uploaded input files (re-resolved server-side from the source run, which must belong to this account and agent). A fresh upload batch takes precedence.
+	ReplayOfRunId *openapi_types.UUID `json:"replay_of_run_id"`
+}
+
+// AgentRunToolCallResponse A single LLM tool call made during a prompt_call step.
+type AgentRunToolCallResponse struct {
+	// CreditsUsed Credits consumed by this tool call (0 for tools that don't bill).
+	CreditsUsed *float32 `json:"credits_used,omitempty"`
+
+	// DurationSeconds Duration of the tool call in seconds.
+	DurationSeconds *float32 `json:"duration_seconds"`
+
+	// EndedAt Timestamp when the tool call ended.
+	EndedAt *string `json:"ended_at"`
+
+	// Error Error message when the tool call failed.
+	Error *string `json:"error"`
+
+	// FunctionName Name of the tool/function invoked.
+	FunctionName string `json:"function_name"`
+
+	// Id Tool call identifier.
+	Id string `json:"id"`
+
+	// Input JSON arguments the LLM passed to the tool, if persisted.
+	Input *string `json:"input"`
+
+	// Output JSON result the tool returned to the LLM, if persisted.
+	Output *string `json:"output"`
+
+	// RoundIndex 0-based tool-loop round this call belonged to.
+	RoundIndex *int `json:"round_index,omitempty"`
+
+	// Sequence 0-based ordinal of this call within its step run.
+	Sequence *int `json:"sequence,omitempty"`
+
+	// StartedAt Timestamp when the tool call started.
+	StartedAt *string `json:"started_at"`
+
+	// Succeeded Whether the tool call completed without error.
+	Succeeded *bool `json:"succeeded,omitempty"`
 }
 
 // AgentSummaryResponse defines model for AgentSummaryResponse.
@@ -394,12 +474,6 @@ type AiAssistantFeedbackResponse struct {
 	Flagged    bool               `json:"flagged"`
 }
 
-// AiAssistantGenerateRequest Request body for AI assistant generate endpoints.
-type AiAssistantGenerateRequest struct {
-	// UserInput User input describing what to do
-	UserInput string `json:"user_input"`
-}
-
 // AiAssistantGenerateResponse Response from an AI assistant generate endpoint.
 type AiAssistantGenerateResponse struct {
 	// ConversationId Conversation ID for accept/decline.
@@ -470,6 +544,14 @@ type AppliedActionResponse struct {
 
 	// Success Whether this individual action succeeded.
 	Success bool `json:"success"`
+}
+
+// AttachmentRefsSourceApiSummary Per-source attachment-reference summary.
+type AttachmentRefsSourceApiSummary struct {
+	ExactNames *[]string `json:"exact_names,omitempty"`
+	IndexesMax *int      `json:"indexes_max"`
+	Kinds      *[]string `json:"kinds,omitempty"`
+	Patterns   *[]string `json:"patterns,omitempty"`
 }
 
 // BodyUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost defines model for Body_upload_file_to_content_api_contents__source_connection_content_version__upload_post.
@@ -1054,8 +1136,8 @@ type ImportFieldErrorModel struct {
 //
 // Used as the element type for “import_warnings“ on every
 // response model that accepts an “agent_definition“ payload.
-// See :py:class:`services.agent_definition_import.AgentImportSkip`
-// for the full category list.
+// See “services.agent_definition_import.AgentImportSkip“ for the
+// full category list.
 //
 // Lives here (not on each router) so the authenticated and public
 // API responses share one definition — keeping the shape that
@@ -1099,6 +1181,24 @@ type InlineTextUploadRequest struct {
 
 	// Title Optional title
 	Title *string `json:"title"`
+}
+
+// InsufficientCreditsDetail “detail“ body for a 402 “insufficient_credits“ response.
+type InsufficientCreditsDetail struct {
+	// AccountId UUID of the account that ran out of credits.
+	AccountId string `json:"account_id"`
+
+	// Error Stable machine-readable error code.
+	Error string `json:"error"`
+
+	// Message Human-readable explanation.
+	Message string `json:"message"`
+}
+
+// InsufficientCreditsResponse 402 envelope returned when the account has exhausted its credits.
+type InsufficientCreditsResponse struct {
+	// Detail ``detail`` body for a 402 ``insufficient_credits`` response.
+	Detail InsufficientCreditsDetail `json:"detail"`
 }
 
 // JsonValue defines model for JsonValue.
@@ -1297,6 +1397,19 @@ type MemoryBankResponseModel struct {
 
 	// UpdatedAt ISO-8601 last-update timestamp.
 	UpdatedAt string `json:"updated_at"`
+}
+
+// ModalityRateResponse Per-modality rate for an LLM that prices image/audio/video output
+// (or input) at a rate distinct from the default text rate.
+//
+// Example: Gemini 3.1 Flash Image charges $3/1M output tokens for
+// text but $60/1M output tokens for generated images.  The image rate
+// surfaces here with “modality="image"“ and “output_credits_per_1000_tokens“
+// set; the default text rate stays on the parent model fields.
+type ModalityRateResponse struct {
+	InputCreditsPer1000Tokens  *float32 `json:"input_credits_per_1000_tokens"`
+	Modality                   string   `json:"modality"`
+	OutputCreditsPer1000Tokens *float32 `json:"output_credits_per_1000_tokens"`
 }
 
 // OrganizationAlertPreferenceListResponse defines model for OrganizationAlertPreferenceListResponse.
@@ -2233,11 +2346,11 @@ type RoutersApiMemoryBanksMemoryBankAcceptRequest struct {
 
 // RoutersApiMemoryBanksMemoryBankAiAssistantRequest Request body for the memory bank AI assistant.
 type RoutersApiMemoryBanksMemoryBankAiAssistantRequest struct {
-	// ConversationId Previous conversation ID to continue.
-	ConversationId *string `json:"conversation_id"`
-
 	// CurrentConfig Current configuration to refine, if any.
 	CurrentConfig *map[string]interface{} `json:"current_config"`
+
+	// HistorySince Optional ISO 8601 timestamp.  When set, only conversation turns created at or after this timestamp are loaded as context, scoping history to the current session so the assistant remembers earlier turns in a multi-turn refinement.
+	HistorySince *time.Time `json:"history_since"`
 
 	// UserInput Natural-language description of the memory bank.
 	UserInput string `json:"user_input"`
@@ -2289,6 +2402,15 @@ type RoutersApiSolutionsAiAssistantAcceptRequest struct {
 
 	// SolutionName When running in standalone mode (no pre-existing solution), provide a name to auto-create a solution and link resources.
 	SolutionName *string `json:"solution_name"`
+}
+
+// RoutersApiSolutionsAiAssistantGenerateRequest Request body for AI assistant generate endpoints.
+type RoutersApiSolutionsAiAssistantGenerateRequest struct {
+	// HistorySince Optional ISO 8601 timestamp.  When set, only conversation turns created at or after this timestamp are loaded as context, scoping history to the current session so the assistant remembers earlier turns in a create flow.
+	HistorySince *time.Time `json:"history_since"`
+
+	// UserInput User input describing what to do
+	UserInput string `json:"user_input"`
 }
 
 // RoutersApiSolutionsSolutionAgentResponse defines model for routers__api__solutions__SolutionAgentResponse.
@@ -2490,6 +2612,9 @@ type RoutersApiSourcesFileUploadResponse struct {
 	// ContentVersionId ID of the created content version
 	ContentVersionId *string `json:"content_version_id"`
 
+	// EmbedderWarning Set when the file is non-text but the source's embedder is text-only — indexing will rely on OCR / transcription and may produce a FAILED row if no text can be extracted.
+	EmbedderWarning *string `json:"embedder_warning"`
+
 	// Filename Original filename
 	Filename string `json:"filename"`
 
@@ -2534,9 +2659,10 @@ type SchemasModelResponsesPromptModelResponse struct {
 	PayloadSchema *map[string]interface{} `json:"payload_schema"`
 
 	// PayloadSchemaSourceUrl Source URL used to derive payload_schema guidance for this model.
-	PayloadSchemaSourceUrl *string    `json:"payload_schema_source_url"`
-	Provider               string     `json:"provider"`
-	ReleasedAt             *time.Time `json:"released_at"`
+	PayloadSchemaSourceUrl *string                 `json:"payload_schema_source_url"`
+	PerModalityRates       *[]ModalityRateResponse `json:"per_modality_rates,omitempty"`
+	Provider               string                  `json:"provider"`
+	ReleasedAt             *time.Time              `json:"released_at"`
 
 	// SchemaDocumentationUrl Model documentation URL with request/response payload details.
 	SchemaDocumentationUrl *string `json:"schema_documentation_url"`
@@ -2547,6 +2673,7 @@ type SchemasModelResponsesPromptModelResponse struct {
 	SunsetAt                 *time.Time                 `json:"sunset_at"`
 	SupportedInputMedia      *[]string                  `json:"supported_input_media"`
 	SupportedLanguages       *[]string                  `json:"supported_languages"`
+	SupportedOutputMedia     *[]string                  `json:"supported_output_media"`
 	SupportsOpenaiArguments  *bool                      `json:"supports_openai_arguments,omitempty"`
 	SupportsStreaming        *bool                      `json:"supports_streaming,omitempty"`
 	SupportsStructuredOutput *bool                      `json:"supports_structured_output,omitempty"`
@@ -2748,6 +2875,12 @@ type GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams struct {
 
 // MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams defines parameters for MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch.
 type MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams defines parameters for ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet.
+type ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -3341,6 +3474,12 @@ type CreateExperimentApiModelsPlaygroundExperimentsPostParams struct {
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
+// DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams defines parameters for DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete.
+type DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
 // GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams defines parameters for GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet.
 type GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -3644,6 +3783,14 @@ type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams struct {
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
+// ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams defines parameters for ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet.
+type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams struct {
+	DownloadName *string `form:"download_name,omitempty" json:"download_name,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
 // CreateAgentApiAgentsPostJSONRequestBody defines body for CreateAgentApiAgentsPost for application/json ContentType.
 type CreateAgentApiAgentsPostJSONRequestBody = RoutersApiAgentsCreateAgentRequest
 
@@ -3690,7 +3837,7 @@ type RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody = AgentRunSt
 type ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody = RoutersApiAiAssistantAiAssistantFeedbackRequest
 
 // ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody defines body for ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost for application/json ContentType.
-type ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody = AiAssistantGenerateRequest
+type ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostJSONRequestBody = RoutersApiSolutionsAiAssistantGenerateRequest
 
 // ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody defines body for ApiAiMemoryBankApiAiAssistantMemoryBankPost for application/json ContentType.
 type ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody = RoutersApiMemoryBanksMemoryBankAiAssistantRequest
@@ -3699,10 +3846,10 @@ type ApiAiMemoryBankApiAiAssistantMemoryBankPostJSONRequestBody = RoutersApiMemo
 type ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchJSONRequestBody = RoutersApiMemoryBanksMemoryBankAcceptRequest
 
 // ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody defines body for ApiAiSolutionApiAiAssistantSolutionPost for application/json ContentType.
-type ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody = AiAssistantGenerateRequest
+type ApiAiSolutionApiAiAssistantSolutionPostJSONRequestBody = RoutersApiSolutionsAiAssistantGenerateRequest
 
 // ApiAiSourceApiAiAssistantSourcePostJSONRequestBody defines body for ApiAiSourceApiAiAssistantSourcePost for application/json ContentType.
-type ApiAiSourceApiAiAssistantSourcePostJSONRequestBody = AiAssistantGenerateRequest
+type ApiAiSourceApiAiAssistantSourcePostJSONRequestBody = RoutersApiSolutionsAiAssistantGenerateRequest
 
 // ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody defines body for ApiAiAcceptApiAiAssistantConversationIdAcceptPost for application/json ContentType.
 type ApiAiAcceptApiAiAssistantConversationIdAcceptPostJSONRequestBody = RoutersApiSolutionsAiAssistantAcceptRequest
@@ -3771,13 +3918,13 @@ type UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteJSONRequestBody = UnlinkResou
 type LinkAgentsApiSolutionsSolutionIdAgentsPostJSONRequestBody = LinkResourcesRequest
 
 // AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody defines body for AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost for application/json ContentType.
-type AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody = AiAssistantGenerateRequest
+type AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostJSONRequestBody = RoutersApiSolutionsAiAssistantGenerateRequest
 
 // AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody defines body for AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost for application/json ContentType.
-type AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody = AiAssistantGenerateRequest
+type AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostJSONRequestBody = RoutersApiSolutionsAiAssistantGenerateRequest
 
 // AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody defines body for AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost for application/json ContentType.
-type AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody = AiAssistantGenerateRequest
+type AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostJSONRequestBody = RoutersApiSolutionsAiAssistantGenerateRequest
 
 // AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody defines body for AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost for application/json ContentType.
 type AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostJSONRequestBody = RoutersApiSolutionsAiAssistantAcceptRequest
@@ -4036,6 +4183,9 @@ type ClientInterface interface {
 	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBody(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet request
+	ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet(ctx context.Context, agentId string, params *ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgentDefinitionApiAgentsAgentIdDefinitionGet request
 	GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4312,6 +4462,9 @@ type ClientInterface interface {
 
 	CreateExperimentApiModelsPlaygroundExperimentsPost(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, body CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete request
+	DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete(ctx context.Context, experimentId openapi_types.UUID, params *DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet request
 	GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet(ctx context.Context, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4474,6 +4627,9 @@ type ClientInterface interface {
 
 	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody request with any body
 	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, params *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet request
+	ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet(ctx context.Context, runId openapi_types.UUID, attachmentId string, params *ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListAgentsApiAgentsGet(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4826,6 +4982,18 @@ func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchW
 
 func (c *Client) MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequest(c.Server, agentId, conversationId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet(ctx context.Context, agentId string, params *ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetRequest(c.Server, agentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6048,6 +6216,18 @@ func (c *Client) CreateExperimentApiModelsPlaygroundExperimentsPost(ctx context.
 	return c.Client.Do(req)
 }
 
+func (c *Client) DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete(ctx context.Context, experimentId openapi_types.UUID, params *DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteRequest(c.Server, experimentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet(ctx context.Context, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetRequest(c.Server, experimentId, params)
 	if err != nil {
@@ -6770,6 +6950,18 @@ func (c *Client) DownloadSourceExportApiSourcesSourceConnectionIdExportsExportId
 
 func (c *Client) UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBody(ctx context.Context, sourceConnectionId string, params *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(c.Server, sourceConnectionId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet(ctx context.Context, runId openapi_types.UUID, attachmentId string, params *ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRequest(c.Server, runId, attachmentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -8215,6 +8407,55 @@ func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWit
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetRequest generates requests for ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet
+func NewApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetRequest(server string, agentId string, params *ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/attachment-references", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -13109,6 +13350,55 @@ func NewCreateExperimentApiModelsPlaygroundExperimentsPostRequestWithBody(server
 	return req, nil
 }
 
+// NewDeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteRequest generates requests for DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete
+func NewDeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteRequest(server string, experimentId openapi_types.UUID, params *DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "experiment_id", runtime.ParamLocationPath, experimentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/playground/experiments/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetRequest generates requests for GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet
 func NewGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetRequest(server string, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams) (*http.Request, error) {
 	var err error
@@ -15740,6 +16030,84 @@ func NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(
 	return req, nil
 }
 
+// NewServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRequest generates requests for ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet
+func NewServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRequest(server string, runId openapi_types.UUID, attachmentId string, params *ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "run_id", runtime.ParamLocationPath, runId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "attachment_id", runtime.ParamLocationPath, attachmentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v2/agent-runs/%s/attachments/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.DownloadName != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "download_name", runtime.ParamLocationQuery, *params.DownloadName); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -15863,6 +16231,9 @@ type ClientWithResponsesInterface interface {
 	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithBodyWithResponse(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error)
 
 	MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchWithResponse(ctx context.Context, agentId string, conversationId string, params *MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams, body MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse, error)
+
+	// ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetWithResponse request
+	ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetWithResponse(ctx context.Context, agentId string, params *ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams, reqEditors ...RequestEditorFn) (*ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse, error)
 
 	// GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse request
 	GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error)
@@ -16139,6 +16510,9 @@ type ClientWithResponsesInterface interface {
 
 	CreateExperimentApiModelsPlaygroundExperimentsPostWithResponse(ctx context.Context, params *CreateExperimentApiModelsPlaygroundExperimentsPostParams, body CreateExperimentApiModelsPlaygroundExperimentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateExperimentApiModelsPlaygroundExperimentsPostResponse, error)
 
+	// DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteWithResponse request
+	DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse, error)
+
 	// GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse request
 	GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams, reqEditors ...RequestEditorFn) (*GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse, error)
 
@@ -16301,6 +16675,9 @@ type ClientWithResponsesInterface interface {
 
 	// UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse request with any body
 	UploadFileToSourceApiSourcesSourceConnectionIdUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionId string, params *UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse, error)
+
+	// ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetWithResponse request
+	ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetWithResponse(ctx context.Context, runId openapi_types.UUID, attachmentId string, params *ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse, error)
 }
 
 type ListAgentsApiAgentsGetResponse struct {
@@ -16784,6 +17161,29 @@ func (r MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse) 
 	return 0
 }
 
+type ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentAttachmentRefsApiResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17018,6 +17418,7 @@ type RunAgentApiAgentsAgentIdRunsPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *AgentRunResponse
+	JSON402      *InsufficientCreditsResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -17041,6 +17442,7 @@ type RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *interface{}
+	JSON402      *InsufficientCreditsResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -18450,6 +18852,28 @@ func (r CreateExperimentApiModelsPlaygroundExperimentsPostResponse) StatusCode()
 	return 0
 }
 
+type DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -19388,6 +19812,29 @@ func (r UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse) Status
 	return 0
 }
 
+type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // ListAgentsApiAgentsGetWithResponse request returning *ListAgentsApiAgentsGetResponse
 func (c *ClientWithResponses) ListAgentsApiAgentsGetWithResponse(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*ListAgentsApiAgentsGetResponse, error) {
 	rsp, err := c.ListAgentsApiAgentsGet(ctx, params, reqEditors...)
@@ -19647,6 +20094,15 @@ func (c *ClientWithResponses) MarkAiSuggestionApiAgentsAgentIdAiAssistantConvers
 		return nil, err
 	}
 	return ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse(rsp)
+}
+
+// ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetWithResponse request returning *ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse
+func (c *ClientWithResponses) ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetWithResponse(ctx context.Context, agentId string, params *ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams, reqEditors ...RequestEditorFn) (*ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse, error) {
+	rsp, err := c.ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet(ctx, agentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse(rsp)
 }
 
 // GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse request returning *GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse
@@ -20530,6 +20986,15 @@ func (c *ClientWithResponses) CreateExperimentApiModelsPlaygroundExperimentsPost
 	return ParseCreateExperimentApiModelsPlaygroundExperimentsPostResponse(rsp)
 }
 
+// DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteWithResponse request returning *DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse
+func (c *ClientWithResponses) DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse, error) {
+	rsp, err := c.DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete(ctx, experimentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse(rsp)
+}
+
 // GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse request returning *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse
 func (c *ClientWithResponses) GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams, reqEditors ...RequestEditorFn) (*GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse, error) {
 	rsp, err := c.GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet(ctx, experimentId, params, reqEditors...)
@@ -21057,6 +21522,15 @@ func (c *ClientWithResponses) UploadFileToSourceApiSourcesSourceConnectionIdUplo
 		return nil, err
 	}
 	return ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse(rsp)
+}
+
+// ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetWithResponse request returning *ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse
+func (c *ClientWithResponses) ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetWithResponse(ctx context.Context, runId openapi_types.UUID, attachmentId string, params *ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse, error) {
+	rsp, err := c.ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet(ctx, runId, attachmentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse(rsp)
 }
 
 // ParseListAgentsApiAgentsGetResponse parses an HTTP response from a ListAgentsApiAgentsGetWithResponse call
@@ -21738,6 +22212,39 @@ func ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse
 	return response, nil
 }
 
+// ParseApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse parses an HTTP response from a ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetWithResponse call
+func ParseApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse(rsp *http.Response) (*ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentAttachmentRefsApiResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse parses an HTTP response from a GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse call
 func ParseGetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse(rsp *http.Response) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -22089,6 +22596,13 @@ func ParseRunAgentApiAgentsAgentIdRunsPostResponse(rsp *http.Response) (*RunAgen
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest InsufficientCreditsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON402 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest HTTPValidationError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -22121,6 +22635,13 @@ func ParseRunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse(rsp *http.Resp
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest InsufficientCreditsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON402 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest HTTPValidationError
@@ -24056,6 +24577,32 @@ func ParseCreateExperimentApiModelsPlaygroundExperimentsPostResponse(rsp *http.R
 	return response, nil
 }
 
+// ParseDeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse parses an HTTP response from a DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteWithResponse call
+func ParseDeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse(rsp *http.Response) (*DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse parses an HTTP response from a GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetWithResponse call
 func ParseGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse(rsp *http.Response) (*GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -25357,6 +25904,39 @@ func ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse(rsp *
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest RoutersApiSourcesFileUploadResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse parses an HTTP response from a ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetWithResponse call
+func ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse(rsp *http.Response) (*ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest interface{}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
