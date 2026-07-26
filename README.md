@@ -132,6 +132,7 @@ https://seclai.github.io/seclai-go/latest/
 
 ### Identity
 
+<!-- sdksync:check -->
 ```go
 me, _ := client.GetMe(ctx)
 for _, org := range me.Organizations {

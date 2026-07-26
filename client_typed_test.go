@@ -1651,6 +1651,10 @@ func TestClient_SetEmailTriggerConfig(t *testing.T) {
 func TestClient_SetEmailTriggerConfig_SendsOnlySetFields(t *testing.T) {
 	var body map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/agents/a_1/triggers/t_1/email-config" {
+			w.WriteHeader(404)
+			return
+		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"trigger_id":"3f1a0d6e-0000-4000-8000-000000000002","agent_id":"3f1a0d6e-0000-4000-8000-000000000003","trigger_type":"EMAIL_RECEIVED"}`)
@@ -1672,6 +1676,10 @@ func TestClient_SetEmailTriggerConfig_SendsOnlySetFields(t *testing.T) {
 func TestClient_SetEmailTriggerConfig_ClearsWithZeroValue(t *testing.T) {
 	var body map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/agents/a_1/triggers/t_1/email-config" {
+			w.WriteHeader(404)
+			return
+		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"trigger_id":"3f1a0d6e-0000-4000-8000-000000000002","agent_id":"3f1a0d6e-0000-4000-8000-000000000003","trigger_type":"EMAIL_RECEIVED"}`)
