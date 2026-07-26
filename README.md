@@ -137,7 +137,14 @@ me, _ := client.GetMe(ctx)
 for _, org := range me.Organizations {
     fmt.Println(org.Name, org.AccountId)
 }
-// Act as an organization: seclai.NewClient(seclai.Options{AccountID: org.AccountId.String()})
+
+// Act as an organization by passing its account ID to a new client.
+if len(me.Organizations) > 0 {
+    orgClient, _ := seclai.NewClient(seclai.Options{
+        AccountID: me.Organizations[0].AccountId.String(),
+    })
+    _ = orgClient
+}
 ```
 
 ### Agents
@@ -532,7 +539,11 @@ _ = client.RemoveAgentEmailOptOut(ctx, "optout_id") // opt them back in
 
 // Blocked inbound senders (owner/admin only)
 blocked, _ := client.ListBlockedEmailSenders(ctx, seclai.BlockedEmailSenderOptions{Limit: 50, Offset: 0})
-_, _ = client.BlockEmailSender(ctx, seclai.BlockEmailSenderRequest{SenderEmail: "spam.example.com", MatchType: "domain"})
+matchDomain := "domain" // optional; defaults to "address"
+_, _ = client.BlockEmailSender(ctx, seclai.BlockEmailSenderRequest{
+    SenderEmail: "spam.example.com",
+    MatchType:   &matchDomain,
+})
 _ = client.UnblockEmailSender(ctx, "blocked_id")
 
 // Auto-block on a governance BLOCK: "disabled" | "input" | "input_and_output"
