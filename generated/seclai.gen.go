@@ -49,11 +49,13 @@ const (
 
 // Defines values for PendingProcessingCompletedFailedStatus.
 const (
-	PendingProcessingCompletedFailedStatusCompleted    PendingProcessingCompletedFailedStatus = "completed"
-	PendingProcessingCompletedFailedStatusFailed       PendingProcessingCompletedFailedStatus = "failed"
-	PendingProcessingCompletedFailedStatusPending      PendingProcessingCompletedFailedStatus = "pending"
-	PendingProcessingCompletedFailedStatusProcessing   PendingProcessingCompletedFailedStatus = "processing"
-	PendingProcessingCompletedFailedStatusWaitingHuman PendingProcessingCompletedFailedStatus = "waiting_human"
+	PendingProcessingCompletedFailedStatusCompleted        PendingProcessingCompletedFailedStatus = "completed"
+	PendingProcessingCompletedFailedStatusFailed           PendingProcessingCompletedFailedStatus = "failed"
+	PendingProcessingCompletedFailedStatusPending          PendingProcessingCompletedFailedStatus = "pending"
+	PendingProcessingCompletedFailedStatusProcessing       PendingProcessingCompletedFailedStatus = "processing"
+	PendingProcessingCompletedFailedStatusQueued           PendingProcessingCompletedFailedStatus = "queued"
+	PendingProcessingCompletedFailedStatusWaitingHuman     PendingProcessingCompletedFailedStatus = "waiting_human"
+	PendingProcessingCompletedFailedStatusWaitingScheduled PendingProcessingCompletedFailedStatus = "waiting_scheduled"
 )
 
 // Defines values for PlaygroundCreateRequestEvaluationComplexity.
@@ -85,6 +87,12 @@ const (
 	SourceIndexModeSlowAndThorough SourceIndexMode = "slow_and_thorough"
 )
 
+// Defines values for DocsSearchApiDocsSearchGetParamsMode.
+const (
+	Keyword  DocsSearchApiDocsSearchGetParamsMode = "keyword"
+	Semantic DocsSearchApiDocsSearchGetParamsMode = "semantic"
+)
+
 // AddConversationTurnRequest defines model for AddConversationTurnRequest.
 type AddConversationTurnRequest struct {
 	// ActionsTaken Actions taken by the AI
@@ -95,6 +103,15 @@ type AddConversationTurnRequest struct {
 
 	// UserInput User input text
 	UserInput string `json:"user_input"`
+}
+
+// AddEmailDomainRequest defines model for AddEmailDomainRequest.
+type AddEmailDomainRequest struct {
+	Delegated *bool `json:"delegated,omitempty"`
+
+	// Kind 'vanity' or 'custom'
+	Kind  string `json:"kind"`
+	Value string `json:"value"`
 }
 
 // AgentAttachmentRefsApiResponse Static attachment-reference contract for an agent.
@@ -109,6 +126,13 @@ type AgentAttachmentRefsApiResponse struct {
 
 	// RequiresUploads When ``false`` the agent's definition does NOT reference any uploaded attachments — ``POST /agents/{id}/upload-input`` will reject with HTTP 400. When ``true`` the ``agent`` block lists the specific selectors a run-time batch must satisfy.
 	RequiresUploads bool `json:"requires_uploads"`
+}
+
+// AgentCallerApiResponse One agent that calls another (blocks disabling the callee while live).
+type AgentCallerApiResponse struct {
+	Disabled bool               `json:"disabled"`
+	Id       openapi_types.UUID `json:"id"`
+	Name     string             `json:"name"`
 }
 
 // AgentDefinitionImportErrorResponse 422 body for invalid `agent_definition` payloads.
@@ -137,6 +161,23 @@ type AgentDefinitionResponse struct {
 
 	// Warnings Validation warnings, if any.
 	Warnings *[]map[string]string `json:"warnings"`
+}
+
+// AgentEmailOptOutListResponse A page of agent-email opt-outs plus the total (for pagination).
+type AgentEmailOptOutListResponse struct {
+	Items []AgentEmailOptOutResponse `json:"items"`
+	Total int                        `json:"total"`
+}
+
+// AgentEmailOptOutResponse A recipient's opt-out from an account's agent emails (one agent or all).
+type AgentEmailOptOutResponse struct {
+	AgentId        *openapi_types.UUID `json:"agent_id"`
+	AgentName      *string             `json:"agent_name"`
+	Comment        *string             `json:"comment"`
+	CreatedAt      string              `json:"created_at"`
+	Id             openapi_types.UUID  `json:"id"`
+	Reason         *string             `json:"reason"`
+	RecipientEmail string              `json:"recipient_email"`
 }
 
 // AgentEvaluationTier Controls model selection for agent evaluation.
@@ -254,7 +295,7 @@ type AgentRunResponse struct {
 	// Output Output produced by the agent run.
 	Output *string `json:"output"`
 
-	// OutputContentType MIME type of `output` — mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` — fetch each attachment via `GET /authenticated/storage-blobs/{storage_key}`.  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.
+	// OutputContentType MIME type of `output` — mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` — fetch each attachment via `GET /api/v2/agent-runs/{run_id}/attachments/{attachment_id}`, where `attachment_id` is the URL-safe base64 of the attachment's `storage_key` (accepts an API key or OAuth token).  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.
 	OutputContentType *string `json:"output_content_type"`
 
 	// Priority Indicates if the run was treated as a priority execution.
@@ -269,6 +310,9 @@ type AgentRunResponse struct {
 
 	// Steps Step outputs and per-step timing/credits. Only included when requested.
 	Steps *[]AgentRunStepResponse `json:"steps"`
+
+	// WaitMs Cumulative milliseconds the run was parked on standard-mode wait steps.  Subtracted from active duration in run-detail and duration-stats responses, exactly like hitl_wait_ms.  Priority waits block inline and are not counted here.
+	WaitMs *int `json:"wait_ms"`
 }
 
 // AgentRunStepResponse defines model for AgentRunStepResponse.
@@ -372,6 +416,15 @@ type AgentSummaryResponse struct {
 
 	// Description Agent description.
 	Description *string `json:"description"`
+
+	// Disabled Whether the agent is paused (disabled).
+	Disabled *bool `json:"disabled,omitempty"`
+
+	// DisabledAt ISO 8601 timestamp the agent was paused.
+	DisabledAt *string `json:"disabled_at"`
+
+	// DisabledReason Why the agent is paused: 'manual' or 'email_overload'.
+	DisabledReason *string `json:"disabled_reason"`
 
 	// EvaluationMode Evaluation mode: output_expectation, eval_and_retry, or sample_and_flag.
 	EvaluationMode *string `json:"evaluation_mode,omitempty"`
@@ -554,6 +607,30 @@ type AttachmentRefsSourceApiSummary struct {
 	Patterns   *[]string `json:"patterns,omitempty"`
 }
 
+// BlockEmailSenderRequest Add one sender/domain to the account blocklist (shared REST request).
+type BlockEmailSenderRequest struct {
+	MatchType   *string `json:"match_type,omitempty"`
+	Note        *string `json:"note"`
+	SenderEmail string  `json:"sender_email"`
+}
+
+// BlockedEmailSenderListResponse A page of blocked senders + the account's auto-block mode.
+type BlockedEmailSenderListResponse struct {
+	AutoBlockMode string                       `json:"auto_block_mode"`
+	Items         []BlockedEmailSenderResponse `json:"items"`
+	Total         int                          `json:"total"`
+}
+
+// BlockedEmailSenderResponse A single blocked inbound email sender.
+type BlockedEmailSenderResponse struct {
+	CreatedAt   string             `json:"created_at"`
+	Id          openapi_types.UUID `json:"id"`
+	MatchType   string             `json:"match_type"`
+	Note        *string            `json:"note"`
+	SenderEmail string             `json:"sender_email"`
+	Source      string             `json:"source"`
+}
+
 // BodyUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost defines model for Body_upload_file_to_content_api_contents__source_connection_content_version__upload_post.
 type BodyUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost struct {
 	// File File to upload
@@ -576,6 +653,11 @@ type BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost struct {
 
 	// Title Optional title for the content
 	Title *string `json:"title,omitempty"`
+}
+
+// CancelQueuedRunsResponse defines model for CancelQueuedRunsResponse.
+type CancelQueuedRunsResponse struct {
+	Cancelled int `json:"cancelled"`
 }
 
 // ChangeStatusRequest defines model for ChangeStatusRequest.
@@ -814,6 +896,9 @@ type CreateSourceBody struct {
 	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
 	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
 
+	// MediaTypes Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored; unsupported values are dropped. Omit / [] for text-only.
+	MediaTypes *[]string `json:"media_types"`
+
 	// Name Source name.
 	Name string `json:"name"`
 
@@ -834,6 +919,91 @@ type CreateSourceBody struct {
 
 	// UrlId URL record ID (required for rss/website sources).
 	UrlId *string `json:"url_id"`
+}
+
+// DmarcFailingSourceResponse defines model for DmarcFailingSourceResponse.
+type DmarcFailingSourceResponse struct {
+	FailedCount int     `json:"failed_count"`
+	HeaderFrom  *string `json:"header_from"`
+	SourceIp    string  `json:"source_ip"`
+}
+
+// DmarcSummaryResponse defines model for DmarcSummaryResponse.
+type DmarcSummaryResponse struct {
+	Dispositions      *map[string]int               `json:"dispositions,omitempty"`
+	FailedMessages    int                           `json:"failed_messages"`
+	Monitored         *bool                         `json:"monitored,omitempty"`
+	PassRate          *float32                      `json:"pass_rate"`
+	PassedMessages    int                           `json:"passed_messages"`
+	ReportCount       int                           `json:"report_count"`
+	TopFailingSources *[]DmarcFailingSourceResponse `json:"top_failing_sources,omitempty"`
+	TotalMessages     int                           `json:"total_messages"`
+	WindowDays        int                           `json:"window_days"`
+}
+
+// DnsProviderResponse defines model for DnsProviderResponse.
+type DnsProviderResponse struct {
+	DashboardUrl       *string   `json:"dashboard_url"`
+	Key                string    `json:"key"`
+	MxPrioritySeparate *bool     `json:"mx_priority_separate,omitempty"`
+	Name               string    `json:"name"`
+	Tips               *[]string `json:"tips,omitempty"`
+	TxtQuotes          *string   `json:"txt_quotes,omitempty"`
+}
+
+// DnsRecordResponse defines model for DnsRecordResponse.
+type DnsRecordResponse struct {
+	Detail       *string `json:"detail"`
+	Key          string  `json:"key"`
+	MxHost       *string `json:"mx_host"`
+	MxPriority   *int    `json:"mx_priority"`
+	Name         string  `json:"name"`
+	Ok           bool    `json:"ok"`
+	RelativeName string  `json:"relative_name"`
+	Type         string  `json:"type"`
+	Value        string  `json:"value"`
+}
+
+// EmailDomainResponse defines model for EmailDomainResponse.
+type EmailDomainResponse struct {
+	Delegated     *bool                `json:"delegated,omitempty"`
+	DnsRecords    *[]DnsRecordResponse `json:"dns_records,omitempty"`
+	Domain        string               `json:"domain"`
+	ErrorMessage  *string              `json:"error_message"`
+	Id            openapi_types.UUID   `json:"id"`
+	IsPrimary     bool                 `json:"is_primary"`
+	Kind          string               `json:"kind"`
+	LastCheckedAt *time.Time           `json:"last_checked_at"`
+	Provider      *DnsProviderResponse `json:"provider,omitempty"`
+	Regressing    *bool                `json:"regressing,omitempty"`
+	Status        string               `json:"status"`
+	Verified      *bool                `json:"verified,omitempty"`
+	VerifiedAt    *time.Time           `json:"verified_at"`
+	ZoneApex      *string              `json:"zone_apex,omitempty"`
+}
+
+// EmailDomainsListResponse defines model for EmailDomainsListResponse.
+type EmailDomainsListResponse struct {
+	CanAddCustom    *bool                  `json:"can_add_custom,omitempty"`
+	CanAddVanity    *bool                  `json:"can_add_vanity,omitempty"`
+	CustomPlanNames *[]string              `json:"custom_plan_names,omitempty"`
+	Domains         *[]EmailDomainResponse `json:"domains,omitempty"`
+	HasCustom       *bool                  `json:"has_custom,omitempty"`
+	HasVanity       *bool                  `json:"has_vanity,omitempty"`
+	VanityPlanNames *[]string              `json:"vanity_plan_names,omitempty"`
+}
+
+// EmailTriggerConfigResponse An EMAIL_RECEIVED trigger's resolved address(es) and config.
+type EmailTriggerConfigResponse struct {
+	AgentId                  openapi_types.UUID `json:"agent_id"`
+	EmailAddresses           *[]string          `json:"email_addresses,omitempty"`
+	EmailAlias               *string            `json:"email_alias"`
+	EmailAllowedSenders      *[]string          `json:"email_allowed_senders"`
+	EmailIgnoreAutoGenerated *bool              `json:"email_ignore_auto_generated,omitempty"`
+	EmailQueueOnQuota        *bool              `json:"email_queue_on_quota,omitempty"`
+	EmailRequireSenderAuth   *bool              `json:"email_require_sender_auth,omitempty"`
+	TriggerId                openapi_types.UUID `json:"trigger_id"`
+	TriggerType              string             `json:"trigger_type"`
 }
 
 // EvaluationCriteriaResponse Response schema for evaluation criteria.
@@ -977,6 +1147,9 @@ type ExecutedActionResponse struct {
 	// Error Error message if failed.
 	Error *string `json:"error"`
 
+	// NeedsClarification True when the action paused for a clarifying question rather than failing. The created resource is kept and the question is in ``description``/``error``.
+	NeedsClarification *bool `json:"needs_clarification,omitempty"`
+
 	// ResourceId ID of the affected resource.
 	ResourceId *string `json:"resource_id"`
 
@@ -1026,6 +1199,9 @@ type GenerateAgentStepsResponse struct {
 
 	// ExamplePrompts Example natural-language prompts that demonstrate the capabilities of this AI assistant for the given mode.
 	ExamplePrompts *[]ExamplePrompt `json:"example_prompts,omitempty"`
+
+	// IntentAssessment How the assistant interpreted the request: 'clear' when steps were generated, or an ask-path value (e.g. 'ambiguous_output', 'cannot_build') when it returned no steps and put a clarifying question or blocker in `note`. Mirrors the MCP surface so callers can distinguish a clarification pause from a hard failure.
+	IntentAssessment *string `json:"intent_assessment"`
 
 	// Note AI explanation of the proposed workflow.
 	Note string `json:"note"`
@@ -1151,6 +1327,25 @@ type ImportSkipResponse struct {
 
 	// Message Human-readable explanation of what was skipped and why.
 	Message string `json:"message"`
+}
+
+// InboundEmailRejectionResponse An inbound email that was discarded without running an agent.
+type InboundEmailRejectionResponse struct {
+	AgentId   *openapi_types.UUID `json:"agent_id"`
+	CreatedAt string              `json:"created_at"`
+	Id        openapi_types.UUID  `json:"id"`
+	MessageId *string             `json:"message_id"`
+	Reason    string              `json:"reason"`
+	Recipient string              `json:"recipient"`
+	Sender    string              `json:"sender"`
+	SenderIp  *string             `json:"sender_ip"`
+	Subject   *string             `json:"subject"`
+}
+
+// InboundEmailStatusResponse defines model for InboundEmailStatusResponse.
+type InboundEmailStatusResponse struct {
+	Paused        bool `json:"paused"`
+	QueuedBacklog int  `json:"queued_backlog"`
 }
 
 // InlineTextReplaceRequest Request model for inline text content replacement.
@@ -1521,6 +1716,27 @@ type ProposedPolicyActionResponse struct {
 	Params map[string]interface{} `json:"params"`
 }
 
+// RemoveEmailDomainResponse defines model for RemoveEmailDomainResponse.
+type RemoveEmailDomainResponse struct {
+	CleanupNote *string `json:"cleanup_note"`
+	Removed     *bool   `json:"removed,omitempty"`
+}
+
+// ResumeInboundResponse defines model for ResumeInboundResponse.
+type ResumeInboundResponse struct {
+	Resumed bool `json:"resumed"`
+}
+
+// SendTestEmailResponse defines model for SendTestEmailResponse.
+type SendTestEmailResponse struct {
+	Sent *bool `json:"sent,omitempty"`
+}
+
+// SetAutoBlockModeRequest Set the account's governance auto-block mode (shared REST request).
+type SetAutoBlockModeRequest struct {
+	Mode string `json:"mode"`
+}
+
 // SolutionSourceConnectionResponse defines model for SolutionSourceConnectionResponse.
 type SolutionSourceConnectionResponse struct {
 	Id   openapi_types.UUID `json:"id"`
@@ -1676,6 +1892,9 @@ type SourceResponse struct {
 	//     SLOW_AND_THOROUGH: 1 024 dimensions, 1 000 char chunks, 200 char overlap.
 	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
 	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
+
+	// MediaTypes Media kinds extracted from indexed content and embedded as multi-modal KB chunks (subset of ['images', 'video']). Empty = text-only.
+	MediaTypes *[]string `json:"media_types,omitempty"`
 
 	// Name Name of the source connection.
 	Name string `json:"name"`
@@ -1938,6 +2157,9 @@ type UpdateSolutionRequest struct {
 
 // UpdateSourceBody Request body for updating a content source.
 type UpdateSourceBody struct {
+	// MediaTypes Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored; unsupported values are dropped. [] disables media extraction (text-only).
+	MediaTypes *[]string `json:"media_types"`
+
 	// Name New name.
 	Name *string `json:"name"`
 
@@ -2116,7 +2338,7 @@ type RoutersApiAgentsCreateAgentRequest struct {
 	// Name Name for the new agent.
 	Name string `json:"name"`
 
-	// TriggerType Trigger type: dynamic_input, template_input, schedule, new_content.
+	// TriggerType Trigger type: dynamic_input, template_input, schedule, new_content, email_received.
 	TriggerType *string `json:"trigger_type,omitempty"`
 }
 
@@ -2127,6 +2349,27 @@ type RoutersApiAgentsGovernancePolicyRefResponse struct {
 
 	// PolicyName Display name of the policy at evaluation time. May be null when the policy has been deleted.
 	PolicyName *string `json:"policy_name"`
+}
+
+// RoutersApiAgentsSetEmailTriggerConfigRequest Alias and/or sender allowlist for an EMAIL_RECEIVED trigger.
+//
+// A field omitted is left unchanged; passing “null“ (or “""“ for
+// “alias“) clears it.
+type RoutersApiAgentsSetEmailTriggerConfigRequest struct {
+	// Alias Custom alias for the address `<alias>.<accountID>@agent.seclai.com` (alphanumeric plus '+', '.', '-'; 1–32 chars; not starting/ending with '+', '.', '-'; not UUID-shaped). Pass null/empty to clear.
+	Alias *string `json:"alias"`
+
+	// AllowedSenders Allowlist of full sender addresses and/or bare domains (a bare domain also matches sub-domains). Empty/null accepts any sender.
+	AllowedSenders *[]string `json:"allowed_senders"`
+
+	// IgnoreAutoGenerated When true (default for new triggers), machine-generated inbound mail (auto-replies, bulk/list mail, bounces) is dropped before a run to prevent auto-reply loops. Set false to process automated mail.
+	IgnoreAutoGenerated *bool `json:"ignore_auto_generated"`
+
+	// QueueOnQuota When true (default false), inbound mail that exceeds the account's hourly email-trigger rate is parked in a QUEUED run and drained later by the catch-up sweep instead of being failed; when false, over-rate mail fails immediately.
+	QueueOnQuota *bool `json:"queue_on_quota"`
+
+	// RequireSenderAuth When true (default for new triggers), the envelope sender must pass SPF or DMARC even on an open inbox (no allowlist); unauthenticated, spoofable mail is rejected. Set false to accept fully unauthenticated mail on an open inbox.
+	RequireSenderAuth *bool `json:"require_sender_auth"`
 }
 
 // RoutersApiAgentsUpdateAgentRequest defines model for routers__api__agents__UpdateAgentRequest.
@@ -2635,25 +2878,37 @@ type RoutersApiSourcesSourceListResponse struct {
 
 // SchemasModelResponsesPromptModelResponse Response model for prompt model data
 type SchemasModelResponsesPromptModelResponse struct {
-	Default                               bool       `json:"default"`
-	DeprecatedAt                          *time.Time `json:"deprecated_at"`
-	Description                           string     `json:"description"`
-	Enabled                               bool       `json:"enabled"`
-	Family                                *string    `json:"family"`
-	FamilyGeneration                      *float32   `json:"family_generation"`
-	Id                                    string     `json:"id"`
-	Input1hCacheWriteCreditsPer1000Tokens *float32   `json:"input_1h_cache_write_credits_per_1000_tokens"`
-	Input5mCacheWriteCreditsPer1000Tokens *float32   `json:"input_5m_cache_write_credits_per_1000_tokens"`
-	InputCacheHitCreditsPer1000Tokens     *float32   `json:"input_cache_hit_credits_per_1000_tokens"`
-	InputCreditsPer1000Tokens             *float32   `json:"input_credits_per_1000_tokens"`
-	IsNew                                 *bool      `json:"is_new,omitempty"`
-	LastUsed                              *bool      `json:"last_used,omitempty"`
-	MaxContextTokens                      int        `json:"max_context_tokens"`
-	MaxConversationLength                 int        `json:"max_conversation_length"`
-	MaxOutputTokens                       int        `json:"max_output_tokens"`
-	ModelId                               string     `json:"model_id"`
-	Name                                  string     `json:"name"`
-	OutputCreditsPer1000Tokens            *float32   `json:"output_credits_per_1000_tokens"`
+	Default          bool       `json:"default"`
+	DeprecatedAt     *time.Time `json:"deprecated_at"`
+	Description      string     `json:"description"`
+	Enabled          bool       `json:"enabled"`
+	Family           *string    `json:"family"`
+	FamilyGeneration *float32   `json:"family_generation"`
+
+	// GenerationCreditsPerUnit Per-unit credit cost for a dedicated media-generation model, in the unit named by ``generation_params.pricing_unit`` (per image / per second / per character / per output token). Multiply by the produced unit count (images, seconds, characters) for the run cost. None for token-billed (non-generation) models.
+	GenerationCreditsPerUnit *float32 `json:"generation_credits_per_unit"`
+
+	// GenerationParams Media-generation descriptor (modality, pricing_unit, and modality-specific constraints). NULL for text LLMs; present for image/audio/video generation models. See schemas.generation_params.
+	GenerationParams *map[string]interface{} `json:"generation_params"`
+
+	// GenerationUnitLabel Human suffix for the per-unit generation rate (e.g. ``/image``, ``/second``, ``/1k chars``, ``/1k tokens``) — single-sourced from the pricing unit so clients render cost without re-deriving the mapping. None for non-generation models. Char/token rates are shown per 1,000 (the ``/1k …`` suffix), so scale ``generation_credits_per_unit`` accordingly for those units.
+	GenerationUnitLabel *string `json:"generation_unit_label"`
+	Id                  string  `json:"id"`
+
+	// ImageGenerationToolCreditsPerImage Per-image credit cost of using the built-in image_generation tool (it runs gpt-image-1). Set only for models that actually support the tool (tool-use capable); None otherwise.
+	ImageGenerationToolCreditsPerImage    *float32 `json:"image_generation_tool_credits_per_image"`
+	Input1hCacheWriteCreditsPer1000Tokens *float32 `json:"input_1h_cache_write_credits_per_1000_tokens"`
+	Input5mCacheWriteCreditsPer1000Tokens *float32 `json:"input_5m_cache_write_credits_per_1000_tokens"`
+	InputCacheHitCreditsPer1000Tokens     *float32 `json:"input_cache_hit_credits_per_1000_tokens"`
+	InputCreditsPer1000Tokens             *float32 `json:"input_credits_per_1000_tokens"`
+	IsNew                                 *bool    `json:"is_new,omitempty"`
+	LastUsed                              *bool    `json:"last_used,omitempty"`
+	MaxContextTokens                      int      `json:"max_context_tokens"`
+	MaxConversationLength                 int      `json:"max_conversation_length"`
+	MaxOutputTokens                       int      `json:"max_output_tokens"`
+	ModelId                               string   `json:"model_id"`
+	Name                                  string   `json:"name"`
+	OutputCreditsPer1000Tokens            *float32 `json:"output_credits_per_1000_tokens"`
 
 	// PayloadSchema Model-specific JSON schema for advanced prompt_call json_template payloads.
 	PayloadSchema *map[string]interface{} `json:"payload_schema"`
@@ -2735,6 +2990,50 @@ type CreateAgentApiAgentsPostParams struct {
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
+// ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams defines parameters for ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGet.
+type ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams struct {
+	// AgentId Filter to one agent (account-wide opt-outs still apply)
+	AgentId *string `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	Limit   *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset  *int    `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams defines parameters for RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDelete.
+type RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams defines parameters for ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGet.
+type ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams defines parameters for BlockEmailSenderApiApiAgentsBlockedEmailSendersPost.
+type BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams defines parameters for SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePut.
+type SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams defines parameters for UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDelete.
+type UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
 // DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams defines parameters for DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete.
 type DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -2794,6 +3093,34 @@ type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetP
 	StartDate *string `form:"start_date,omitempty" json:"start_date,omitempty"`
 	EndDate   *string `form:"end_date,omitempty" json:"end_date,omitempty"`
 
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams defines parameters for ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet.
+type ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams struct {
+	// AgentId Filter to a single agent's rejections
+	AgentId *string `form:"agent_id,omitempty" json:"agent_id,omitempty"`
+	Limit   *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams defines parameters for GetInboundEmailStatusApiApiAgentsInboundEmailStatusGet.
+type GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams defines parameters for CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPost.
+type CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams defines parameters for ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePost.
+type ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -2885,6 +3212,12 @@ type ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParam
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
+// GetAgentCallersApiApiAgentsAgentIdCallersGetParams defines parameters for GetAgentCallersApiApiAgentsAgentIdCallersGet.
+type GetAgentCallersApiApiAgentsAgentIdCallersGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
 // GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams defines parameters for GetAgentDefinitionApiAgentsAgentIdDefinitionGet.
 type GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -2893,6 +3226,18 @@ type GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams struct {
 
 // UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams defines parameters for UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut.
 type UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DisableAgentApiApiAgentsAgentIdDisablePostParams defines parameters for DisableAgentApiApiAgentsAgentIdDisablePost.
+type DisableAgentApiApiAgentsAgentIdDisablePostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// EnableAgentApiApiAgentsAgentIdEnablePostParams defines parameters for EnableAgentApiApiAgentsAgentIdEnablePost.
+type EnableAgentApiApiAgentsAgentIdEnablePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -2986,6 +3331,12 @@ type RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams struct {
 
 // ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams defines parameters for ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet.
 type ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams defines parameters for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut.
+type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -3206,6 +3557,75 @@ type UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParam
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
 
+// DocsSearchApiDocsSearchGetParams defines parameters for DocsSearchApiDocsSearchGet.
+type DocsSearchApiDocsSearchGetParams struct {
+	// Q Search query
+	Q string `form:"q" json:"q"`
+
+	// Mode Search strategy
+	Mode *DocsSearchApiDocsSearchGetParamsMode `form:"mode,omitempty" json:"mode,omitempty"`
+
+	// Limit Maximum results
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// DocsSearchApiDocsSearchGetParamsMode defines parameters for DocsSearchApiDocsSearchGet.
+type DocsSearchApiDocsSearchGetParamsMode string
+
+// ListEmailDomainsApiApiEmailDomainsGetParams defines parameters for ListEmailDomainsApiApiEmailDomainsGet.
+type ListEmailDomainsApiApiEmailDomainsGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// AddEmailDomainApiApiEmailDomainsPostParams defines parameters for AddEmailDomainApiApiEmailDomainsPost.
+type AddEmailDomainApiApiEmailDomainsPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams defines parameters for UseSharedDomainApiApiEmailDomainsUseSharedDomainPost.
+type UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams defines parameters for RemoveEmailDomainApiApiEmailDomainsDomainIdDelete.
+type RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams defines parameters for GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGet.
+type GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams struct {
+	Days       *int `form:"days,omitempty" json:"days,omitempty"`
+	TopSources *int `form:"top_sources,omitempty" json:"top_sources,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams defines parameters for SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost.
+type SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams defines parameters for SendTestEmailApiApiEmailDomainsDomainIdTestEmailPost.
+type SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams defines parameters for VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPost.
+type VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
 // GovernanceAiGenerateApiGovernanceAiAssistantPostParams defines parameters for GovernanceAiGenerateApiGovernanceAiAssistantPost.
 type GovernanceAiGenerateApiGovernanceAiAssistantPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -3407,6 +3827,12 @@ type ListModelsApiModelsGetParams struct {
 	// SupportsThinking Filter to models that support extended thinking
 	SupportsThinking *bool `form:"supports_thinking,omitempty" json:"supports_thinking,omitempty"`
 
+	// SupportsInputMedia Filter to models that accept this input modality — a coarse kind (`image`, `audio`, `video`, `pdf`) or a full MIME.
+	SupportsInputMedia *string `form:"supports_input_media,omitempty" json:"supports_input_media,omitempty"`
+
+	// SupportsOutputMedia Filter to models that produce this output modality — a coarse kind (`image`, `audio`, `video`) or a full MIME. Use to find image/audio/video generation models.
+	SupportsOutputMedia *string `form:"supports_output_media,omitempty" json:"supports_output_media,omitempty"`
+
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -3443,6 +3869,12 @@ type GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams struct {
 
 // MarkReadApiModelsAlertsAlertIdReadPatchParams defines parameters for MarkReadApiModelsAlertsAlertIdReadPatch.
 type MarkReadApiModelsAlertsAlertIdReadPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+}
+
+// GetGenerationTiersApiModelsGenerationTiersGetParams defines parameters for GetGenerationTiersApiModelsGenerationTiersGet.
+type GetGenerationTiersApiModelsGenerationTiersGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 }
@@ -3794,6 +4226,12 @@ type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams 
 // CreateAgentApiAgentsPostJSONRequestBody defines body for CreateAgentApiAgentsPost for application/json ContentType.
 type CreateAgentApiAgentsPostJSONRequestBody = RoutersApiAgentsCreateAgentRequest
 
+// BlockEmailSenderApiApiAgentsBlockedEmailSendersPostJSONRequestBody defines body for BlockEmailSenderApiApiAgentsBlockedEmailSendersPost for application/json ContentType.
+type BlockEmailSenderApiApiAgentsBlockedEmailSendersPostJSONRequestBody = BlockEmailSenderRequest
+
+// SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutJSONRequestBody defines body for SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePut for application/json ContentType.
+type SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutJSONRequestBody = SetAutoBlockModeRequest
+
 // UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody defines body for UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch for application/json ContentType.
 type UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchJSONRequestBody = UpdateEvaluationCriteriaRequest
 
@@ -3832,6 +4270,9 @@ type RunAgentApiAgentsAgentIdRunsPostJSONRequestBody = AgentRunRequest
 
 // RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody defines body for RunStreamingAgentApiAgentsAgentIdRunsStreamPost for application/json ContentType.
 type RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody = AgentRunStreamRequest
+
+// SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody defines body for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut for application/json ContentType.
+type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody = RoutersApiAgentsSetEmailTriggerConfigRequest
 
 // ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody defines body for ApiAiFeedbackApiAiAssistantFeedbackPost for application/json ContentType.
 type ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody = RoutersApiAiAssistantAiAssistantFeedbackRequest
@@ -3874,6 +4315,9 @@ type ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSO
 
 // UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostMultipartRequestBody defines body for UploadFileToContentApiContentsSourceConnectionContentVersionUploadPost for multipart/form-data ContentType.
 type UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostMultipartRequestBody = BodyUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost
+
+// AddEmailDomainApiApiEmailDomainsPostJSONRequestBody defines body for AddEmailDomainApiApiEmailDomainsPost for application/json ContentType.
+type AddEmailDomainApiApiEmailDomainsPostJSONRequestBody = AddEmailDomainRequest
 
 // GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody defines body for GovernanceAiGenerateApiGovernanceAiAssistantPost for application/json ContentType.
 type GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody = RoutersApiGovernanceGovernanceAiAssistantRequest
@@ -4111,6 +4555,28 @@ type ClientInterface interface {
 
 	CreateAgentApiAgentsPost(ctx context.Context, params *CreateAgentApiAgentsPostParams, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGet request
+	ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGet(ctx context.Context, params *ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDelete request
+	RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDelete(ctx context.Context, optoutId string, params *RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGet request
+	ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGet(ctx context.Context, params *ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithBody request with any body
+	BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithBody(ctx context.Context, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	BlockEmailSenderApiApiAgentsBlockedEmailSendersPost(ctx context.Context, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, body BlockEmailSenderApiApiAgentsBlockedEmailSendersPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithBody request with any body
+	SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithBody(ctx context.Context, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePut(ctx context.Context, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, body SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDelete request
+	UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDelete(ctx context.Context, blockedId string, params *UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete request
 	DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx context.Context, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4138,6 +4604,18 @@ type ClientInterface interface {
 
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet request
+	ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInboundEmailStatusApiApiAgentsInboundEmailStatusGet request
+	GetInboundEmailStatusApiApiAgentsInboundEmailStatusGet(ctx context.Context, params *GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPost request
+	CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPost(ctx context.Context, params *CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePost request
+	ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePost(ctx context.Context, params *ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PreviewImportAgentApiAgentsPreviewImportPostWithBody request with any body
 	PreviewImportAgentApiAgentsPreviewImportPostWithBody(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4187,6 +4665,9 @@ type ClientInterface interface {
 	// ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet request
 	ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet(ctx context.Context, agentId string, params *ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetAgentCallersApiApiAgentsAgentIdCallersGet request
+	GetAgentCallersApiApiAgentsAgentIdCallersGet(ctx context.Context, agentId string, params *GetAgentCallersApiApiAgentsAgentIdCallersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetAgentDefinitionApiAgentsAgentIdDefinitionGet request
 	GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4194,6 +4675,12 @@ type ClientInterface interface {
 	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DisableAgentApiApiAgentsAgentIdDisablePost request
+	DisableAgentApiApiAgentsAgentIdDisablePost(ctx context.Context, agentId string, params *DisableAgentApiApiAgentsAgentIdDisablePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// EnableAgentApiApiAgentsAgentIdEnablePost request
+	EnableAgentApiApiAgentsAgentIdEnablePost(ctx context.Context, agentId string, params *EnableAgentApiApiAgentsAgentIdEnablePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet request
 	ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet(ctx context.Context, agentId string, params *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4235,6 +4722,11 @@ type ClientInterface interface {
 
 	// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet request
 	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody request with any body
+	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPost request
 	ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4346,6 +4838,35 @@ type ClientInterface interface {
 	// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody request with any body
 	UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBody(ctx context.Context, sourceConnectionContentVersion string, params *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DocsSearchApiDocsSearchGet request
+	DocsSearchApiDocsSearchGet(ctx context.Context, params *DocsSearchApiDocsSearchGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListEmailDomainsApiApiEmailDomainsGet request
+	ListEmailDomainsApiApiEmailDomainsGet(ctx context.Context, params *ListEmailDomainsApiApiEmailDomainsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddEmailDomainApiApiEmailDomainsPostWithBody request with any body
+	AddEmailDomainApiApiEmailDomainsPostWithBody(ctx context.Context, params *AddEmailDomainApiApiEmailDomainsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AddEmailDomainApiApiEmailDomainsPost(ctx context.Context, params *AddEmailDomainApiApiEmailDomainsPostParams, body AddEmailDomainApiApiEmailDomainsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UseSharedDomainApiApiEmailDomainsUseSharedDomainPost request
+	UseSharedDomainApiApiEmailDomainsUseSharedDomainPost(ctx context.Context, params *UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveEmailDomainApiApiEmailDomainsDomainIdDelete request
+	RemoveEmailDomainApiApiEmailDomainsDomainIdDelete(ctx context.Context, domainId openapi_types.UUID, params *RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGet request
+	GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGet(ctx context.Context, domainId openapi_types.UUID, params *GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost request
+	SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost(ctx context.Context, domainId openapi_types.UUID, params *SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SendTestEmailApiApiEmailDomainsDomainIdTestEmailPost request
+	SendTestEmailApiApiEmailDomainsDomainIdTestEmailPost(ctx context.Context, domainId openapi_types.UUID, params *SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPost request
+	VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPost(ctx context.Context, domainId openapi_types.UUID, params *VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody request with any body
 	GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4453,6 +4974,9 @@ type ClientInterface interface {
 
 	// MarkReadApiModelsAlertsAlertIdReadPatch request
 	MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetGenerationTiersApiModelsGenerationTiersGet request
+	GetGenerationTiersApiModelsGenerationTiersGet(ctx context.Context, params *GetGenerationTiersApiModelsGenerationTiersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListExperimentsApiModelsPlaygroundExperimentsGet request
 	ListExperimentsApiModelsPlaygroundExperimentsGet(ctx context.Context, params *ListExperimentsApiModelsPlaygroundExperimentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4668,6 +5192,102 @@ func (c *Client) CreateAgentApiAgentsPost(ctx context.Context, params *CreateAge
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGet(ctx context.Context, params *ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDelete(ctx context.Context, optoutId string, params *RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteRequest(c.Server, optoutId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGet(ctx context.Context, params *ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithBody(ctx context.Context, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBlockEmailSenderApiApiAgentsBlockedEmailSendersPostRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) BlockEmailSenderApiApiAgentsBlockedEmailSendersPost(ctx context.Context, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, body BlockEmailSenderApiApiAgentsBlockedEmailSendersPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBlockEmailSenderApiApiAgentsBlockedEmailSendersPostRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithBody(ctx context.Context, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePut(ctx context.Context, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, body SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDelete(ctx context.Context, blockedId string, params *UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteRequest(c.Server, blockedId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx context.Context, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest(c.Server, criteriaId, params)
 	if err != nil {
@@ -4778,6 +5398,54 @@ func (c *Client) GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummar
 
 func (c *Client) GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetInboundEmailStatusApiApiAgentsInboundEmailStatusGet(ctx context.Context, params *GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInboundEmailStatusApiApiAgentsInboundEmailStatusGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPost(ctx context.Context, params *CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePost(ctx context.Context, params *ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5004,6 +5672,18 @@ func (c *Client) ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentRefere
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetAgentCallersApiApiAgentsAgentIdCallersGet(ctx context.Context, agentId string, params *GetAgentCallersApiApiAgentsAgentIdCallersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentCallersApiApiAgentsAgentIdCallersGetRequest(c.Server, agentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(c.Server, agentId, params)
 	if err != nil {
@@ -5030,6 +5710,30 @@ func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBody(ctx 
 
 func (c *Client) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequest(c.Server, agentId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DisableAgentApiApiAgentsAgentIdDisablePost(ctx context.Context, agentId string, params *DisableAgentApiApiAgentsAgentIdDisablePostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDisableAgentApiApiAgentsAgentIdDisablePostRequest(c.Server, agentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) EnableAgentApiApiAgentsAgentIdEnablePost(ctx context.Context, agentId string, params *EnableAgentApiApiAgentsAgentIdEnablePostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEnableAgentApiApiAgentsAgentIdEnablePostRequest(c.Server, agentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5210,6 +5914,30 @@ func (c *Client) RunStreamingAgentApiAgentsAgentIdRunsStreamPost(ctx context.Con
 
 func (c *Client) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRequest(c.Server, agentId, runId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequestWithBody(c.Server, agentId, triggerId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequest(c.Server, agentId, triggerId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5712,6 +6440,126 @@ func (c *Client) UploadFileToContentApiContentsSourceConnectionContentVersionUpl
 	return c.Client.Do(req)
 }
 
+func (c *Client) DocsSearchApiDocsSearchGet(ctx context.Context, params *DocsSearchApiDocsSearchGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDocsSearchApiDocsSearchGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListEmailDomainsApiApiEmailDomainsGet(ctx context.Context, params *ListEmailDomainsApiApiEmailDomainsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEmailDomainsApiApiEmailDomainsGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddEmailDomainApiApiEmailDomainsPostWithBody(ctx context.Context, params *AddEmailDomainApiApiEmailDomainsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddEmailDomainApiApiEmailDomainsPostRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddEmailDomainApiApiEmailDomainsPost(ctx context.Context, params *AddEmailDomainApiApiEmailDomainsPostParams, body AddEmailDomainApiApiEmailDomainsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddEmailDomainApiApiEmailDomainsPostRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UseSharedDomainApiApiEmailDomainsUseSharedDomainPost(ctx context.Context, params *UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUseSharedDomainApiApiEmailDomainsUseSharedDomainPostRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RemoveEmailDomainApiApiEmailDomainsDomainIdDelete(ctx context.Context, domainId openapi_types.UUID, params *RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveEmailDomainApiApiEmailDomainsDomainIdDeleteRequest(c.Server, domainId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGet(ctx context.Context, domainId openapi_types.UUID, params *GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetRequest(c.Server, domainId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost(ctx context.Context, domainId openapi_types.UUID, params *SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostRequest(c.Server, domainId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SendTestEmailApiApiEmailDomainsDomainIdTestEmailPost(ctx context.Context, domainId openapi_types.UUID, params *SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSendTestEmailApiApiEmailDomainsDomainIdTestEmailPostRequest(c.Server, domainId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPost(ctx context.Context, domainId openapi_types.UUID, params *VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewVerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostRequest(c.Server, domainId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -6170,6 +7018,18 @@ func (c *Client) GetAlertUnreadCountApiModelsAlertsUnreadCountGet(ctx context.Co
 
 func (c *Client) MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(c.Server, alertId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetGenerationTiersApiModelsGenerationTiersGet(ctx context.Context, params *GetGenerationTiersApiModelsGenerationTiersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetGenerationTiersApiModelsGenerationTiersGetRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -7107,6 +7967,390 @@ func NewCreateAgentApiAgentsPostRequestWithBody(server string, params *CreateAge
 	return req, nil
 }
 
+// NewListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetRequest generates requests for ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGet
+func NewListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetRequest(server string, params *ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/agent-email-optouts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.AgentId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "agent_id", runtime.ParamLocationQuery, *params.AgentId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "offset", runtime.ParamLocationQuery, *params.Offset); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteRequest generates requests for RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDelete
+func NewRemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteRequest(server string, optoutId string, params *RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "optout_id", runtime.ParamLocationPath, optoutId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/agent-email-optouts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetRequest generates requests for ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGet
+func NewListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetRequest(server string, params *ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/blocked-email-senders")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "offset", runtime.ParamLocationQuery, *params.Offset); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewBlockEmailSenderApiApiAgentsBlockedEmailSendersPostRequest calls the generic BlockEmailSenderApiApiAgentsBlockedEmailSendersPost builder with application/json body
+func NewBlockEmailSenderApiApiAgentsBlockedEmailSendersPostRequest(server string, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, body BlockEmailSenderApiApiAgentsBlockedEmailSendersPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewBlockEmailSenderApiApiAgentsBlockedEmailSendersPostRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewBlockEmailSenderApiApiAgentsBlockedEmailSendersPostRequestWithBody generates requests for BlockEmailSenderApiApiAgentsBlockedEmailSendersPost with any type of body
+func NewBlockEmailSenderApiApiAgentsBlockedEmailSendersPostRequestWithBody(server string, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/blocked-email-senders")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutRequest calls the generic SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePut builder with application/json body
+func NewSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutRequest(server string, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, body SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutRequestWithBody generates requests for SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePut with any type of body
+func NewSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutRequestWithBody(server string, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/blocked-email-senders/mode")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewUnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteRequest generates requests for UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDelete
+func NewUnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteRequest(server string, blockedId string, params *UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "blocked_id", runtime.ParamLocationPath, blockedId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/blocked-email-senders/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest generates requests for DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete
 func NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRequest(server string, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams) (*http.Request, error) {
 	var err error
@@ -7706,6 +8950,212 @@ func NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetRequest generates requests for ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet
+func NewListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetRequest(server string, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/inbound-email-rejections")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.AgentId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "agent_id", runtime.ParamLocationQuery, *params.AgentId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetInboundEmailStatusApiApiAgentsInboundEmailStatusGetRequest generates requests for GetInboundEmailStatusApiApiAgentsInboundEmailStatusGet
+func NewGetInboundEmailStatusApiApiAgentsInboundEmailStatusGetRequest(server string, params *GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/inbound-email-status")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewCancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostRequest generates requests for CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPost
+func NewCancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostRequest(server string, params *CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/inbound-email-status/cancel-queued")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostRequest generates requests for ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePost
+func NewResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostRequest(server string, params *ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/inbound-email-status/resume")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -8475,6 +9925,55 @@ func NewApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetRe
 	return req, nil
 }
 
+// NewGetAgentCallersApiApiAgentsAgentIdCallersGetRequest generates requests for GetAgentCallersApiApiAgentsAgentIdCallersGet
+func NewGetAgentCallersApiApiAgentsAgentIdCallersGetRequest(server string, agentId string, params *GetAgentCallersApiApiAgentsAgentIdCallersGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/callers", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest generates requests for GetAgentDefinitionApiAgentsAgentIdDefinitionGet
 func NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(server string, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams) (*http.Request, error) {
 	var err error
@@ -8567,6 +10066,104 @@ func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDisableAgentApiApiAgentsAgentIdDisablePostRequest generates requests for DisableAgentApiApiAgentsAgentIdDisablePost
+func NewDisableAgentApiApiAgentsAgentIdDisablePostRequest(server string, agentId string, params *DisableAgentApiApiAgentsAgentIdDisablePostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/disable", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewEnableAgentApiApiAgentsAgentIdEnablePostRequest generates requests for EnableAgentApiApiAgentsAgentIdEnablePost
+func NewEnableAgentApiApiAgentsAgentIdEnablePostRequest(server string, agentId string, params *EnableAgentApiApiAgentsAgentIdEnablePostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/enable", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -9468,6 +11065,75 @@ func NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetReq
 	if err != nil {
 		return nil, err
 	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequest calls the generic SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut builder with application/json body
+func NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequest(server string, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequestWithBody(server, agentId, triggerId, params, "application/json", bodyReader)
+}
+
+// NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequestWithBody generates requests for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut with any type of body
+func NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequestWithBody(server string, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "trigger_id", runtime.ParamLocationPath, triggerId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/triggers/%s/email-config", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	if params != nil {
 
@@ -11291,6 +12957,520 @@ func NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRe
 	return req, nil
 }
 
+// NewDocsSearchApiDocsSearchGetRequest generates requests for DocsSearchApiDocsSearchGet
+func NewDocsSearchApiDocsSearchGetRequest(server string, params *DocsSearchApiDocsSearchGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/docs-search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "q", runtime.ParamLocationQuery, params.Q); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		if params.Mode != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "mode", runtime.ParamLocationQuery, *params.Mode); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListEmailDomainsApiApiEmailDomainsGetRequest generates requests for ListEmailDomainsApiApiEmailDomainsGet
+func NewListEmailDomainsApiApiEmailDomainsGetRequest(server string, params *ListEmailDomainsApiApiEmailDomainsGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/email-domains")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewAddEmailDomainApiApiEmailDomainsPostRequest calls the generic AddEmailDomainApiApiEmailDomainsPost builder with application/json body
+func NewAddEmailDomainApiApiEmailDomainsPostRequest(server string, params *AddEmailDomainApiApiEmailDomainsPostParams, body AddEmailDomainApiApiEmailDomainsPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAddEmailDomainApiApiEmailDomainsPostRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewAddEmailDomainApiApiEmailDomainsPostRequestWithBody generates requests for AddEmailDomainApiApiEmailDomainsPost with any type of body
+func NewAddEmailDomainApiApiEmailDomainsPostRequestWithBody(server string, params *AddEmailDomainApiApiEmailDomainsPostParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/email-domains")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewUseSharedDomainApiApiEmailDomainsUseSharedDomainPostRequest generates requests for UseSharedDomainApiApiEmailDomainsUseSharedDomainPost
+func NewUseSharedDomainApiApiEmailDomainsUseSharedDomainPostRequest(server string, params *UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/email-domains/use-shared-domain")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRemoveEmailDomainApiApiEmailDomainsDomainIdDeleteRequest generates requests for RemoveEmailDomainApiApiEmailDomainsDomainIdDelete
+func NewRemoveEmailDomainApiApiEmailDomainsDomainIdDeleteRequest(server string, domainId openapi_types.UUID, params *RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "domain_id", runtime.ParamLocationPath, domainId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/email-domains/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetRequest generates requests for GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGet
+func NewGetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetRequest(server string, domainId openapi_types.UUID, params *GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "domain_id", runtime.ParamLocationPath, domainId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/email-domains/%s/dmarc", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Days != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "days", runtime.ParamLocationQuery, *params.Days); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.TopSources != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "top_sources", runtime.ParamLocationQuery, *params.TopSources); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostRequest generates requests for SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost
+func NewSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostRequest(server string, domainId openapi_types.UUID, params *SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "domain_id", runtime.ParamLocationPath, domainId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/email-domains/%s/primary", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSendTestEmailApiApiEmailDomainsDomainIdTestEmailPostRequest generates requests for SendTestEmailApiApiEmailDomainsDomainIdTestEmailPost
+func NewSendTestEmailApiApiEmailDomainsDomainIdTestEmailPostRequest(server string, domainId openapi_types.UUID, params *SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "domain_id", runtime.ParamLocationPath, domainId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/email-domains/%s/test-email", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewVerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostRequest generates requests for VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPost
+func NewVerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostRequest(server string, domainId openapi_types.UUID, params *VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "domain_id", runtime.ParamLocationPath, domainId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/email-domains/%s/verify", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest calls the generic GovernanceAiGenerateApiGovernanceAiAssistantPost builder with application/json body
 func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequest(server string, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, body GovernanceAiGenerateApiGovernanceAiAssistantPostJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -12896,6 +15076,38 @@ func NewListModelsApiModelsGetRequest(server string, params *ListModelsApiModels
 
 		}
 
+		if params.SupportsInputMedia != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "supports_input_media", runtime.ParamLocationQuery, *params.SupportsInputMedia); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.SupportsOutputMedia != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "supports_output_media", runtime.ParamLocationQuery, *params.SupportsOutputMedia); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -13145,6 +15357,48 @@ func NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(server string, alertId op
 	}
 
 	req, err := http.NewRequest("PATCH", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetGenerationTiersApiModelsGenerationTiersGetRequest generates requests for GetGenerationTiersApiModelsGenerationTiersGet
+func NewGetGenerationTiersApiModelsGenerationTiersGetRequest(server string, params *GetGenerationTiersApiModelsGenerationTiersGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/generation-tiers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -16159,6 +18413,28 @@ type ClientWithResponsesInterface interface {
 
 	CreateAgentApiAgentsPostWithResponse(ctx context.Context, params *CreateAgentApiAgentsPostParams, body CreateAgentApiAgentsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentApiAgentsPostResponse, error)
 
+	// ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetWithResponse request
+	ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetWithResponse(ctx context.Context, params *ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams, reqEditors ...RequestEditorFn) (*ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse, error)
+
+	// RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteWithResponse request
+	RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteWithResponse(ctx context.Context, optoutId string, params *RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams, reqEditors ...RequestEditorFn) (*RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse, error)
+
+	// ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetWithResponse request
+	ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetWithResponse(ctx context.Context, params *ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams, reqEditors ...RequestEditorFn) (*ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse, error)
+
+	// BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithBodyWithResponse request with any body
+	BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithBodyWithResponse(ctx context.Context, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse, error)
+
+	BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithResponse(ctx context.Context, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, body BlockEmailSenderApiApiAgentsBlockedEmailSendersPostJSONRequestBody, reqEditors ...RequestEditorFn) (*BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse, error)
+
+	// SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithBodyWithResponse request with any body
+	SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithBodyWithResponse(ctx context.Context, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse, error)
+
+	SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithResponse(ctx context.Context, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, body SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse, error)
+
+	// UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteWithResponse request
+	UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteWithResponse(ctx context.Context, blockedId string, params *UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams, reqEditors ...RequestEditorFn) (*UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse, error)
+
 	// DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse request
 	DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse(ctx context.Context, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error)
 
@@ -16186,6 +18462,18 @@ type ClientWithResponsesInterface interface {
 
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse, error)
+
+	// ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse request
+	ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse, error)
+
+	// GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetWithResponse request
+	GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetWithResponse(ctx context.Context, params *GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams, reqEditors ...RequestEditorFn) (*GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse, error)
+
+	// CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostWithResponse request
+	CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostWithResponse(ctx context.Context, params *CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams, reqEditors ...RequestEditorFn) (*CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse, error)
+
+	// ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostWithResponse request
+	ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostWithResponse(ctx context.Context, params *ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams, reqEditors ...RequestEditorFn) (*ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse, error)
 
 	// PreviewImportAgentApiAgentsPreviewImportPostWithBodyWithResponse request with any body
 	PreviewImportAgentApiAgentsPreviewImportPostWithBodyWithResponse(ctx context.Context, params *PreviewImportAgentApiAgentsPreviewImportPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PreviewImportAgentApiAgentsPreviewImportPostResponse, error)
@@ -16235,6 +18523,9 @@ type ClientWithResponsesInterface interface {
 	// ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetWithResponse request
 	ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetWithResponse(ctx context.Context, agentId string, params *ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams, reqEditors ...RequestEditorFn) (*ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse, error)
 
+	// GetAgentCallersApiApiAgentsAgentIdCallersGetWithResponse request
+	GetAgentCallersApiApiAgentsAgentIdCallersGetWithResponse(ctx context.Context, agentId string, params *GetAgentCallersApiApiAgentsAgentIdCallersGetParams, reqEditors ...RequestEditorFn) (*GetAgentCallersApiApiAgentsAgentIdCallersGetResponse, error)
+
 	// GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse request
 	GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error)
 
@@ -16242,6 +18533,12 @@ type ClientWithResponsesInterface interface {
 	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithBodyWithResponse(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error)
 
 	UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutWithResponse(ctx context.Context, agentId string, params *UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams, body UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse, error)
+
+	// DisableAgentApiApiAgentsAgentIdDisablePostWithResponse request
+	DisableAgentApiApiAgentsAgentIdDisablePostWithResponse(ctx context.Context, agentId string, params *DisableAgentApiApiAgentsAgentIdDisablePostParams, reqEditors ...RequestEditorFn) (*DisableAgentApiApiAgentsAgentIdDisablePostResponse, error)
+
+	// EnableAgentApiApiAgentsAgentIdEnablePostWithResponse request
+	EnableAgentApiApiAgentsAgentIdEnablePostWithResponse(ctx context.Context, agentId string, params *EnableAgentApiApiAgentsAgentIdEnablePostParams, reqEditors ...RequestEditorFn) (*EnableAgentApiApiAgentsAgentIdEnablePostResponse, error)
 
 	// ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse request
 	ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse(ctx context.Context, agentId string, params *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams, reqEditors ...RequestEditorFn) (*ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse, error)
@@ -16283,6 +18580,11 @@ type ClientWithResponsesInterface interface {
 
 	// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse request
 	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error)
+
+	// SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse request with any body
+	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error)
+
+	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error)
 
 	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request
 	ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error)
@@ -16394,6 +18696,35 @@ type ClientWithResponsesInterface interface {
 	// UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse request with any body
 	UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse, error)
 
+	// DocsSearchApiDocsSearchGetWithResponse request
+	DocsSearchApiDocsSearchGetWithResponse(ctx context.Context, params *DocsSearchApiDocsSearchGetParams, reqEditors ...RequestEditorFn) (*DocsSearchApiDocsSearchGetResponse, error)
+
+	// ListEmailDomainsApiApiEmailDomainsGetWithResponse request
+	ListEmailDomainsApiApiEmailDomainsGetWithResponse(ctx context.Context, params *ListEmailDomainsApiApiEmailDomainsGetParams, reqEditors ...RequestEditorFn) (*ListEmailDomainsApiApiEmailDomainsGetResponse, error)
+
+	// AddEmailDomainApiApiEmailDomainsPostWithBodyWithResponse request with any body
+	AddEmailDomainApiApiEmailDomainsPostWithBodyWithResponse(ctx context.Context, params *AddEmailDomainApiApiEmailDomainsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddEmailDomainApiApiEmailDomainsPostResponse, error)
+
+	AddEmailDomainApiApiEmailDomainsPostWithResponse(ctx context.Context, params *AddEmailDomainApiApiEmailDomainsPostParams, body AddEmailDomainApiApiEmailDomainsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddEmailDomainApiApiEmailDomainsPostResponse, error)
+
+	// UseSharedDomainApiApiEmailDomainsUseSharedDomainPostWithResponse request
+	UseSharedDomainApiApiEmailDomainsUseSharedDomainPostWithResponse(ctx context.Context, params *UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams, reqEditors ...RequestEditorFn) (*UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse, error)
+
+	// RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteWithResponse request
+	RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteWithResponse(ctx context.Context, domainId openapi_types.UUID, params *RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams, reqEditors ...RequestEditorFn) (*RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse, error)
+
+	// GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetWithResponse request
+	GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetWithResponse(ctx context.Context, domainId openapi_types.UUID, params *GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams, reqEditors ...RequestEditorFn) (*GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse, error)
+
+	// SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostWithResponse request
+	SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostWithResponse(ctx context.Context, domainId openapi_types.UUID, params *SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams, reqEditors ...RequestEditorFn) (*SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse, error)
+
+	// SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostWithResponse request
+	SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostWithResponse(ctx context.Context, domainId openapi_types.UUID, params *SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams, reqEditors ...RequestEditorFn) (*SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse, error)
+
+	// VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostWithResponse request
+	VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostWithResponse(ctx context.Context, domainId openapi_types.UUID, params *VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams, reqEditors ...RequestEditorFn) (*VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse, error)
+
 	// GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse request with any body
 	GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error)
 
@@ -16501,6 +18832,9 @@ type ClientWithResponsesInterface interface {
 
 	// MarkReadApiModelsAlertsAlertIdReadPatchWithResponse request
 	MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error)
+
+	// GetGenerationTiersApiModelsGenerationTiersGetWithResponse request
+	GetGenerationTiersApiModelsGenerationTiersGetWithResponse(ctx context.Context, params *GetGenerationTiersApiModelsGenerationTiersGetParams, reqEditors ...RequestEditorFn) (*GetGenerationTiersApiModelsGenerationTiersGetResponse, error)
 
 	// ListExperimentsApiModelsPlaygroundExperimentsGetWithResponse request
 	ListExperimentsApiModelsPlaygroundExperimentsGetWithResponse(ctx context.Context, params *ListExperimentsApiModelsPlaygroundExperimentsGetParams, reqEditors ...RequestEditorFn) (*ListExperimentsApiModelsPlaygroundExperimentsGetResponse, error)
@@ -16726,6 +19060,142 @@ func (r CreateAgentApiAgentsPostResponse) StatusCode() int {
 	return 0
 }
 
+type ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentEmailOptOutListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BlockedEmailSenderListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *BlockedEmailSenderResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BlockedEmailSenderListResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -16903,6 +19373,95 @@ func (r GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]InboundEmailRejectionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *InboundEmailStatusResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CancelQueuedRunsResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ResumeInboundResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -17184,6 +19743,29 @@ func (r ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetRe
 	return 0
 }
 
+type GetAgentCallersApiApiAgentsAgentIdCallersGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]AgentCallerApiResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentCallersApiApiAgentsAgentIdCallersGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentCallersApiApiAgentsAgentIdCallersGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17224,6 +19806,52 @@ func (r UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse) Status() str
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DisableAgentApiApiAgentsAgentIdDisablePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentSummaryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DisableAgentApiApiAgentsAgentIdDisablePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DisableAgentApiApiAgentsAgentIdDisablePostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type EnableAgentApiApiAgentsAgentIdEnablePostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentSummaryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r EnableAgentApiApiAgentsAgentIdEnablePostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r EnableAgentApiApiAgentsAgentIdEnablePostResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -17479,6 +20107,29 @@ func (r ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRes
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EmailTriggerConfigResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -18120,6 +20771,210 @@ func (r UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRe
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DocsSearchApiDocsSearchGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r DocsSearchApiDocsSearchGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DocsSearchApiDocsSearchGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListEmailDomainsApiApiEmailDomainsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EmailDomainsListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListEmailDomainsApiApiEmailDomainsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListEmailDomainsApiApiEmailDomainsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type AddEmailDomainApiApiEmailDomainsPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EmailDomainResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r AddEmailDomainApiApiEmailDomainsPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AddEmailDomainApiApiEmailDomainsPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RemoveEmailDomainResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DmarcSummaryResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EmailDomainResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SendTestEmailResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EmailDomainResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -18800,6 +21655,28 @@ func (r MarkReadApiModelsAlertsAlertIdReadPatchResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r MarkReadApiModelsAlertsAlertIdReadPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetGenerationTiersApiModelsGenerationTiersGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *map[string]interface{}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetGenerationTiersApiModelsGenerationTiersGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetGenerationTiersApiModelsGenerationTiersGetResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -19861,6 +22738,76 @@ func (c *ClientWithResponses) CreateAgentApiAgentsPostWithResponse(ctx context.C
 	return ParseCreateAgentApiAgentsPostResponse(rsp)
 }
 
+// ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetWithResponse request returning *ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse
+func (c *ClientWithResponses) ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetWithResponse(ctx context.Context, params *ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams, reqEditors ...RequestEditorFn) (*ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse, error) {
+	rsp, err := c.ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse(rsp)
+}
+
+// RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteWithResponse request returning *RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse
+func (c *ClientWithResponses) RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteWithResponse(ctx context.Context, optoutId string, params *RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams, reqEditors ...RequestEditorFn) (*RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse, error) {
+	rsp, err := c.RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDelete(ctx, optoutId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse(rsp)
+}
+
+// ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetWithResponse request returning *ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse
+func (c *ClientWithResponses) ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetWithResponse(ctx context.Context, params *ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams, reqEditors ...RequestEditorFn) (*ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse, error) {
+	rsp, err := c.ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse(rsp)
+}
+
+// BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithBodyWithResponse request with arbitrary body returning *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse
+func (c *ClientWithResponses) BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithBodyWithResponse(ctx context.Context, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse, error) {
+	rsp, err := c.BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithResponse(ctx context.Context, params *BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams, body BlockEmailSenderApiApiAgentsBlockedEmailSendersPostJSONRequestBody, reqEditors ...RequestEditorFn) (*BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse, error) {
+	rsp, err := c.BlockEmailSenderApiApiAgentsBlockedEmailSendersPost(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse(rsp)
+}
+
+// SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithBodyWithResponse request with arbitrary body returning *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse
+func (c *ClientWithResponses) SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithBodyWithResponse(ctx context.Context, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse, error) {
+	rsp, err := c.SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithResponse(ctx context.Context, params *SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams, body SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse, error) {
+	rsp, err := c.SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePut(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse(rsp)
+}
+
+// UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteWithResponse request returning *UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse
+func (c *ClientWithResponses) UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteWithResponse(ctx context.Context, blockedId string, params *UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams, reqEditors ...RequestEditorFn) (*UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse, error) {
+	rsp, err := c.UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDelete(ctx, blockedId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse(rsp)
+}
+
 // DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse request returning *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse
 func (c *ClientWithResponses) DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse(ctx context.Context, criteriaId string, params *DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error) {
 	rsp, err := c.DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete(ctx, criteriaId, params, reqEditors...)
@@ -19947,6 +22894,42 @@ func (c *ClientWithResponses) GetNonManualEvaluationSummaryApiAgentsEvaluationRe
 		return nil, err
 	}
 	return ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse(rsp)
+}
+
+// ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse request returning *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse
+func (c *ClientWithResponses) ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse, error) {
+	rsp, err := c.ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse(rsp)
+}
+
+// GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetWithResponse request returning *GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse
+func (c *ClientWithResponses) GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetWithResponse(ctx context.Context, params *GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams, reqEditors ...RequestEditorFn) (*GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse, error) {
+	rsp, err := c.GetInboundEmailStatusApiApiAgentsInboundEmailStatusGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse(rsp)
+}
+
+// CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostWithResponse request returning *CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse
+func (c *ClientWithResponses) CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostWithResponse(ctx context.Context, params *CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams, reqEditors ...RequestEditorFn) (*CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse, error) {
+	rsp, err := c.CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPost(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse(rsp)
+}
+
+// ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostWithResponse request returning *ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse
+func (c *ClientWithResponses) ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostWithResponse(ctx context.Context, params *ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams, reqEditors ...RequestEditorFn) (*ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse, error) {
+	rsp, err := c.ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePost(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse(rsp)
 }
 
 // PreviewImportAgentApiAgentsPreviewImportPostWithBodyWithResponse request with arbitrary body returning *PreviewImportAgentApiAgentsPreviewImportPostResponse
@@ -20105,6 +23088,15 @@ func (c *ClientWithResponses) ApiGetAgentAttachmentReferencesApiAgentsAgentIdAtt
 	return ParseApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetResponse(rsp)
 }
 
+// GetAgentCallersApiApiAgentsAgentIdCallersGetWithResponse request returning *GetAgentCallersApiApiAgentsAgentIdCallersGetResponse
+func (c *ClientWithResponses) GetAgentCallersApiApiAgentsAgentIdCallersGetWithResponse(ctx context.Context, agentId string, params *GetAgentCallersApiApiAgentsAgentIdCallersGetParams, reqEditors ...RequestEditorFn) (*GetAgentCallersApiApiAgentsAgentIdCallersGetResponse, error) {
+	rsp, err := c.GetAgentCallersApiApiAgentsAgentIdCallersGet(ctx, agentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentCallersApiApiAgentsAgentIdCallersGetResponse(rsp)
+}
+
 // GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse request returning *GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse
 func (c *ClientWithResponses) GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse(ctx context.Context, agentId string, params *GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams, reqEditors ...RequestEditorFn) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error) {
 	rsp, err := c.GetAgentDefinitionApiAgentsAgentIdDefinitionGet(ctx, agentId, params, reqEditors...)
@@ -20129,6 +23121,24 @@ func (c *ClientWithResponses) UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut
 		return nil, err
 	}
 	return ParseUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse(rsp)
+}
+
+// DisableAgentApiApiAgentsAgentIdDisablePostWithResponse request returning *DisableAgentApiApiAgentsAgentIdDisablePostResponse
+func (c *ClientWithResponses) DisableAgentApiApiAgentsAgentIdDisablePostWithResponse(ctx context.Context, agentId string, params *DisableAgentApiApiAgentsAgentIdDisablePostParams, reqEditors ...RequestEditorFn) (*DisableAgentApiApiAgentsAgentIdDisablePostResponse, error) {
+	rsp, err := c.DisableAgentApiApiAgentsAgentIdDisablePost(ctx, agentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDisableAgentApiApiAgentsAgentIdDisablePostResponse(rsp)
+}
+
+// EnableAgentApiApiAgentsAgentIdEnablePostWithResponse request returning *EnableAgentApiApiAgentsAgentIdEnablePostResponse
+func (c *ClientWithResponses) EnableAgentApiApiAgentsAgentIdEnablePostWithResponse(ctx context.Context, agentId string, params *EnableAgentApiApiAgentsAgentIdEnablePostParams, reqEditors ...RequestEditorFn) (*EnableAgentApiApiAgentsAgentIdEnablePostResponse, error) {
+	rsp, err := c.EnableAgentApiApiAgentsAgentIdEnablePost(ctx, agentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEnableAgentApiApiAgentsAgentIdEnablePostResponse(rsp)
 }
 
 // ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetWithResponse request returning *ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse
@@ -20260,6 +23270,23 @@ func (c *ClientWithResponses) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdE
 		return nil, err
 	}
 	return ParseListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse(rsp)
+}
+
+// SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse request with arbitrary body returning *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse
+func (c *ClientWithResponses) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error) {
+	rsp, err := c.SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx, agentId, triggerId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error) {
+	rsp, err := c.SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut(ctx, agentId, triggerId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse(rsp)
 }
 
 // ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request returning *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse
@@ -20618,6 +23645,95 @@ func (c *ClientWithResponses) UploadFileToContentApiContentsSourceConnectionCont
 	return ParseUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostResponse(rsp)
 }
 
+// DocsSearchApiDocsSearchGetWithResponse request returning *DocsSearchApiDocsSearchGetResponse
+func (c *ClientWithResponses) DocsSearchApiDocsSearchGetWithResponse(ctx context.Context, params *DocsSearchApiDocsSearchGetParams, reqEditors ...RequestEditorFn) (*DocsSearchApiDocsSearchGetResponse, error) {
+	rsp, err := c.DocsSearchApiDocsSearchGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDocsSearchApiDocsSearchGetResponse(rsp)
+}
+
+// ListEmailDomainsApiApiEmailDomainsGetWithResponse request returning *ListEmailDomainsApiApiEmailDomainsGetResponse
+func (c *ClientWithResponses) ListEmailDomainsApiApiEmailDomainsGetWithResponse(ctx context.Context, params *ListEmailDomainsApiApiEmailDomainsGetParams, reqEditors ...RequestEditorFn) (*ListEmailDomainsApiApiEmailDomainsGetResponse, error) {
+	rsp, err := c.ListEmailDomainsApiApiEmailDomainsGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListEmailDomainsApiApiEmailDomainsGetResponse(rsp)
+}
+
+// AddEmailDomainApiApiEmailDomainsPostWithBodyWithResponse request with arbitrary body returning *AddEmailDomainApiApiEmailDomainsPostResponse
+func (c *ClientWithResponses) AddEmailDomainApiApiEmailDomainsPostWithBodyWithResponse(ctx context.Context, params *AddEmailDomainApiApiEmailDomainsPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddEmailDomainApiApiEmailDomainsPostResponse, error) {
+	rsp, err := c.AddEmailDomainApiApiEmailDomainsPostWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddEmailDomainApiApiEmailDomainsPostResponse(rsp)
+}
+
+func (c *ClientWithResponses) AddEmailDomainApiApiEmailDomainsPostWithResponse(ctx context.Context, params *AddEmailDomainApiApiEmailDomainsPostParams, body AddEmailDomainApiApiEmailDomainsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*AddEmailDomainApiApiEmailDomainsPostResponse, error) {
+	rsp, err := c.AddEmailDomainApiApiEmailDomainsPost(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddEmailDomainApiApiEmailDomainsPostResponse(rsp)
+}
+
+// UseSharedDomainApiApiEmailDomainsUseSharedDomainPostWithResponse request returning *UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse
+func (c *ClientWithResponses) UseSharedDomainApiApiEmailDomainsUseSharedDomainPostWithResponse(ctx context.Context, params *UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams, reqEditors ...RequestEditorFn) (*UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse, error) {
+	rsp, err := c.UseSharedDomainApiApiEmailDomainsUseSharedDomainPost(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse(rsp)
+}
+
+// RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteWithResponse request returning *RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse
+func (c *ClientWithResponses) RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteWithResponse(ctx context.Context, domainId openapi_types.UUID, params *RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams, reqEditors ...RequestEditorFn) (*RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse, error) {
+	rsp, err := c.RemoveEmailDomainApiApiEmailDomainsDomainIdDelete(ctx, domainId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse(rsp)
+}
+
+// GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetWithResponse request returning *GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse
+func (c *ClientWithResponses) GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetWithResponse(ctx context.Context, domainId openapi_types.UUID, params *GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams, reqEditors ...RequestEditorFn) (*GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse, error) {
+	rsp, err := c.GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGet(ctx, domainId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse(rsp)
+}
+
+// SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostWithResponse request returning *SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse
+func (c *ClientWithResponses) SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostWithResponse(ctx context.Context, domainId openapi_types.UUID, params *SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams, reqEditors ...RequestEditorFn) (*SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse, error) {
+	rsp, err := c.SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost(ctx, domainId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse(rsp)
+}
+
+// SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostWithResponse request returning *SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse
+func (c *ClientWithResponses) SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostWithResponse(ctx context.Context, domainId openapi_types.UUID, params *SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams, reqEditors ...RequestEditorFn) (*SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse, error) {
+	rsp, err := c.SendTestEmailApiApiEmailDomainsDomainIdTestEmailPost(ctx, domainId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse(rsp)
+}
+
+// VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostWithResponse request returning *VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse
+func (c *ClientWithResponses) VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostWithResponse(ctx context.Context, domainId openapi_types.UUID, params *VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams, reqEditors ...RequestEditorFn) (*VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse, error) {
+	rsp, err := c.VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPost(ctx, domainId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseVerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse(rsp)
+}
+
 // GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse request with arbitrary body returning *GovernanceAiGenerateApiGovernanceAiAssistantPostResponse
 func (c *ClientWithResponses) GovernanceAiGenerateApiGovernanceAiAssistantPostWithBodyWithResponse(ctx context.Context, params *GovernanceAiGenerateApiGovernanceAiAssistantPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GovernanceAiGenerateApiGovernanceAiAssistantPostResponse, error) {
 	rsp, err := c.GovernanceAiGenerateApiGovernanceAiAssistantPostWithBody(ctx, params, contentType, body, reqEditors...)
@@ -20958,6 +24074,15 @@ func (c *ClientWithResponses) MarkReadApiModelsAlertsAlertIdReadPatchWithRespons
 		return nil, err
 	}
 	return ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse(rsp)
+}
+
+// GetGenerationTiersApiModelsGenerationTiersGetWithResponse request returning *GetGenerationTiersApiModelsGenerationTiersGetResponse
+func (c *ClientWithResponses) GetGenerationTiersApiModelsGenerationTiersGetWithResponse(ctx context.Context, params *GetGenerationTiersApiModelsGenerationTiersGetParams, reqEditors ...RequestEditorFn) (*GetGenerationTiersApiModelsGenerationTiersGetResponse, error) {
+	rsp, err := c.GetGenerationTiersApiModelsGenerationTiersGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetGenerationTiersApiModelsGenerationTiersGetResponse(rsp)
 }
 
 // ListExperimentsApiModelsPlaygroundExperimentsGetWithResponse request returning *ListExperimentsApiModelsPlaygroundExperimentsGetResponse
@@ -21599,6 +24724,190 @@ func ParseCreateAgentApiAgentsPostResponse(rsp *http.Response) (*CreateAgentApiA
 	return response, nil
 }
 
+// ParseListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse parses an HTTP response from a ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetWithResponse call
+func ParseListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse(rsp *http.Response) (*ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentEmailOptOutListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse parses an HTTP response from a RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteWithResponse call
+func ParseRemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse(rsp *http.Response) (*RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse parses an HTTP response from a ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetWithResponse call
+func ParseListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse(rsp *http.Response) (*ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BlockedEmailSenderListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseBlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse parses an HTTP response from a BlockEmailSenderApiApiAgentsBlockedEmailSendersPostWithResponse call
+func ParseBlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse(rsp *http.Response) (*BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest BlockedEmailSenderResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse parses an HTTP response from a SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutWithResponse call
+func ParseSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse(rsp *http.Response) (*SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BlockedEmailSenderListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse parses an HTTP response from a UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteWithResponse call
+func ParseUnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse(rsp *http.Response) (*UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse parses an HTTP response from a DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteWithResponse call
 func ParseDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse(rsp *http.Response) (*DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -21850,6 +25159,117 @@ func ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummar
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse parses an HTTP response from a ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse call
+func ParseListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse(rsp *http.Response) (*ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []InboundEmailRejectionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse parses an HTTP response from a GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetWithResponse call
+func ParseGetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse(rsp *http.Response) (*GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest InboundEmailStatusResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse parses an HTTP response from a CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostWithResponse call
+func ParseCancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse(rsp *http.Response) (*CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CancelQueuedRunsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse parses an HTTP response from a ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostWithResponse call
+func ParseResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse(rsp *http.Response) (*ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ResumeInboundResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 
@@ -22245,6 +25665,39 @@ func ParseApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet
 	return response, nil
 }
 
+// ParseGetAgentCallersApiApiAgentsAgentIdCallersGetResponse parses an HTTP response from a GetAgentCallersApiApiAgentsAgentIdCallersGetWithResponse call
+func ParseGetAgentCallersApiApiAgentsAgentIdCallersGetResponse(rsp *http.Response) (*GetAgentCallersApiApiAgentsAgentIdCallersGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentCallersApiApiAgentsAgentIdCallersGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []AgentCallerApiResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse parses an HTTP response from a GetAgentDefinitionApiAgentsAgentIdDefinitionGetWithResponse call
 func ParseGetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse(rsp *http.Response) (*GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -22294,6 +25747,72 @@ func ParseUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse(rsp *http.R
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest AgentDefinitionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDisableAgentApiApiAgentsAgentIdDisablePostResponse parses an HTTP response from a DisableAgentApiApiAgentsAgentIdDisablePostWithResponse call
+func ParseDisableAgentApiApiAgentsAgentIdDisablePostResponse(rsp *http.Response) (*DisableAgentApiApiAgentsAgentIdDisablePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DisableAgentApiApiAgentsAgentIdDisablePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentSummaryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseEnableAgentApiApiAgentsAgentIdEnablePostResponse parses an HTTP response from a EnableAgentApiApiAgentsAgentIdEnablePostWithResponse call
+func ParseEnableAgentApiApiAgentsAgentIdEnablePostResponse(rsp *http.Response) (*EnableAgentApiApiAgentsAgentIdEnablePostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &EnableAgentApiApiAgentsAgentIdEnablePostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentSummaryResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -22674,6 +26193,39 @@ func ParseListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetR
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest []EvaluationResultWithCriteriaResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse parses an HTTP response from a SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithResponse call
+func ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse(rsp *http.Response) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmailTriggerConfigResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -23577,6 +27129,279 @@ func ParseUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest RoutersApiContentsFileUploadResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDocsSearchApiDocsSearchGetResponse parses an HTTP response from a DocsSearchApiDocsSearchGetWithResponse call
+func ParseDocsSearchApiDocsSearchGetResponse(rsp *http.Response) (*DocsSearchApiDocsSearchGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DocsSearchApiDocsSearchGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListEmailDomainsApiApiEmailDomainsGetResponse parses an HTTP response from a ListEmailDomainsApiApiEmailDomainsGetWithResponse call
+func ParseListEmailDomainsApiApiEmailDomainsGetResponse(rsp *http.Response) (*ListEmailDomainsApiApiEmailDomainsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListEmailDomainsApiApiEmailDomainsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmailDomainsListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAddEmailDomainApiApiEmailDomainsPostResponse parses an HTTP response from a AddEmailDomainApiApiEmailDomainsPostWithResponse call
+func ParseAddEmailDomainApiApiEmailDomainsPostResponse(rsp *http.Response) (*AddEmailDomainApiApiEmailDomainsPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AddEmailDomainApiApiEmailDomainsPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmailDomainResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse parses an HTTP response from a UseSharedDomainApiApiEmailDomainsUseSharedDomainPostWithResponse call
+func ParseUseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse(rsp *http.Response) (*UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseRemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse parses an HTTP response from a RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteWithResponse call
+func ParseRemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse(rsp *http.Response) (*RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RemoveEmailDomainResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse parses an HTTP response from a GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetWithResponse call
+func ParseGetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse(rsp *http.Response) (*GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DmarcSummaryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse parses an HTTP response from a SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostWithResponse call
+func ParseSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse(rsp *http.Response) (*SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmailDomainResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse parses an HTTP response from a SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostWithResponse call
+func ParseSendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse(rsp *http.Response) (*SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SendTestEmailResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseVerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse parses an HTTP response from a VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostWithResponse call
+func ParseVerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse(rsp *http.Response) (*VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmailDomainResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -24505,6 +28330,32 @@ func ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse(rsp *http.Response) (*
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetGenerationTiersApiModelsGenerationTiersGetResponse parses an HTTP response from a GetGenerationTiersApiModelsGenerationTiersGetWithResponse call
+func ParseGetGenerationTiersApiModelsGenerationTiersGetResponse(rsp *http.Response) (*GetGenerationTiersApiModelsGenerationTiersGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetGenerationTiersApiModelsGenerationTiersGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 

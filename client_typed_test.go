@@ -1142,7 +1142,7 @@ func TestClient_Search(t *testing.T) {
 			w.WriteHeader(404)
 			return
 		}
-		if got := r.URL.Query().Get("query"); got != "hello" {
+		if got := r.URL.Query().Get("q"); got != "hello" {
 			w.WriteHeader(400)
 			return
 		}
@@ -1529,5 +1529,538 @@ func TestClient_DeleteExperiment(t *testing.T) {
 	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
 	if err := c.DeleteExperiment(context.Background(), "exp_1"); err != nil {
 		t.Fatalf("DeleteExperiment: %v", err)
+	}
+}
+
+// ── New in this sync: identity, agent pause, email governance, email domains,
+// generation tiers, docs search ─────────────────────────────────────────────
+
+func TestClient_GetMe(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/me" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"account_id":"3f1a0d6e-0000-4000-8000-00000000000a","organizations":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.GetMe(context.Background())
+	if err != nil {
+		t.Fatalf("GetMe: %v", err)
+	}
+	if got.AccountId.String() == "" {
+		t.Fatal("expected account id")
+	}
+}
+
+func TestClient_DisableAgent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/agents/a_1/disable" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"a_1","name":"x","disabled":true}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.DisableAgent(context.Background(), "a_1")
+	if err != nil {
+		t.Fatalf("DisableAgent: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected response")
+	}
+}
+
+func TestClient_EnableAgent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/agents/a_1/enable" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"a_1","name":"x","disabled":false}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.EnableAgent(context.Background(), "a_1")
+	if err != nil {
+		t.Fatalf("EnableAgent: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected response")
+	}
+}
+
+func TestClient_GetAgentCallers(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/a_1/callers" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `[{"id":"3f1a0d6e-0000-4000-8000-000000000001","name":"Caller","disabled":false}]`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.GetAgentCallers(context.Background(), "a_1")
+	if err != nil {
+		t.Fatalf("GetAgentCallers: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "Caller" {
+		t.Fatalf("unexpected callers: %+v", got)
+	}
+}
+
+func TestClient_SetEmailTriggerConfig(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/agents/a_1/triggers/t_1/email-config" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"trigger_id":"3f1a0d6e-0000-4000-8000-000000000002","agent_id":"3f1a0d6e-0000-4000-8000-000000000003","trigger_type":"EMAIL_RECEIVED","email_addresses":["support@agent.seclai.com"]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.SetEmailTriggerConfig(context.Background(), "a_1", "t_1", RoutersApiAgentsSetEmailTriggerConfigRequest{})
+	if err != nil {
+		t.Fatalf("SetEmailTriggerConfig: %v", err)
+	}
+	if got.EmailAddresses == nil || len(*got.EmailAddresses) != 1 {
+		t.Fatalf("unexpected addresses: %+v", got.EmailAddresses)
+	}
+}
+
+func TestClient_ListAgentEmailOptOuts(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/agent-email-optouts" {
+			w.WriteHeader(404)
+			return
+		}
+		if r.URL.Query().Get("agent_id") != "a_1" || r.URL.Query().Get("limit") != "25" || r.URL.Query().Get("offset") != "50" {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[],"total":0}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.ListAgentEmailOptOuts(context.Background(), AgentEmailOptOutOptions{AgentID: "a_1", Limit: 25, Offset: 50})
+	if err != nil {
+		t.Fatalf("ListAgentEmailOptOuts: %v", err)
+	}
+	if got.Total != 0 {
+		t.Fatalf("unexpected total: %d", got.Total)
+	}
+}
+
+func TestClient_RemoveAgentEmailOptOut(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/agents/agent-email-optouts/oo_1" {
+			w.WriteHeader(404)
+			return
+		}
+		w.WriteHeader(204)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err := c.RemoveAgentEmailOptOut(context.Background(), "oo_1"); err != nil {
+		t.Fatalf("RemoveAgentEmailOptOut: %v", err)
+	}
+}
+
+func TestClient_ListBlockedEmailSenders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/blocked-email-senders" {
+			w.WriteHeader(404)
+			return
+		}
+		if r.URL.Query().Get("limit") != "10" {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[],"total":0,"auto_block_mode":"disabled"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.ListBlockedEmailSenders(context.Background(), ListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("ListBlockedEmailSenders: %v", err)
+	}
+	if got.AutoBlockMode != "disabled" {
+		t.Fatalf("unexpected mode: %s", got.AutoBlockMode)
+	}
+}
+
+func TestClient_BlockEmailSender(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/agents/blocked-email-senders" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"3f1a0d6e-0000-4000-8000-000000000004","created_at":"2026-07-01","sender_email":"spam@example.com","match_type":"address","source":"manual"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.BlockEmailSender(context.Background(), BlockEmailSenderRequest{SenderEmail: "spam@example.com"})
+	if err != nil {
+		t.Fatalf("BlockEmailSender: %v", err)
+	}
+	if got.SenderEmail != "spam@example.com" {
+		t.Fatalf("unexpected sender: %s", got.SenderEmail)
+	}
+}
+
+func TestClient_UnblockEmailSender(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/agents/blocked-email-senders/b_1" {
+			w.WriteHeader(404)
+			return
+		}
+		w.WriteHeader(204)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err := c.UnblockEmailSender(context.Background(), "b_1"); err != nil {
+		t.Fatalf("UnblockEmailSender: %v", err)
+	}
+}
+
+func TestClient_SetAutoBlockMode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/agents/blocked-email-senders/mode" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"items":[],"total":0,"auto_block_mode":"input_and_output"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.SetAutoBlockMode(context.Background(), SetAutoBlockModeRequest{Mode: "input_and_output"})
+	if err != nil {
+		t.Fatalf("SetAutoBlockMode: %v", err)
+	}
+	if got.AutoBlockMode != "input_and_output" {
+		t.Fatalf("unexpected mode: %s", got.AutoBlockMode)
+	}
+}
+
+func TestClient_ListInboundEmailRejections(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/inbound-email-rejections" {
+			w.WriteHeader(404)
+			return
+		}
+		if r.URL.Query().Get("agent_id") != "a_1" || r.URL.Query().Get("limit") != "5" {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `[{"id":"3f1a0d6e-0000-4000-8000-000000000005","created_at":"2026-07-01","recipient":"x@y","sender":"s@y","reason":"unauthorized_sender"}]`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.ListInboundEmailRejections(context.Background(), InboundEmailRejectionOptions{AgentID: "a_1", Limit: 5})
+	if err != nil {
+		t.Fatalf("ListInboundEmailRejections: %v", err)
+	}
+	if len(got) != 1 || got[0].Reason != "unauthorized_sender" {
+		t.Fatalf("unexpected rejections: %+v", got)
+	}
+}
+
+func TestClient_GetInboundEmailStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/inbound-email-status" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"paused":true,"queued_backlog":42}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.GetInboundEmailStatus(context.Background())
+	if err != nil {
+		t.Fatalf("GetInboundEmailStatus: %v", err)
+	}
+	if !got.Paused || got.QueuedBacklog != 42 {
+		t.Fatalf("unexpected status: %+v", got)
+	}
+}
+
+func TestClient_CancelQueuedEmailRuns(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/agents/inbound-email-status/cancel-queued" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"cancelled":7}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.CancelQueuedEmailRuns(context.Background())
+	if err != nil {
+		t.Fatalf("CancelQueuedEmailRuns: %v", err)
+	}
+	if got.Cancelled != 7 {
+		t.Fatalf("unexpected count: %d", got.Cancelled)
+	}
+}
+
+func TestClient_ResumeInboundEmail(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/agents/inbound-email-status/resume" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"resumed":true}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.ResumeInboundEmail(context.Background())
+	if err != nil {
+		t.Fatalf("ResumeInboundEmail: %v", err)
+	}
+	if !got.Resumed {
+		t.Fatal("expected resumed")
+	}
+}
+
+func TestClient_ListEmailDomains(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/email-domains" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"domains":[],"can_add_vanity":true}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.ListEmailDomains(context.Background())
+	if err != nil {
+		t.Fatalf("ListEmailDomains: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected response")
+	}
+}
+
+func TestClient_AddEmailDomain(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/email-domains" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"3f1a0d6e-0000-4000-8000-000000000006","domain":"acme.seclai.com","kind":"vanity","status":"pending","is_primary":false}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.AddEmailDomain(context.Background(), AddEmailDomainRequest{Kind: "vanity", Value: "acme"})
+	if err != nil {
+		t.Fatalf("AddEmailDomain: %v", err)
+	}
+	if got.Kind != "vanity" {
+		t.Fatalf("unexpected kind: %s", got.Kind)
+	}
+}
+
+func TestClient_RemoveEmailDomain(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/email-domains/d_1" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"removed":true,"cleanup_note":"Delete the NS record"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.RemoveEmailDomain(context.Background(), "d_1")
+	if err != nil {
+		t.Fatalf("RemoveEmailDomain: %v", err)
+	}
+	if got.CleanupNote == nil || *got.CleanupNote == "" {
+		t.Fatal("expected cleanup note")
+	}
+}
+
+func TestClient_VerifyEmailDomain(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/email-domains/d_1/verify" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"3f1a0d6e-0000-4000-8000-000000000007","domain":"a.b","kind":"custom","status":"verified","is_primary":false}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.VerifyEmailDomain(context.Background(), "d_1")
+	if err != nil {
+		t.Fatalf("VerifyEmailDomain: %v", err)
+	}
+	if got.Status != "verified" {
+		t.Fatalf("unexpected status: %s", got.Status)
+	}
+}
+
+func TestClient_SetPrimaryEmailDomain(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/email-domains/d_1/primary" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"3f1a0d6e-0000-4000-8000-000000000008","domain":"a.b","kind":"custom","status":"verified","is_primary":true}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.SetPrimaryEmailDomain(context.Background(), "d_1")
+	if err != nil {
+		t.Fatalf("SetPrimaryEmailDomain: %v", err)
+	}
+	if !got.IsPrimary {
+		t.Fatal("expected primary")
+	}
+}
+
+func TestClient_UseSharedEmailDomain(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/email-domains/use-shared-domain" {
+			w.WriteHeader(404)
+			return
+		}
+		w.WriteHeader(204)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err := c.UseSharedEmailDomain(context.Background()); err != nil {
+		t.Fatalf("UseSharedEmailDomain: %v", err)
+	}
+}
+
+func TestClient_SendEmailDomainTestEmail(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/email-domains/d_1/test-email" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"sent":true}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.SendEmailDomainTestEmail(context.Background(), "d_1")
+	if err != nil {
+		t.Fatalf("SendEmailDomainTestEmail: %v", err)
+	}
+	if got.Sent == nil || !*got.Sent {
+		t.Fatal("expected sent")
+	}
+}
+
+func TestClient_GetDmarcSummary(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/email-domains/d_1/dmarc" {
+			w.WriteHeader(404)
+			return
+		}
+		if r.URL.Query().Get("days") != "7" || r.URL.Query().Get("top_sources") != "3" {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"window_days":7,"report_count":2,"total_messages":100,"passed_messages":99,"failed_messages":1}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.GetDmarcSummary(context.Background(), "d_1", DmarcOptions{Days: 7, TopSources: 3})
+	if err != nil {
+		t.Fatalf("GetDmarcSummary: %v", err)
+	}
+	if got.WindowDays != 7 {
+		t.Fatalf("unexpected window: %d", got.WindowDays)
+	}
+}
+
+func TestClient_GetGenerationTiers(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/models/generation-tiers" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"image":{"fast":{}}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.GetGenerationTiers(context.Background())
+	if err != nil {
+		t.Fatalf("GetGenerationTiers: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("expected payload")
+	}
+}
+
+func TestClient_SearchDocs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/docs-search" {
+			w.WriteHeader(404)
+			return
+		}
+		if r.URL.Query().Get("q") != "email triggers" || r.URL.Query().Get("mode") != "semantic" || r.URL.Query().Get("limit") != "3" {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"results":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.SearchDocs(context.Background(), DocsSearchOptions{Query: "email triggers", Mode: "semantic", Limit: 3})
+	if err != nil {
+		t.Fatalf("SearchDocs: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("expected payload")
 	}
 }

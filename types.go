@@ -466,3 +466,83 @@ type MeResponse = generated.MeResponse
 
 // OrganizationInfoResponse is an organization entry inside MeResponse.
 type OrganizationInfoResponse = generated.OrganizationInfoResponse
+
+// ── Agent Email Triggers ────────────────────────────────────────────────────
+
+// RoutersApiAgentsSetEmailTriggerConfigRequest is the request body for configuring
+// an EMAIL_RECEIVED trigger. A field left at its zero value is unchanged.
+type RoutersApiAgentsSetEmailTriggerConfigRequest = generated.RoutersApiAgentsSetEmailTriggerConfigRequest
+
+// EmailTriggerConfigResponse is an EMAIL_RECEIVED trigger's resolved email
+// address(es) and inbound-handling configuration.
+type EmailTriggerConfigResponse = generated.EmailTriggerConfigResponse
+
+// ── Agent Email Governance ──────────────────────────────────────────────────
+
+// AgentEmailOptOutResponse is a recipient's opt-out from an account's agent
+// emails, for one agent or account-wide.
+type AgentEmailOptOutResponse = generated.AgentEmailOptOutResponse
+
+// AgentEmailOptOutListResponse is a page of agent-email opt-outs plus the total.
+type AgentEmailOptOutListResponse = generated.AgentEmailOptOutListResponse
+
+// BlockEmailSenderRequest is the request body for blocking an inbound sender or domain.
+type BlockEmailSenderRequest = generated.BlockEmailSenderRequest
+
+// BlockedEmailSenderResponse is a single blocked inbound email sender.
+type BlockedEmailSenderResponse = generated.BlockedEmailSenderResponse
+
+// BlockedEmailSenderListResponse is a page of blocked senders plus the account's
+// governance auto-block mode.
+type BlockedEmailSenderListResponse = generated.BlockedEmailSenderListResponse
+
+// SetAutoBlockModeRequest is the request body for setting the auto-block mode.
+type SetAutoBlockModeRequest = generated.SetAutoBlockModeRequest
+
+// InboundEmailRejectionResponse is an inbound email discarded before running an agent.
+type InboundEmailRejectionResponse = generated.InboundEmailRejectionResponse
+
+// InboundEmailStatusResponse is the account-wide inbound-email overload state.
+type InboundEmailStatusResponse = generated.InboundEmailStatusResponse
+
+// CancelQueuedRunsResponse reports how many queued inbound-email runs were cancelled.
+type CancelQueuedRunsResponse = generated.CancelQueuedRunsResponse
+
+// ResumeInboundResponse reports the result of lifting the inbound-email pause.
+type ResumeInboundResponse = generated.ResumeInboundResponse
+
+// AgentCallerApiResponse is a live agent that calls another agent via a
+// call_agent step, blocking the callee from being disabled.
+type AgentCallerApiResponse = generated.AgentCallerApiResponse
+
+// ── Email Domains ───────────────────────────────────────────────────────────
+
+// AddEmailDomainRequest is the request body for adding an agent-email domain.
+type AddEmailDomainRequest = generated.AddEmailDomainRequest
+
+// EmailDomainResponse is an agent-email domain with its verification status and
+// the DNS records the customer must publish.
+type EmailDomainResponse = generated.EmailDomainResponse
+
+// EmailDomainsListResponse is the account's email domains plus plan capabilities.
+type EmailDomainsListResponse = generated.EmailDomainsListResponse
+
+// RemoveEmailDomainResponse is the result of removing an email domain, including
+// an optional registrar cleanup note.
+type RemoveEmailDomainResponse = generated.RemoveEmailDomainResponse
+
+// SendTestEmailResponse is the result of sending a test email from a domain.
+type SendTestEmailResponse = generated.SendTestEmailResponse
+
+// DnsRecordResponse is a DNS record the customer must publish for a domain.
+type DnsRecordResponse = generated.DnsRecordResponse
+
+// DnsProviderResponse is the detected DNS provider for a domain.
+type DnsProviderResponse = generated.DnsProviderResponse
+
+// DmarcSummaryResponse is a DMARC aggregate-report summary for a domain.
+type DmarcSummaryResponse = generated.DmarcSummaryResponse
+
+// DmarcFailingSourceResponse is a top DMARC-failing source IP within a
+// [DmarcSummaryResponse].
+type DmarcFailingSourceResponse = generated.DmarcFailingSourceResponse
