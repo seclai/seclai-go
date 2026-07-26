@@ -5,6 +5,13 @@ description: Sync a Seclai SDK (seclai-python, seclai-javascript, seclai-go, sec
 
 # Syncing a Seclai SDK to a new spec
 
+> **Vendored file — do not edit in place.** The canonical copy lives in the
+> `seclai/sdk-tools` repository at `skills/seclai-sdk-sync/`, and is mirrored
+> into each SDK repo with `git subtree`. Edits made here are reported as drift by
+> `sdk-tools/sync.sh --check` and are overwritten on the next pull. To change it,
+> change it upstream — or, if you can't reach that repo, open an issue on this
+> one describing the fix and a maintainer will carry it across.
+
 Run the analysis with `sdksync.py`, bundled next to this file, rather than
 hand-rolling greps. Every ad-hoc parity regex written so far has missed methods
 with multi-line signatures.
