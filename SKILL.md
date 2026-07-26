@@ -5,6 +5,13 @@ description: Write or update CHANGELOG.md in a Seclai SDK repo (seclai-python, s
 
 # Seclai changelog entries
 
+> **Vendored file — do not edit in place.** The canonical copy lives in the
+> `seclai/sdk-tools` repository at `skills/seclai-changelog/`, and is mirrored
+> into each SDK repo with `git subtree`. Edits made here are reported as drift by
+> `sdk-tools/sync.sh --check` and are overwritten on the next pull. To change it,
+> change it upstream — or, if you can't reach that repo, open an issue on this
+> one describing the fix and a maintainer will carry it across.
+
 All six Seclai SDK repos keep a root `CHANGELOG.md` in [Common Changelog](https://common-changelog.org) format. This skill covers writing a new entry and backfilling from tags.
 
 ## Format rules
@@ -138,7 +145,7 @@ Run the bundled checker from the repo root before declaring done:
 python3 .claude/skills/seclai-changelog/validate.py CHANGELOG.md
 ```
 
-That path holds in every SDK repo — this skill is vendored there from [`seclai/sdk-tools`](https://github.com/seclai/sdk-tools). When working inside `sdk-tools` itself, the canonical copy is `skills/seclai-changelog/validate.py`.
+That path holds in every SDK repo, since this skill is vendored into each one. When working inside `sdk-tools` itself, the canonical copy is `skills/seclai-changelog/validate.py`.
 
 It verifies heading format, descending version order, group names and ordering, `Breaking:` sorting, absence of an `Unreleased` section, and that every release has exactly one matching link definition. It exits non-zero on error, so the same invocation works as a CI gate.
 
