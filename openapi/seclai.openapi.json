@@ -52,6 +52,32 @@
         "title": "AddConversationTurnRequest",
         "type": "object"
       },
+      "AddEmailDomainRequest": {
+        "properties": {
+          "delegated": {
+            "default": false,
+            "title": "Delegated",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "'vanity' or 'custom'",
+            "title": "Kind",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "value"
+        ],
+        "title": "AddEmailDomainRequest",
+        "type": "object"
+      },
       "AgentAttachmentRefsApiResponse": {
         "description": "Static attachment-reference contract for an agent.\n\nMirrors the MCP ``get_agent_attachment_references`` tool: returns\nwhat files (if any) an agent's templates expect on a run so API\nconsumers can stage uploads correctly before calling\n``POST /agents/{id}/runs``.",
         "properties": {
@@ -69,6 +95,31 @@
           "requires_uploads"
         ],
         "title": "AgentAttachmentRefsApiResponse",
+        "type": "object"
+      },
+      "AgentCallerApiResponse": {
+        "description": "One agent that calls another (blocks disabling the callee while live).",
+        "properties": {
+          "disabled": {
+            "title": "Disabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "disabled"
+        ],
+        "title": "AgentCallerApiResponse",
         "type": "object"
       },
       "AgentDefinitionImportErrorResponse": {
@@ -149,6 +200,102 @@
           "schema_version"
         ],
         "title": "AgentDefinitionResponse",
+        "type": "object"
+      },
+      "AgentEmailOptOutListResponse": {
+        "description": "A page of agent-email opt-outs plus the total (for pagination).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AgentEmailOptOutResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AgentEmailOptOutListResponse",
+        "type": "object"
+      },
+      "AgentEmailOptOutResponse": {
+        "description": "A recipient's opt-out from an account's agent emails (one agent or all).",
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "recipient_email": {
+            "title": "Recipient Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "recipient_email",
+          "agent_id",
+          "agent_name",
+          "reason",
+          "comment"
+        ],
+        "title": "AgentEmailOptOutResponse",
         "type": "object"
       },
       "AgentEvaluationTier": {
@@ -540,7 +687,7 @@
                 "type": "null"
               }
             ],
-            "description": "MIME type of `output` \u2014 mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` \u2014 fetch each attachment via `GET /authenticated/storage-blobs/{storage_key}`.  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.",
+            "description": "MIME type of `output` \u2014 mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` \u2014 fetch each attachment via `GET /api/v2/agent-runs/{run_id}/attachments/{attachment_id}`, where `attachment_id` is the URL-safe base64 of the attachment's `storage_key` (accepts an API key or OAuth token).  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.",
             "title": "Output Content Type"
           },
           "priority": {
@@ -583,6 +730,18 @@
             ],
             "description": "Step outputs and per-step timing/credits. Only included when requested.",
             "title": "Steps"
+          },
+          "wait_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Cumulative milliseconds the run was parked on standard-mode wait steps.  Subtracted from active duration in run-detail and duration-stats responses, exactly like hitl_wait_ms.  Priority waits block inline and are not counted here.",
+            "title": "Wait Ms"
           }
         },
         "required": [
@@ -938,6 +1097,36 @@
             ],
             "description": "Agent description.",
             "title": "Description"
+          },
+          "disabled": {
+            "default": false,
+            "description": "Whether the agent is paused (disabled).",
+            "title": "Disabled",
+            "type": "boolean"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 8601 timestamp the agent was paused.",
+            "title": "Disabled At"
+          },
+          "disabled_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the agent is paused: 'manual' or 'email_overload'.",
+            "title": "Disabled Reason"
           },
           "evaluation_mode": {
             "default": "eval_and_retry",
@@ -1521,6 +1710,113 @@
         "title": "AttachmentRefsSourceApiSummary",
         "type": "object"
       },
+      "BlockEmailSenderRequest": {
+        "description": "Add one sender/domain to the account blocklist (shared REST request).",
+        "properties": {
+          "match_type": {
+            "default": "address",
+            "title": "Match Type",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "sender_email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Sender Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sender_email"
+        ],
+        "title": "BlockEmailSenderRequest",
+        "type": "object"
+      },
+      "BlockedEmailSenderListResponse": {
+        "description": "A page of blocked senders + the account's auto-block mode.",
+        "properties": {
+          "auto_block_mode": {
+            "title": "Auto Block Mode",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BlockedEmailSenderResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "auto_block_mode"
+        ],
+        "title": "BlockedEmailSenderListResponse",
+        "type": "object"
+      },
+      "BlockedEmailSenderResponse": {
+        "description": "A single blocked inbound email sender.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "match_type": {
+            "title": "Match Type",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "sender_email": {
+            "title": "Sender Email",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "sender_email",
+          "match_type",
+          "source",
+          "note"
+        ],
+        "title": "BlockedEmailSenderResponse",
+        "type": "object"
+      },
       "Body_upload_file_to_content_api_contents__source_connection_content_version__upload_post": {
         "properties": {
           "file": {
@@ -1583,6 +1879,19 @@
           "file"
         ],
         "title": "Body_upload_file_to_source_api_sources__source_connection_id__upload_post",
+        "type": "object"
+      },
+      "CancelQueuedRunsResponse": {
+        "properties": {
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cancelled"
+        ],
+        "title": "CancelQueuedRunsResponse",
         "type": "object"
       },
       "ChangeStatusRequest": {
@@ -2424,6 +2733,21 @@
             ],
             "description": "Index mode for custom_index sources: fast_and_cheap (default), balanced, slow_and_thorough, or custom."
           },
+          "media_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored; unsupported values are dropped. Omit / [] for text-only.",
+            "title": "Media Types"
+          },
           "name": {
             "description": "Source name.",
             "maxLength": 255,
@@ -2504,6 +2828,441 @@
           "source_type"
         ],
         "title": "CreateSourceBody",
+        "type": "object"
+      },
+      "DmarcFailingSourceResponse": {
+        "properties": {
+          "failed_count": {
+            "title": "Failed Count",
+            "type": "integer"
+          },
+          "header_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header From"
+          },
+          "source_ip": {
+            "title": "Source Ip",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_ip",
+          "failed_count"
+        ],
+        "title": "DmarcFailingSourceResponse",
+        "type": "object"
+      },
+      "DmarcSummaryResponse": {
+        "properties": {
+          "dispositions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Dispositions",
+            "type": "object"
+          },
+          "failed_messages": {
+            "title": "Failed Messages",
+            "type": "integer"
+          },
+          "monitored": {
+            "default": true,
+            "title": "Monitored",
+            "type": "boolean"
+          },
+          "pass_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate"
+          },
+          "passed_messages": {
+            "title": "Passed Messages",
+            "type": "integer"
+          },
+          "report_count": {
+            "title": "Report Count",
+            "type": "integer"
+          },
+          "top_failing_sources": {
+            "items": {
+              "$ref": "#/components/schemas/DmarcFailingSourceResponse"
+            },
+            "title": "Top Failing Sources",
+            "type": "array"
+          },
+          "total_messages": {
+            "title": "Total Messages",
+            "type": "integer"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window_days",
+          "report_count",
+          "total_messages",
+          "passed_messages",
+          "failed_messages"
+        ],
+        "title": "DmarcSummaryResponse",
+        "type": "object"
+      },
+      "DnsProviderResponse": {
+        "properties": {
+          "dashboard_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dashboard Url"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "mx_priority_separate": {
+            "default": true,
+            "title": "Mx Priority Separate",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tips": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tips",
+            "type": "array"
+          },
+          "txt_quotes": {
+            "default": "strip",
+            "title": "Txt Quotes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "DnsProviderResponse",
+        "type": "object"
+      },
+      "DnsRecordResponse": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "mx_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mx Host"
+          },
+          "mx_priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mx Priority"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "relative_name": {
+            "title": "Relative Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "type",
+          "name",
+          "relative_name",
+          "value",
+          "ok"
+        ],
+        "title": "DnsRecordResponse",
+        "type": "object"
+      },
+      "EmailDomainResponse": {
+        "properties": {
+          "delegated": {
+            "default": false,
+            "title": "Delegated",
+            "type": "boolean"
+          },
+          "dns_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecordResponse"
+            },
+            "title": "Dns Records",
+            "type": "array"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_primary": {
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsProviderResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "regressing": {
+            "default": false,
+            "title": "Regressing",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "verified": {
+            "default": false,
+            "title": "Verified",
+            "type": "boolean"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "zone_apex": {
+            "default": "",
+            "title": "Zone Apex",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "domain",
+          "kind",
+          "status",
+          "is_primary"
+        ],
+        "title": "EmailDomainResponse",
+        "type": "object"
+      },
+      "EmailDomainsListResponse": {
+        "properties": {
+          "can_add_custom": {
+            "default": false,
+            "title": "Can Add Custom",
+            "type": "boolean"
+          },
+          "can_add_vanity": {
+            "default": false,
+            "title": "Can Add Vanity",
+            "type": "boolean"
+          },
+          "custom_plan_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Custom Plan Names",
+            "type": "array"
+          },
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/EmailDomainResponse"
+            },
+            "title": "Domains",
+            "type": "array"
+          },
+          "has_custom": {
+            "default": false,
+            "title": "Has Custom",
+            "type": "boolean"
+          },
+          "has_vanity": {
+            "default": false,
+            "title": "Has Vanity",
+            "type": "boolean"
+          },
+          "vanity_plan_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Vanity Plan Names",
+            "type": "array"
+          }
+        },
+        "title": "EmailDomainsListResponse",
+        "type": "object"
+      },
+      "EmailTriggerConfigResponse": {
+        "description": "An EMAIL_RECEIVED trigger's resolved address(es) and config.",
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "email_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Email Addresses",
+            "type": "array"
+          },
+          "email_alias": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Alias"
+          },
+          "email_allowed_senders": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Allowed Senders"
+          },
+          "email_ignore_auto_generated": {
+            "default": true,
+            "title": "Email Ignore Auto Generated",
+            "type": "boolean"
+          },
+          "email_queue_on_quota": {
+            "default": false,
+            "title": "Email Queue On Quota",
+            "type": "boolean"
+          },
+          "email_require_sender_auth": {
+            "default": true,
+            "title": "Email Require Sender Auth",
+            "type": "boolean"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          },
+          "trigger_type": {
+            "title": "Trigger Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "agent_id",
+          "trigger_type"
+        ],
+        "title": "EmailTriggerConfigResponse",
         "type": "object"
       },
       "EvaluationCriteriaResponse": {
@@ -3100,6 +3859,12 @@
             "description": "Error message if failed.",
             "title": "Error"
           },
+          "needs_clarification": {
+            "default": false,
+            "description": "True when the action paused for a clarifying question rather than failing. The created resource is kept and the question is in ``description``/``error``.",
+            "title": "Needs Clarification",
+            "type": "boolean"
+          },
           "resource_id": {
             "anyOf": [
               {
@@ -3255,6 +4020,18 @@
             },
             "title": "Example Prompts",
             "type": "array"
+          },
+          "intent_assessment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the assistant interpreted the request: 'clear' when steps were generated, or an ask-path value (e.g. 'ambiguous_output', 'cannot_build') when it returned no steps and put a clarifying question or blocker in `note`. Mirrors the MCP surface so callers can distinguish a clarification pause from a hard failure.",
+            "title": "Intent Assessment"
           },
           "note": {
             "description": "AI explanation of the proposed workflow.",
@@ -3568,6 +4345,108 @@
           "message"
         ],
         "title": "ImportSkipResponse",
+        "type": "object"
+      },
+      "InboundEmailRejectionResponse": {
+        "description": "An inbound email that was discarded without running an agent.",
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipient": {
+            "title": "Recipient",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "sender_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Ip"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "recipient",
+          "sender",
+          "sender_ip",
+          "reason",
+          "message_id",
+          "agent_id",
+          "subject"
+        ],
+        "title": "InboundEmailRejectionResponse",
+        "type": "object"
+      },
+      "InboundEmailStatusResponse": {
+        "properties": {
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "queued_backlog": {
+            "title": "Queued Backlog",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "paused",
+          "queued_backlog"
+        ],
+        "title": "InboundEmailStatusResponse",
         "type": "object"
       },
       "InlineTextReplaceRequest": {
@@ -4427,7 +5306,9 @@
           "processing",
           "completed",
           "failed",
-          "waiting_human"
+          "queued",
+          "waiting_human",
+          "waiting_scheduled"
         ],
         "title": "PendingProcessingCompletedFailedStatus",
         "type": "string"
@@ -4714,6 +5595,66 @@
           "params"
         ],
         "title": "ProposedPolicyActionResponse",
+        "type": "object"
+      },
+      "RemoveEmailDomainResponse": {
+        "properties": {
+          "cleanup_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cleanup Note"
+          },
+          "removed": {
+            "default": true,
+            "title": "Removed",
+            "type": "boolean"
+          }
+        },
+        "title": "RemoveEmailDomainResponse",
+        "type": "object"
+      },
+      "ResumeInboundResponse": {
+        "properties": {
+          "resumed": {
+            "title": "Resumed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "resumed"
+        ],
+        "title": "ResumeInboundResponse",
+        "type": "object"
+      },
+      "SendTestEmailResponse": {
+        "properties": {
+          "sent": {
+            "default": true,
+            "title": "Sent",
+            "type": "boolean"
+          }
+        },
+        "title": "SendTestEmailResponse",
+        "type": "object"
+      },
+      "SetAutoBlockModeRequest": {
+        "description": "Set the account's governance auto-block mode (shared REST request).",
+        "properties": {
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "SetAutoBlockModeRequest",
         "type": "object"
       },
       "SolutionSourceConnectionResponse": {
@@ -5177,6 +6118,14 @@
               }
             ],
             "description": "Index mode for custom_index sources: fast_and_cheap, balanced, slow_and_thorough, or custom."
+          },
+          "media_types": {
+            "description": "Media kinds extracted from indexed content and embedded as multi-modal KB chunks (subset of ['images', 'video']). Empty = text-only.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Media Types",
+            "type": "array"
           },
           "name": {
             "description": "Name of the source connection.",
@@ -6072,6 +7021,21 @@
       "UpdateSourceBody": {
         "description": "Request body for updating a content source.",
         "properties": {
+          "media_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored; unsupported values are dropped. [] disables media extraction (text-only).",
+            "title": "Media Types"
+          },
           "name": {
             "anyOf": [
               {
@@ -6650,7 +7614,7 @@
           },
           "trigger_type": {
             "default": "dynamic_input",
-            "description": "Trigger type: dynamic_input, template_input, schedule, new_content.",
+            "description": "Trigger type: dynamic_input, template_input, schedule, new_content, email_received.",
             "title": "Trigger Type",
             "type": "string"
           }
@@ -6686,6 +7650,77 @@
           "policy_id"
         ],
         "title": "GovernancePolicyRefResponse",
+        "type": "object"
+      },
+      "routers__api__agents__SetEmailTriggerConfigRequest": {
+        "description": "Alias and/or sender allowlist for an EMAIL_RECEIVED trigger.\n\nA field omitted is left unchanged; passing ``null`` (or ``\"\"`` for\n``alias``) clears it.",
+        "properties": {
+          "alias": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Custom alias for the address `<alias>.<accountID>@agent.seclai.com` (alphanumeric plus '+', '.', '-'; 1\u201332 chars; not starting/ending with '+', '.', '-'; not UUID-shaped). Pass null/empty to clear.",
+            "title": "Alias"
+          },
+          "allowed_senders": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Allowlist of full sender addresses and/or bare domains (a bare domain also matches sub-domains). Empty/null accepts any sender.",
+            "title": "Allowed Senders"
+          },
+          "ignore_auto_generated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When true (default for new triggers), machine-generated inbound mail (auto-replies, bulk/list mail, bounces) is dropped before a run to prevent auto-reply loops. Set false to process automated mail.",
+            "title": "Ignore Auto Generated"
+          },
+          "queue_on_quota": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When true (default false), inbound mail that exceeds the account's hourly email-trigger rate is parked in a QUEUED run and drained later by the catch-up sweep instead of being failed; when false, over-rate mail fails immediately.",
+            "title": "Queue On Quota"
+          },
+          "require_sender_auth": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When true (default for new triggers), the envelope sender must pass SPF or DMARC even on an open inbox (no allowlist); unauthenticated, spoofable mail is rejected. Set false to accept fully unauthenticated mail on an open inbox.",
+            "title": "Require Sender Auth"
+          }
+        },
+        "title": "SetEmailTriggerConfigRequest",
         "type": "object"
       },
       "routers__api__agents__UpdateAgentRequest": {
@@ -8342,9 +9377,58 @@
             ],
             "title": "Family Generation"
           },
+          "generation_credits_per_unit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-unit credit cost for a dedicated media-generation model, in the unit named by ``generation_params.pricing_unit`` (per image / per second / per character / per output token). Multiply by the produced unit count (images, seconds, characters) for the run cost. None for token-billed (non-generation) models.",
+            "title": "Generation Credits Per Unit"
+          },
+          "generation_params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Media-generation descriptor (modality, pricing_unit, and modality-specific constraints). NULL for text LLMs; present for image/audio/video generation models. See schemas.generation_params.",
+            "title": "Generation Params"
+          },
+          "generation_unit_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Human suffix for the per-unit generation rate (e.g. ``/image``, ``/second``, ``/1k chars``, ``/1k tokens``) \u2014 single-sourced from the pricing unit so clients render cost without re-deriving the mapping. None for non-generation models. Char/token rates are shown per 1,000 (the ``/1k \u2026`` suffix), so scale ``generation_credits_per_unit`` accordingly for those units.",
+            "title": "Generation Unit Label"
+          },
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "image_generation_tool_credits_per_image": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-image credit cost of using the built-in image_generation tool (it runs gpt-image-1). Set only for models that actually support the tool (tool-use capable); None otherwise.",
+            "title": "Image Generation Tool Credits Per Image"
           },
           "input_1h_cache_write_credits_per_1000_tokens": {
             "anyOf": [
@@ -8860,7 +9944,7 @@
         ]
       },
       "post": {
-        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
+        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n- `email_received`: a virtual email inbox; runs when mail arrives at the agent's address. Configure the alias/allowlist with `PUT /api/agents/{agent_id}/triggers/{trigger_id}/email-config`.\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
         "operationId": "create_agent_api_agents_post",
         "parameters": [
           {
@@ -8903,6 +9987,314 @@
           }
         },
         "summary": "Create an agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/agent-email-optouts": {
+      "get": {
+        "description": "List recipients who have opted out of this account's agent emails (filter to one agent via `agent_id`; account-wide opt-outs always apply). Paginated via `limit`/`offset`; returns the page plus the `total` count.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; always scoped to the key's account.",
+        "operationId": "list_agent_email_optouts_api_api_agents_agent_email_optouts_get",
+        "parameters": [
+          {
+            "description": "Filter to one agent (account-wide opt-outs still apply)",
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one agent (account-wide opt-outs still apply)",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentEmailOptOutListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List agent-email opt-outs",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/agent-email-optouts/{optout_id}": {
+      "delete": {
+        "description": "Revoke an opt-out (opt the recipient back in to agent emails).\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; the opt-out must belong to the key's account.",
+        "operationId": "remove_agent_email_optout_api_api_agents_agent_email_optouts__optout_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "optout_id",
+            "required": true,
+            "schema": {
+              "title": "Optout Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke an agent-email opt-out",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/blocked-email-senders": {
+      "get": {
+        "description": "List the account's blocked inbound email senders (newest first, paginated via `limit`/`offset`) plus the governance `auto_block_mode`.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; always scoped to the key's account.",
+        "operationId": "list_blocked_email_senders_api_api_agents_blocked_email_senders_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockedEmailSenderListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List blocked inbound email senders + the auto-block mode",
+        "tags": [
+          "agents"
+        ]
+      },
+      "post": {
+        "description": "Add a sender address or a whole domain to the account blocklist (idempotent; `match_type` is `address` (default) or `domain`).\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token for an account owner/admin; scoped to the key's account.",
+        "operationId": "block_email_sender_api_api_agents_blocked_email_senders_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockEmailSenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockedEmailSenderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Block an inbound email sender or domain",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/blocked-email-senders/mode": {
+      "put": {
+        "description": "Set whether a governance BLOCK on an authenticated inbound email sender auto-adds them to the blocklist (`disabled`, `input`, or `input_and_output`); returns the updated list.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token for an account owner/admin; scoped to the key's account.",
+        "operationId": "set_auto_block_mode_api_api_agents_blocked_email_senders_mode_put",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAutoBlockModeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockedEmailSenderListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set the governance auto-block mode",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/blocked-email-senders/{blocked_id}": {
+      "delete": {
+        "description": "Remove a blocked sender by id.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token for an account owner/admin; the blocked sender must belong to the key's account.",
+        "operationId": "unblock_email_sender_api_api_agents_blocked_email_senders__blocked_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "blocked_id",
+            "required": true,
+            "schema": {
+              "title": "Blocked Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unblock an inbound email sender",
         "tags": [
           "agents"
         ]
@@ -9436,6 +10828,158 @@
         "summary": "Get Non Manual Evaluation Summary",
         "tags": [
           "agent-evaluations"
+        ]
+      }
+    },
+    "/agents/inbound-email-rejections": {
+      "get": {
+        "description": "List recent inbound emails that were quietly discarded before running an agent (unauthorized sender, unknown alias, spam/virus, flood-shed) for this account's agents.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; always scoped to the key's account.",
+        "operationId": "list_inbound_email_rejections_api_api_agents_inbound_email_rejections_get",
+        "parameters": [
+          {
+            "description": "Filter to a single agent's rejections",
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to a single agent's rejections",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InboundEmailRejectionResponse"
+                  },
+                  "title": "Response List Inbound Email Rejections Api Api Agents Inbound Email Rejections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List discarded inbound emails",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/inbound-email-status": {
+      "get": {
+        "description": "Whether the account-wide overload circuit breaker has currently paused new inbound email (all inbound turned away until the queued backlog drains), plus the size of the QUEUED (over-quota parked) run backlog.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; always scoped to the key's account.",
+        "operationId": "get_inbound_email_status_api_api_agents_inbound_email_status_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboundEmailStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Account inbound-email overload status",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/inbound-email-status/cancel-queued": {
+      "post": {
+        "description": "Fail all of the account's QUEUED (over-quota parked) inbound-email runs at once. A queued run consumed no quota or credits at queue time, so this merely fails them. Returns the count cancelled.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token for an account owner/admin; scoped to the key's account.",
+        "operationId": "cancel_queued_email_runs_api_api_agents_inbound_email_status_cancel_queued_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelQueuedRunsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Cancel all queued inbound-email runs",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/inbound-email-status/resume": {
+      "post": {
+        "description": "Manually lift the account-wide inbound pause. If the queued backlog is still above the ceiling the breaker re-arms on the next evaluation \u2014 this is a one-shot override, not a permanent disable.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token for an account owner/admin; scoped to the key's account.",
+        "operationId": "resume_inbound_email_api_api_agents_inbound_email_status_resume_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeInboundResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Manually resume paused inbound email",
+        "tags": [
+          "agents"
         ]
       }
     },
@@ -10101,6 +11645,56 @@
         ]
       }
     },
+    "/agents/{agent_id}/callers": {
+      "get": {
+        "description": "List the live agents that call this agent via a `call_agent` step. They must be disabled before this agent can be paused.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; the agent must belong to the key's account.",
+        "operationId": "get_agent_callers_api_api_agents__agent_id__callers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentCallerApiResponse"
+                  },
+                  "title": "Response Get Agent Callers Api Api Agents  Agent Id  Callers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List agents that call this agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/agents/{agent_id}/definition": {
       "get": {
         "description": "Fetch the current agent definition from the main branch.\n\nThe response includes `change_id` which must be provided when updating the definition (optimistic locking).\n\nThe definition contains the agent's step workflow. Available step types:\n- `prompt_call`: Call an LLM with a prompt template\n- `retrieval`: Search a knowledge base\n- `regex_replace`: Reshape text via ordered regex find/replace rules\n- `gate`: Evaluate conditions, stop or continue child execution\n- `retry`: Re-execute from a target ancestor step (for quality-control loops; pair with a `gate` step for conditional retrying. Fields: `target_step_id` (ancestor step ID), `max_retries` (1\u201310))\n- `evaluate_step`: Score a selected previous step output and emit JSON with `score`, `passed`, and `pass_threshold` (fields: `target_step_id`, `evaluation_prompt`, `pass_threshold`, optional `evaluation_tier`, optional `expectation_config`)\n- `extract_data`: Progressively read and analyze large input\n- `extract_content`: Extract structured data (JSON, HTML, XML)\n- `add_chat_turn` / `load_chat_history`: Record a turn or load running history from a conversation memory bank\n- `add_memory` / `search_memory` / `load_memory`: Write, semantic-search, or load entries on a general memory bank\n- `send_email`: Send email with step output\n- `webhook_call`: POST data to an external URL\n- `write_aws_s3_object`: Write output to S3\n- `call_agent`: Invoke another agent\n- `write_metadata`: Write a value to content metadata (for filtering/gates; content-triggered agents only. Fields: `metadata_key`, `content`)\n- `write_content_attachment`: Write a file-backed attachment to content (optionally indexed for retrieval; content-triggered agents only. Fields: `attachment_key`, `content`, `content_type`, `indexed`)\n- `load_content_attachment`: Load a previously written attachment (content-triggered agents only. Fields: `attachment_key`)\n- `load_content`: Load the full text body of a source document (typically used with content-triggered agents; can also load by explicit `content_version_id`. Fields: `content_version_id` optional)\n- `streaming_result`: Stream LLM tokens in real-time via SSE (must be a direct child of `prompt_call`; requires `dynamic_input` or `template_input` trigger; `priority: true` enables real-time streaming)\n- `display_result`: Show output to the user\n- `join`: Merge parallel branches\n- `merge`: Combine multiple inputs into a single templated output\n- `text`: Static text literal\n- `for_each`: Iterate a body over a list of items (body lives in `body[]`)\n- `if_else`: Conditional dispatch. Evaluates `conditions` (same shape as `gate`) and runs `then_steps` on match, otherwise the optional `else_steps`. The chosen branch's output flows to the if_else step's own `child_steps` (post-branch continuation chain). **`display_result` and `streaming_result` are not allowed inside `then_steps` / `else_steps`** \u2014 end each branch with a content-producing step (e.g. `text`, `prompt_call`) and place the single `display_result` in `child_steps`.\n- `switch`: Single-discriminator dispatch. Renders `discriminator` (default `{{input}}`) and routes to the first matching `cases[]` entry (equality by default; pass a list in `match` for `$in` semantics) or to `else_steps` when nothing matches. The chosen case's output flows to the switch step's own `child_steps`. **`display_result` and `streaming_result` are not allowed inside `cases[].steps` or `else_steps`** \u2014 end each case with a content-producing step and place the single `display_result` in `child_steps`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access agents belonging to your account.",
@@ -10196,6 +11790,98 @@
           }
         },
         "summary": "Update agent definition",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/{agent_id}/disable": {
+      "post": {
+        "description": "Disable an agent so it stops firing from every trigger path (API runs return 409, inbound email is turned away, scheduled/content triggers are skipped).\n\nReturns **409** with the blocking callers when other live agents still call this one via a `call_agent` step \u2014 disable those first.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token bound to a user; the agent must belong to the key's account.",
+        "operationId": "disable_agent_api_api_agents__agent_id__disable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause (disable) an agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/{agent_id}/enable": {
+      "post": {
+        "description": "Re-enable a paused agent (clears the disable state, whether it was paused manually or auto-paused by the inbound-email overload safeguard).\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token bound to a user; the agent must belong to the key's account.",
+        "operationId": "enable_agent_api_api_agents__agent_id__enable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume (enable) a paused agent",
         "tags": [
           "agents"
         ]
@@ -11031,6 +12717,71 @@
         "summary": "List Run Evaluation Results",
         "tags": [
           "agent-evaluations"
+        ]
+      }
+    },
+    "/agents/{agent_id}/triggers/{trigger_id}/email-config": {
+      "put": {
+        "description": "Set the custom alias, sender allowlist, and inbound-handling flags (`ignore_auto_generated`, `require_sender_auth`, `queue_on_quota`) on an agent's EMAIL_RECEIVED trigger, and return its computed email address(es). Omitted fields are left unchanged.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; the trigger must belong to an agent in the key's account.",
+        "operationId": "set_email_trigger_config_api_api_agents__agent_id__triggers__trigger_id__email_config_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "trigger_id",
+            "required": true,
+            "schema": {
+              "title": "Trigger Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/routers__api__agents__SetEmailTriggerConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTriggerConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Configure an EMAIL_RECEIVED trigger",
+        "tags": [
+          "agents"
         ]
       }
     },
@@ -12649,6 +14400,435 @@
         ]
       }
     },
+    "/docs-search": {
+      "get": {
+        "description": "Search the Seclai documentation by content and return matching pages. `mode=keyword` matches page titles and summaries (fast, no AI cost); `mode=semantic` matches page body content by meaning (uses an embedding). Each result carries a `doc_slug` and an optional section `anchor` for building a `https://seclai.com/docs/<doc_slug>[#<anchor>]` link, a `score` (relevance; not comparable across modes), and \u2014 in semantic mode \u2014 a `highlight` (best matching verbatim sentence; `null` for keyword). Documentation is global, so results are not account-scoped.",
+        "operationId": "docs_search_api_docs_search_get",
+        "parameters": [
+          {
+            "description": "Search query",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Search query",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Search strategy",
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "default": "keyword",
+              "description": "Search strategy",
+              "enum": [
+                "keyword",
+                "semantic"
+              ],
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum results",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 8,
+              "description": "Maximum results",
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Docs Search Api Docs Search Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search documentation",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/email-domains": {
+      "get": {
+        "description": "List the account's vanity (`<slug>.seclai.com`) and custom (`agent.mycompany.com`) agent-email domains with their verification status, the DNS records the customer must publish, and the plan capabilities (`can_add_vanity`/`can_add_custom`) plus whether one of each kind already exists (`has_vanity`/`has_custom` \u2014 the per-kind limit is 1).\n\nAuth & scoping: requires an `X-API-Key` header or OAuth Bearer token bound to a **user** (an account-only key is refused with 403); the domain is scoped to the key's account.",
+        "operationId": "list_email_domains_api_api_email_domains_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailDomainsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List the account's email domains + plan capabilities",
+        "tags": [
+          "email-domains"
+        ]
+      },
+      "post": {
+        "description": "Add a new vanity subdomain (`kind=vanity`, `value=<slug>`) or custom domain (`kind=custom`, `value=agent.mycompany.com`; optional `delegated=true` to let Seclai manage a dedicated Route53 zone). Stands up the SES identity + DNS and returns the records the customer must publish. Owner/admin only.\n\nAuth & scoping: requires an `X-API-Key` header or OAuth Bearer token bound to a **user** (an account-only key is refused with 403); the domain is scoped to the key's account.",
+        "operationId": "add_email_domain_api_api_email_domains_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddEmailDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailDomainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add + provision an email domain",
+        "tags": [
+          "email-domains"
+        ]
+      }
+    },
+    "/email-domains/use-shared-domain": {
+      "post": {
+        "description": "Clear the account's primary domain so agent email reverts to the shared `agent.seclai.com` sending/inbound scheme, WITHOUT removing the configured domain(s) \u2014 they stay verified and can be promoted again later. Owner/admin only.\n\nAuth & scoping: requires an `X-API-Key` header or OAuth Bearer token bound to a **user** (an account-only key is refused with 403); the domain is scoped to the key's account.",
+        "operationId": "use_shared_domain_api_api_email_domains_use_shared_domain_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Revert to the shared agent.seclai.com sending domain",
+        "tags": [
+          "email-domains"
+        ]
+      }
+    },
+    "/email-domains/{domain_id}": {
+      "delete": {
+        "description": "Remove a domain and tear down its SES identity + DNS / receipt-rule recipient. Returns a `cleanup_note` when the removed domain was Seclai-managed (delegated), reminding the caller to delete the registrar NS delegation record (dangling-delegation / subdomain-takeover guard). Owner/admin only.\n\nAuth & scoping: requires an `X-API-Key` header or OAuth Bearer token bound to a **user** (an account-only key is refused with 403); the domain is scoped to the key's account.",
+        "operationId": "remove_email_domain_api_api_email_domains__domain_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Domain Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveEmailDomainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove an email domain",
+        "tags": [
+          "email-domains"
+        ]
+      }
+    },
+    "/email-domains/{domain_id}/dmarc": {
+      "get": {
+        "description": "Pass rate, disposition breakdown (`none`/`quarantine`/`reject`), and top failing source IPs from the DMARC `rua` aggregate reports over the last `days` (clamped by the service). Populated for domains whose DNS zone Seclai controls (vanity + delegated custom); a self-managed custom domain keeps its own DMARC reporting and returns an all-zero summary.\n\nAuth & scoping: requires an `X-API-Key` header or OAuth Bearer token bound to a **user** (an account-only key is refused with 403); the domain is scoped to the key's account.",
+        "operationId": "get_dmarc_summary_api_api_email_domains__domain_id__dmarc_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Domain Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "top_sources",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "title": "Top Sources",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DmarcSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "DMARC aggregate-report summary for a domain",
+        "tags": [
+          "email-domains"
+        ]
+      }
+    },
+    "/email-domains/{domain_id}/primary": {
+      "post": {
+        "description": "Promote a verified domain to the account's primary domain \u2014 agent email then sends FROM and receives ON this domain (`<agentID>@<domain>`, `<alias>@<domain>`) instead of the shared `agent.seclai.com`. The domain must be verified. Owner/admin only.\n\nAuth & scoping: requires an `X-API-Key` header or OAuth Bearer token bound to a **user** (an account-only key is refused with 403); the domain is scoped to the key's account.",
+        "operationId": "set_primary_email_domain_api_api_email_domains__domain_id__primary_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Domain Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailDomainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make a verified domain the account's primary sending/inbound domain",
+        "tags": [
+          "email-domains"
+        ]
+      }
+    },
+    "/email-domains/{domain_id}/test-email": {
+      "post": {
+        "description": "Send a test message FROM the verified domain (`noreply@<domain>`) TO the account owner's email, to confirm end-to-end that the domain actually sends (SES verified, DKIM/SPF aligned). Never sends to any other address, so it can't be used as an open relay. Owner/admin only.\n\nAuth & scoping: requires an `X-API-Key` header or OAuth Bearer token bound to a **user** (an account-only key is refused with 403); the domain is scoped to the key's account.",
+        "operationId": "send_test_email_api_api_email_domains__domain_id__test_email_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Domain Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendTestEmailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send a test email from a verified domain to the account owner",
+        "tags": [
+          "email-domains"
+        ]
+      }
+    },
+    "/email-domains/{domain_id}/verify": {
+      "post": {
+        "description": "Re-poll SES + DNS for this domain right now instead of waiting for the background verification sweep, and return its updated status + DNS-record check results. Useful right after publishing the required records. Owner/admin only.\n\nAuth & scoping: requires an `X-API-Key` header or OAuth Bearer token bound to a **user** (an account-only key is refused with 403); the domain is scoped to the key's account.",
+        "operationId": "verify_email_domain_api_api_email_domains__domain_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Domain Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailDomainResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run a verification check immediately ('Check now')",
+        "tags": [
+          "email-domains"
+        ]
+      }
+    },
     "/governance/ai-assistant": {
       "post": {
         "description": "Send a natural-language request to the governance AI assistant to generate a plan of policy changes. Returns a conversation with proposed actions that can be accepted or declined.\n\nAuth: requires `X-API-Key` header or OAuth Bearer token with governance access.",
@@ -13993,7 +16173,7 @@
     },
     "/models": {
       "get": {
-        "description": "List all enabled LLM models with full details.\n\nReturns models grouped by provider, including capabilities, credit pricing, tool support, variant tiers, and lifecycle status.\n\nOptional query parameters:\n- `provider`: filter by provider (e.g. 'anthropic', 'openai')\n- `supports_tool_use`: filter to models with tool calling support\n- `supports_thinking`: filter to models with extended thinking support\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
+        "description": "List all enabled LLM models with full details.\n\nReturns models grouped by provider, including capabilities, credit pricing, tool support, variant tiers, and lifecycle status.\n\nOptional query parameters:\n- `provider`: filter by provider (e.g. 'anthropic', 'openai')\n- `supports_tool_use`: filter to models with tool calling support\n- `supports_thinking`: filter to models with extended thinking support\n- `supports_input_media`: filter to models accepting an input modality (`image`/`audio`/`video`/`pdf` or a full MIME)\n- `supports_output_media`: filter to models producing an output modality (`image`/`audio`/`video`) \u2014 e.g. to find generation models\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "list_models_api_models_get",
         "parameters": [
           {
@@ -14048,6 +16228,42 @@
               ],
               "description": "Filter to models that support extended thinking",
               "title": "Supports Thinking"
+            }
+          },
+          {
+            "description": "Filter to models that accept this input modality \u2014 a coarse kind (`image`, `audio`, `video`, `pdf`) or a full MIME.",
+            "in": "query",
+            "name": "supports_input_media",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to models that accept this input modality \u2014 a coarse kind (`image`, `audio`, `video`, `pdf`) or a full MIME.",
+              "title": "Supports Input Media"
+            }
+          },
+          {
+            "description": "Filter to models that produce this output modality \u2014 a coarse kind (`image`, `audio`, `video`) or a full MIME. Use to find image/audio/video generation models.",
+            "in": "query",
+            "name": "supports_output_media",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to models that produce this output modality \u2014 a coarse kind (`image`, `audio`, `video`) or a full MIME. Use to find image/audio/video generation models.",
+              "title": "Supports Output Media"
             }
           },
           {
@@ -14266,6 +16482,35 @@
           }
         },
         "summary": "Mark Read",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/models/generation-tiers": {
+      "get": {
+        "description": "List the media-generation quality tiers and the model + cost each resolves to.\n\nOn a prompt_call's `media_generation` tool \u2014 and the dedicated generate_* steps via tier routing \u2014 the author/LLM chooses a *tier* (fast/balanced/thorough), never a model. This is the surface that maps each `(modality, tier)` to its concrete generator, raw `credits_per_unit`, `unit_label`, and a human-readable scaled `price_label`. Global routing/pricing (the same for every account); read-only. REST parity with the `list_generation_tiers` MCP tool.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
+        "operationId": "get_generation_tiers_api_models_generation_tiers_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Generation Tiers Api Models Generation Tiers Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Generation Tiers",
         "tags": [
           "models"
         ]
@@ -14758,7 +17003,7 @@
     },
     "/search": {
       "get": {
-        "description": "Search across all resource types in your account.  Accepts a free-text keyword query or a UUID.  UUIDs are matched exactly; keywords are matched by name and description (case-insensitive substring).  Results are ranked: name-prefix > name-substring > description-substring.  Searchable types: agent, knowledge_base, source_connection, solution, memory_bank, alert, api_key, governance_policy.",
+        "description": "Search across all resource types in your account.  Accepts a free-text keyword query or a UUID.  UUIDs are matched exactly; keywords are matched by name and description (case-insensitive substring).  Results are ranked: name-prefix > name-substring > description-substring.  Searchable types: agent, knowledge_base, source_connection, solution, memory_bank, alert, api_key, governance_policy, mcp_client.",
         "operationId": "search_api_search_get",
         "parameters": [
           {
