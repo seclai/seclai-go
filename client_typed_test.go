@@ -1620,11 +1620,13 @@ func TestClient_GetAgentCallers(t *testing.T) {
 }
 
 func TestClient_SetEmailTriggerConfig(t *testing.T) {
+	var body map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut || r.URL.Path != "/agents/a_1/triggers/t_1/email-config" {
 			w.WriteHeader(404)
 			return
 		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"trigger_id":"3f1a0d6e-0000-4000-8000-000000000002","agent_id":"3f1a0d6e-0000-4000-8000-000000000003","trigger_type":"EMAIL_RECEIVED","email_addresses":["support@agent.seclai.com"]}`)
 	}))
@@ -1637,6 +1639,54 @@ func TestClient_SetEmailTriggerConfig(t *testing.T) {
 	}
 	if got.EmailAddresses == nil || len(*got.EmailAddresses) != 1 {
 		t.Fatalf("unexpected addresses: %+v", got.EmailAddresses)
+	}
+	// A zero-value request must be a no-op. The API treats an explicit null as
+	// "clear this field", so sending nulls here would silently wipe the alias,
+	// the sender allowlist and the inbound-handling flags.
+	if len(body) != 0 {
+		t.Fatalf("zero-value request must send an empty object, got %v", body)
+	}
+}
+
+func TestClient_SetEmailTriggerConfig_SendsOnlySetFields(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"trigger_id":"3f1a0d6e-0000-4000-8000-000000000002","agent_id":"3f1a0d6e-0000-4000-8000-000000000003","trigger_type":"EMAIL_RECEIVED"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	alias := "support"
+	requireAuth := false
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if _, err := c.SetEmailTriggerConfig(context.Background(), "a_1", "t_1",
+		RoutersApiAgentsSetEmailTriggerConfigRequest{Alias: &alias, RequireSenderAuth: &requireAuth}); err != nil {
+		t.Fatalf("SetEmailTriggerConfig: %v", err)
+	}
+	if len(body) != 2 || body["alias"] != "support" || body["require_sender_auth"] != false {
+		t.Fatalf("expected only the two set fields, got %v", body)
+	}
+}
+
+func TestClient_SetEmailTriggerConfig_ClearsWithZeroValue(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"trigger_id":"3f1a0d6e-0000-4000-8000-000000000002","agent_id":"3f1a0d6e-0000-4000-8000-000000000003","trigger_type":"EMAIL_RECEIVED"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	// Clearing is still possible: a pointer to the zero value is sent explicitly.
+	empty := ""
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if _, err := c.SetEmailTriggerConfig(context.Background(), "a_1", "t_1",
+		RoutersApiAgentsSetEmailTriggerConfigRequest{Alias: &empty}); err != nil {
+		t.Fatalf("SetEmailTriggerConfig: %v", err)
+	}
+	if len(body) != 1 || body["alias"] != "" {
+		t.Fatalf("expected alias cleared, got %v", body)
 	}
 }
 
@@ -1697,7 +1747,7 @@ func TestClient_ListBlockedEmailSenders(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
-	got, err := c.ListBlockedEmailSenders(context.Background(), ListOptions{Limit: 10})
+	got, err := c.ListBlockedEmailSenders(context.Background(), BlockedEmailSenderOptions{Limit: 10})
 	if err != nil {
 		t.Fatalf("ListBlockedEmailSenders: %v", err)
 	}
