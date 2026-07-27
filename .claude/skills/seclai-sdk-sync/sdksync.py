@@ -3,6 +3,7 @@
 
 Subcommands:
   parity     spec paths that have no request call in the hand-written client
+  params     query params the client sends that the endpoint does not declare
   spec-diff  paths and schemas added/removed/changed between two spec revisions
   api-delta  public client methods added/removed between two git revisions
 
@@ -24,21 +25,46 @@ from pathlib import Path
 
 VERBS = ("GET", "POST", "PUT", "PATCH", "DELETE")
 
+# A quoted path literal. Matched as "everything up to the closing quote" rather
+# than a character class: C# interpolations embed calls —
+# $"/agents/runs/{Uri.EscapeDataString(runId)}/cancel" — and a class that omits
+# parentheses silently fails to match the whole literal, so the path is never
+# extracted and the endpoint looks unimplemented.
+PATH_LITERAL_RE = r"""(?:"(/[^"\n]*)"|`(/[^`\n]*)`|'(/[^'\n]*)')"""
+
 # ── Language table ───────────────────────────────────────────────────────────
 # `sources` are HAND-WRITTEN client files only. Generated trees must never be
 # scanned: they contain a module per endpoint and would make parity always pass.
+# Query-key extraction, used by `params`. Two forms:
+#   key_re    — the key is captured directly (go: q["k"] = ; csharp: ["k"] = )
+#   dict_at   — the keys live inside a brace-delimited literal that follows an
+#               anchor. These MUST be sliced by brace matching, not regex: the
+#               multi-line `params=_strip_none(\n    {...}\n)` form defeats a
+#               non-greedy regex and yields an empty key set, which reads as
+#               "this method sends no params" — a silent false pass.
+#   helpers   — positional helper calls that expand to a fixed, ordered key list.
+#               Expansion is arity-aware: only as many keys as arguments supplied.
 LANGS = {
     "python": {
         "detect": "seclai/seclai.py",
         "sources": ["seclai/seclai.py"],
         "method_re": r"^[ \t]+(?:async )?def ([a-z][a-z0-9_]*)\(",
         "verb_re": r'"(GET|POST|PUT|PATCH|DELETE)"',
+        "dict_at": [r"params\s*=\s*(?:_strip_none\()?\s*"],
+        "dict_key_re": r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:',
+        "skip": {"request", "request_raw", "stream", "paginate"},
     },
     "javascript": {
         "detect": "src/client.ts",
         "sources": ["src/client.ts"],
-        "method_re": r"^[ \t]+(?:async )?\*?([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
+        # Exactly two spaces: class members sit at that indent, while statements
+        # inside a body sit at four or more. A looser `^[ \t]+` also matches
+        # `return (await this.request(...)` and attributes findings to "return".
+        "method_re": r"^  (?:async )?\*?([a-zA-Z_][a-zA-Z0-9_]*)\s*[(<]",
         "verb_re": r'"(GET|POST|PUT|PATCH|DELETE)"',
+        "dict_at": [r"query:\s*"],
+        "dict_key_re": r'["\']?([a-zA-Z_][a-zA-Z0-9_]*)["\']?\s*:',
+        "skip": {"request", "requestRaw", "uploadFile", "paginate"},
     },
     "go": {
         "detect": "client.go",
@@ -46,12 +72,18 @@ LANGS = {
         "exclude": ["*_test.go"],
         "method_re": r"^func \(c \*Client\) ([A-Z][A-Za-z0-9]*)\(",
         "verb_re": r"http\.Method(Get|Post|Put|Patch|Delete)",
+        "key_re": r'q\["([a-zA-Z_][a-zA-Z0-9_]*)"\]\s*=',
+        "helpers": {"listQuery(": ["page", "limit"]},
+        "skip": {"Do", "buildURL"},
     },
     "csharp": {
         "detect": "src/Seclai/SeclaiClient.cs",
         "sources": ["src/Seclai/*.cs"],
         "method_re": r"public (?:async )?[\w<>,?\[\]. ]+ ([A-Z][A-Za-z0-9]*)\s*\(",
         "verb_re": r"HttpMethod\.(Get|Post|Put|Patch|Delete)",
+        "key_re": r'\["([a-zA-Z_][a-zA-Z0-9_]*)"\]\s*=',
+        "helpers": {"PaginationQuery(": ["page", "limit", "sort", "order"]},
+        "skip": {"SendJsonAsync", "SendNoContentAsync", "SendRawAsync", "BuildUri", "PaginationQuery"},
     },
 }
 
@@ -98,8 +130,8 @@ def extract_paths(text: str, verb_re: str) -> dict[str, set[str]]:
     Absence of a verb is reported as a warning, never as a hard miss.
     """
     found: dict[str, set[str]] = {}
-    for m in re.finditer(r"""["'`](/[A-Za-z0-9_\-/{}$%.]*)["'`]""", text):
-        p = normalise(m.group(1))
+    for m in re.finditer(PATH_LITERAL_RE, text):
+        p = normalise(next(g for g in m.groups() if g is not None))
         if p == "/" or not p.startswith("/"):
             continue
         window = text[max(0, m.start() - 220): m.end() + 60]
@@ -123,6 +155,204 @@ def load_spec(ref: str | None, path: str, repo: Path) -> dict:
             "       For the others, point at one explicitly, e.g.\n"
             "         --spec ../seclai-python/openapi/seclai.openapi.json")
     return json.loads(f.read_text())
+
+
+# ── params ───────────────────────────────────────────────────────────────────
+def balanced_slice(text: str, at: int, opener: str = "{", closer: str = "}") -> str | None:
+    """Return the brace-delimited literal starting at or after `at`.
+
+    Regex cannot do this: query literals span lines and nest, and a non-greedy
+    match silently truncates at the first inner `}`.
+    """
+    i = text.find(opener, at)
+    if i == -1:
+        return None
+    depth, j = 0, i
+    while j < len(text):
+        if text[j] == opener:
+            depth += 1
+        elif text[j] == closer:
+            depth -= 1
+            if depth == 0:
+                return text[i + 1: j]
+        j += 1
+    return None
+
+
+def spec_query_index(spec: dict) -> dict[tuple[str, str], tuple[str, set[str], set[str]]]:
+    """(VERB, normalised path) -> (raw path, declared query names, required names).
+
+    Resolves `$ref` against components.parameters and merges path-level params
+    into each operation, both of which the spec uses.
+    """
+    comp = spec.get("components", {}).get("parameters", {})
+
+    def resolve(p: dict) -> dict:
+        ref = p.get("$ref")
+        if ref and ref.startswith("#/components/parameters/"):
+            return comp.get(ref.rsplit("/", 1)[-1], {})
+        return p
+
+    index: dict[tuple[str, str], tuple[str, set[str], set[str]]] = {}
+    for raw, ops in spec.get("paths", {}).items():
+        shared = [resolve(p) for p in ops.get("parameters", [])]
+        for verb, op in ops.items():
+            if verb not in ("get", "post", "put", "patch", "delete"):
+                continue
+            params = shared + [resolve(p) for p in op.get("parameters", [])]
+            q = {p["name"] for p in params if p.get("in") == "query" and "name" in p}
+            req = {p["name"] for p in params
+                   if p.get("in") == "query" and p.get("required") and "name" in p}
+            index[(verb.upper(), normalise(raw))] = (raw, q, req)
+    return index
+
+
+def method_blocks(text: str, method_re: str):
+    """Yield (name, body). Each block runs to the next method anchor."""
+    ms = list(re.finditer(method_re, text, re.M))
+    for i, m in enumerate(ms):
+        end = ms[i + 1].start() if i + 1 < len(ms) else len(text)
+        yield m.group(1), text[m.start():end]
+
+
+def block_call(body: str, verb_re: str) -> tuple[str, str] | None:
+    """First (VERB, normalised path) issued inside a method body.
+
+    The path must appear AFTER the verb: taking the first path-like literal
+    anywhere in the block picks up example paths out of docstrings and prose.
+    """
+    v = re.search(verb_re, body)
+    if not v:
+        return None
+    p = re.search(PATH_LITERAL_RE, body[v.end():v.end() + 400])
+    if not p:
+        return None
+    path = normalise(next(g for g in p.groups() if g is not None))
+    if path == "/":
+        return None
+    return v.group(1).upper(), path
+
+
+def block_query_keys(body: str, cfg: dict) -> tuple[set[str], bool]:
+    """(keys, parsed_ok). parsed_ok is False when a construction site was found
+    but could not be read — reported as an error, never as "sends nothing"."""
+    keys: set[str] = set()
+    ok = True
+
+    for anchor, ordered in (cfg.get("helpers") or {}).items():
+        for m in re.finditer(re.escape(anchor), body):
+            args = balanced_slice(body, m.end() - 1, "(", ")")
+            if args is None:
+                ok = False
+                continue
+            n = len([a for a in args.split(",") if a.strip()])
+            keys |= set(ordered[:n])
+
+    if "key_re" in cfg:
+        keys |= set(re.findall(cfg["key_re"], body))
+
+    indirect = False
+    for anchor in cfg.get("dict_at", []):
+        for m in re.finditer(anchor, body):
+            rest = body[m.end():]
+            stripped = rest.lstrip()
+            if not stripped.startswith("{"):
+                # `params=params` / `query: someVar` — a reference, not a literal.
+                # Not readable here, but the literal is usually assigned earlier in
+                # the same block, so only treat it as unaudited if nothing was found.
+                indirect = True
+                continue
+            lit = balanced_slice(body, m.end())
+            if lit is None:
+                ok = False
+                continue
+            keys |= set(re.findall(cfg["dict_key_re"], lit))
+
+    if indirect and not keys:
+        ok = False
+    return keys, ok
+
+
+def cmd_params(args) -> int:
+    repo = Path(args.repo).resolve()
+    name = repo.name
+    if name in NOT_APPLICABLE:
+        print(f"{name}: not applicable — {NOT_APPLICABLE[name]}")
+        return 0
+    lang = args.lang or detect_lang(repo)
+    if not lang:
+        die(f"cannot detect SDK language in {repo}")
+    cfg = LANGS[lang]
+    files = source_files(repo, cfg)
+    if not files:
+        die(f"no client sources found for {lang} in {repo}")
+
+    spec = load_spec(args.rev, args.spec, repo)
+    index = spec_query_index(spec)
+
+    undeclared, not_in_spec, unparsed, exposed = set(), set(), set(), {}
+
+    for f in files:
+        text = f.read_text(errors="replace")
+        for mname, body in method_blocks(text, cfg["method_re"]):
+            if mname in cfg.get("skip", ()):
+                continue
+            call = block_call(body, cfg["verb_re"])
+            if not call:
+                continue
+            keys, ok = block_query_keys(body, cfg)
+            if not ok:
+                unparsed.add((mname, f"{call[0]} {call[1]}"))
+            if call not in index:
+                not_in_spec.add((mname, f"{call[0]} {call[1]}"))
+                continue
+            raw, declared, _required = index[call]
+            exposed.setdefault((call[0], raw), set()).update(keys)
+            for k in sorted(keys - declared):
+                undeclared.add((mname, f"{call[0]} {raw}", k, tuple(sorted(declared))))
+
+    print(f"{name} [{lang}] — {len(files)} client file(s), "
+          f"{len(index)} spec operations")
+
+    if undeclared:
+        print(f"\nUNDECLARED ({len(undeclared)}) — sent but the endpoint does not accept it:")
+        for m, op, k, decl in sorted(undeclared):
+            print(f"   {m}  ({op})")
+            print(f"       sends: {k}")
+            print(f"       accepts: {', '.join(decl) or '(none)'}")
+
+    if not_in_spec:
+        print(f"\nNOT IN SPEC ({len(not_in_spec)}) — client calls a path the spec does not declare:")
+        for m, op in sorted(not_in_spec):
+            print(f"   {m}  ({op})")
+
+    if unparsed:
+        print(f"\nUNPARSED ({len(unparsed)}) — query construction could not be read;"
+              f" treat as unaudited, not as clean:")
+        for m, op in sorted(unparsed):
+            print(f"   {m}  ({op})")
+
+    if not args.quiet_unexposed:
+        gaps = []
+        for (verb, _npath), (raw, declared, _req) in index.items():
+            got = exposed.get((verb, raw))
+            if got is None:
+                continue          # endpoint not implemented at all — parity's job
+            missing = declared - got
+            if missing:
+                gaps.append((f"{verb} {raw}", sorted(missing)))
+        if gaps:
+            print(f"\nUNEXPOSED ({len(gaps)}) — declared query params no method sends:")
+            for op, names in sorted(gaps):
+                print(f"   {op}: {', '.join(names)}")
+
+    errors = len(undeclared) + len(not_in_spec) + len(unparsed)
+    print()
+    if errors:
+        print(f"{errors} error(s)")
+        return 1
+    print("no parameter mismatches")
+    return 0
 
 
 # ── parity ───────────────────────────────────────────────────────────────────
@@ -298,6 +528,15 @@ def main() -> int:
     p.add_argument("--lang", choices=list(LANGS))
     p.add_argument("--quiet-partial", action="store_true", help="suppress the best-effort verb warnings")
     p.set_defaults(func=cmd_parity)
+
+    p = sub.add_parser("params", help="query params the client sends that the endpoint does not declare")
+    p.add_argument("repo", nargs="?", default=".")
+    p.add_argument("--spec", default="openapi/seclai.openapi.json")
+    p.add_argument("--rev", help="read the spec from this git rev instead of the working tree")
+    p.add_argument("--lang", choices=list(LANGS))
+    p.add_argument("--quiet-unexposed", action="store_true",
+                   help="suppress the declared-but-never-sent report")
+    p.set_defaults(func=cmd_params)
 
     p = sub.add_parser("spec-diff", help="paths/schemas added, removed or changed between revisions")
     p.add_argument("old", help="git rev of the older spec")

@@ -21,13 +21,52 @@ S=.claude/skills/seclai-sdk-sync/sdksync.py     # vendored into each SDK repo
 
 python3 $S spec-diff HEAD                       # what the new spec changed
 python3 $S parity .                             # spec paths with no request call
+python3 $S params .                             # params the endpoint does not accept
 python3 $S api-delta 1.3.0                      # public methods added since a tag
 ```
 
-`parity` exits non-zero when a path is unimplemented, so it works as a CI gate.
-Run it over the **whole spec**, never just the diff — `GET /me` sat unimplemented
+`parity` and `params` exit non-zero on a finding, so both work as CI gates.
+Run them over the **whole spec**, never just the diff — `GET /me` sat unimplemented
 in both the Python and JavaScript SDKs for months because each sync only looked at
 its own new paths.
+
+## `params` — the check that catches what tests cannot
+
+`parity` walks spec→client. `params` walks client→spec, and that direction finds a
+different and more dangerous class of defect, because the API silently ignores
+query params it does not declare:
+
+- **UNDECLARED** — the client sends a key the endpoint does not accept. The filter
+  simply does nothing and the caller gets unfiltered results.
+- **NOT IN SPEC** — the client calls a path the spec does not declare. `parity`
+  cannot see this by construction.
+- **UNPARSED** — a query-construction site the extractor could not read. Treated as
+  an error, never as clean: a parser that gives up quietly is the failure this tool
+  exists to prevent.
+- **UNEXPOSED** (warning) — a declared param no method sends; a coverage gap.
+
+Tests do not defend against this class. The SDK tests were written from the same
+table as the code, so they assert the same wrong parameter names — one Go test
+asserted the buggy `query` instead of the required `q`, locking the defect in. The
+spec is the only independent oracle.
+
+## `docexamples` — compile the README
+
+```bash
+D=.claude/skills/seclai-sdk-sync/docexamples.py
+python3 $D list .        # every fence and whether it is checked
+python3 $D check .       # compile the marked ones
+```
+
+Opt-in: mark a fence by putting `<!-- sdksync:check -->` on the line directly above
+it. Invisible on GitHub, npm and pkg.go.dev. Most fences are deliberate fragments —
+3 of 39 TypeScript fences carry an import — so compiling everything would mean
+rewriting the READMEs first. `list` prints the marked fraction so coverage can be
+raised over time. TypeScript and Go only; Python examples are plain dicts with
+nothing to typecheck.
+
+Mark any example you add or change. `npm run typecheck` and `go build` do **not**
+cover README snippets, and two shipped PRs contained examples that could not compile.
 
 ## The repos are not uniform
 
@@ -36,7 +75,7 @@ its own new paths.
 | seclai-python | generated + hand-written wrappers | yes | `make generate`, then black |
 | seclai-javascript | types generated, methods hand-written | yes | `npm run generate` |
 | seclai-go | hand-written | yes | |
-| seclai-csharp | hand-rolled from the start | **no** | no codegen library was suitable; covers a subset of the API by design |
+| seclai-csharp | hand-rolled from the start | **no** | no codegen library was suitable; still at near-full parity — sync it like the others |
 | seclai-cli | wraps `@seclai/sdk` | no | coverage question is command-to-SDK-method |
 | seclai-mcp | no client source | no | |
 
@@ -59,7 +98,14 @@ For repos without a bundled spec, point at one:
    ones that get skipped.
 5. **Write the methods.** In Python they must land in **both** `Seclai` and
    `AsyncSeclai`. Generating both from a single table of method definitions is
-   the reliable way to keep them identical; hand-writing 2×N methods drifts.
+   the reliable way to keep them identical; hand-writing 2×N methods into an
+   8,000-line file drifts, and no test asserts the two classes match. Working
+   emitters from the last sync are in `emit-examples/` in the `sdk-tools` repo —
+   copy and adapt one, they are reference material rather than a supported API.
+
+   Generation removes transcription drift but propagates a wrong table uniformly
+   to every call site. Two defects in the last sync were faithful emissions of a
+   bad table. Audit the result with `params` before trusting it.
 6. **Tests** — sync and async for each method, asserting verb, path, query params
    and body. Python uses `httpx.MockTransport`; JavaScript uses a `makeClient`
    fetch stub.
