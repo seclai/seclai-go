@@ -472,15 +472,24 @@ func (c *Client) GetAgentRun(ctx context.Context, runID string, opts *GetAgentRu
 	return &out, nil
 }
 
-// DeleteAgentRun cancels/deletes a specific run by run ID.
+// DeleteAgentRun cancels a run.
+//
+// Deprecated: this never deleted anything — the endpoint it calls is documented
+// as "Cancel an agent run", and the API has no delete-a-run operation. It also
+// discards the returned run state. Use [Client.CancelAgentRun] instead.
 func (c *Client) DeleteAgentRun(ctx context.Context, runID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/runs/%s", url.PathEscape(runID)), nil, nil, nil, nil)
+	_, err := c.CancelAgentRun(ctx, runID)
+	return err
 }
 
-// CancelAgentRun cancels an in-progress agent run.
+// CancelAgentRun cancels an in-progress agent run and returns its updated state.
+//
+// Cancellation is DELETE on the run resource — the API exposes no
+// POST .../cancel route, and no operation that deletes a run.
+// Rejected when the run has already reached a terminal state.
 func (c *Client) CancelAgentRun(ctx context.Context, runID string) (*AgentRunResponse, error) {
 	var out AgentRunResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/runs/%s/cancel", url.PathEscape(runID)), nil, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/runs/%s", url.PathEscape(runID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -760,11 +760,13 @@ func TestClient_DeleteAgentRun(t *testing.T) {
 			w.WriteHeader(404)
 			return
 		}
-		w.WriteHeader(204)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"failed"}`)
 	}))
 	t.Cleanup(srv.Close)
 
 	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	//nolint:staticcheck // deprecated alias kept for compatibility; still covered
 	if err := c.DeleteAgentRun(context.Background(), "run_1"); err != nil {
 		t.Fatalf("DeleteAgentRun: %v", err)
 	}
@@ -772,7 +774,10 @@ func TestClient_DeleteAgentRun(t *testing.T) {
 
 func TestClient_CancelAgentRun(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/agents/runs/run_1/cancel" {
+		// Cancellation is DELETE on the run resource. This test asserted
+		// POST /agents/runs/{id}/cancel, a path the API has never had, so it
+		// confirmed a 404-ing method rather than catching it.
+		if r.Method != http.MethodDelete || r.URL.Path != "/agents/runs/run_1" {
 			w.WriteHeader(404)
 			return
 		}
