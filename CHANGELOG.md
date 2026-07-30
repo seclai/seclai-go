@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Run the test suite under `-race`, in `make test` and both CI workflows. The tests capture request state in an httptest handler goroutine and assert on it from the test goroutine; that is safe by construction, but nothing was enforcing it
 - Stop sending `Severity` from `ListAlerts`. `GET /alerts` declares no such filter, so it never filtered, and it becomes a 422 once `Options.APIVersion` is `2026-07-27` or later. The field is still accepted and ignored
 - Deprecate `GetAgentAiConversationHistory`. The API requires a `step_type` query parameter its signature cannot supply, so every call answered 422. Use `GetAgentAiConversationHistoryWithOptions`
 - Accept either wire shape from `ListEvaluationCriteria`. The endpoint returns a bare array by default and the canonical `{data, pagination}` envelope once opted in, so the client reads both and keeps returning `[]EvaluationCriteriaResponse`

@@ -1,7 +1,11 @@
 .PHONY: test fmt vet docs docs-clean
 
+# -race because the tests capture request state in an httptest handler goroutine
+# and assert on it from the test goroutine. That is safe today — the completed
+# round-trip establishes happens-before — but it is safe by construction rather
+# than by declaration, so the detector is what keeps it honest.
 test:
-	go test ./...
+	go test -race ./...
 
 fmt:
 	@gofmt -w .
