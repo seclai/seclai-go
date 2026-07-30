@@ -72,7 +72,12 @@ LANGS = {
         # Exactly two spaces: class members sit at that indent, while statements
         # inside a body sit at four or more. A looser `^[ \t]+` also matches
         # `return (await this.request(...)` and attributes findings to "return".
-        "method_re": r"^  (?:async )?\*?([a-zA-Z_][a-zA-Z0-9_]*)\s*[(<]",
+        # The indent alone is not enough: the module-level helpers above the class
+        # put `if (` and `for (` at exactly two spaces as well, and without the
+        # lookahead `api-delta` lists methods named `if` and `for`.
+        "method_re": (r"^  (?:async )?\*?"
+                      r"(?!(?:if|for|while|switch|catch|do|else|try|return|new|typeof|await)\b)"
+                      r"([a-zA-Z_][a-zA-Z0-9_]*)\s*[(<]"),
         "verb_re": r'"(GET|POST|PUT|PATCH|DELETE)"',
         "return_re": r"\s*:\s*([^{\n]+?)\s*\{",
         "dict_at": [r"query:\s*"],
@@ -213,6 +218,29 @@ def balanced_slice(text: str, at: int, opener: str = "{", closer: str = "}") -> 
     return None
 
 
+def split_args(sig: str) -> list[str]:
+    """Split a comma-separated argument or parameter list at depth 0.
+
+    A naive `split(",")` turns `Dictionary<string, string> q` into two entries,
+    which over-counts arity for the query helpers and reports a phantom
+    signature change for `surface`.
+    """
+    out, depth, cur = [], 0, ""
+    for ch in sig:
+        if ch in "<([{":
+            depth += 1
+        elif ch in ">)]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        out.append(cur.strip())
+    return [p for p in out if p and p != "*"]
+
+
 def spec_query_index(spec: dict) -> dict[tuple[str, str], tuple[str, set[str], set[str]]]:
     """(VERB, normalised path) -> (raw path, declared query names, required names).
 
@@ -292,8 +320,7 @@ def block_query_keys(body: str, cfg: dict) -> tuple[set[str], bool]:
             if args is None:
                 ok = False
                 continue
-            n = len([a for a in args.split(",") if a.strip()])
-            keys |= set(ordered[:n])
+            keys |= set(ordered[:len(split_args(args))])
 
     if "key_re" in cfg:
         keys |= set(re.findall(cfg["key_re"], body))
@@ -405,7 +432,10 @@ def cmd_params(args) -> int:
             for op, names in sorted(gaps):
                 print(f"   {op}: {', '.join(names)}")
 
-    errors = len(undeclared) + len(not_in_spec) + len(unparsed) + len(missing_required)
+    # A method whose query could not be read AND whose path is not in the spec is
+    # one problem, not two; counting it twice inflated the gate's error total.
+    errors = (len(undeclared) + len(not_in_spec) + len(missing_required)
+              + len(unparsed - not_in_spec))
     print()
     if errors:
         print(f"{errors} error(s)")
@@ -484,8 +514,13 @@ def _json_schema(op: dict, section: str, code: str | None = None) -> dict | None
     return (node or {}).get("content", {}).get("application/json", {}).get("schema")
 
 
-def diff_operation(old: dict, new: dict, path: str, verb: str) -> list[str]:
+def diff_operation(old: dict, new: dict, path: str, verb: str,
+                   old_q: dict | None = None, new_q: dict | None = None) -> list[str]:
     """What actually changed on one operation, beyond its prose.
+
+    `old_q`/`new_q` are prebuilt `spec_query_index` results. Rebuilding them here
+    walks and $ref-resolves the whole 124-path spec twice for every changed
+    operation; the caller builds them once.
 
     The original implementation labelled every non-verb change
     "description/params only", which reads as "nothing to do". In the 2026-07
@@ -494,8 +529,10 @@ def diff_operation(old: dict, new: dict, path: str, verb: str) -> list[str]:
     runtime — and the tool reported them as prose edits. Anything a client can
     observe gets named here; only genuine prose edits fall through to "docs only".
     """
-    lo = spec_query_index(old).get((verb, normalise(path)))
-    ln = spec_query_index(new).get((verb, normalise(path)))
+    old_q = spec_query_index(old) if old_q is None else old_q
+    new_q = spec_query_index(new) if new_q is None else new_q
+    lo = old_q.get((verb, normalise(path)))
+    ln = new_q.get((verb, normalise(path)))
     oop = old["paths"][path][verb.lower()]
     nop = new["paths"][path][verb.lower()]
     out: list[str] = []
@@ -549,6 +586,7 @@ def cmd_spec_diff(args) -> int:
             print(f"   {p}")
 
     changed, breaking = [], 0
+    old_q, new_q = spec_query_index(old), spec_query_index(new)
     for p in sorted(np_ & op):
         if json.dumps(old["paths"][p], sort_keys=True) == json.dumps(new["paths"][p], sort_keys=True):
             continue
@@ -559,7 +597,8 @@ def cmd_spec_diff(args) -> int:
         if oo - nn:
             lines.append("-verbs " + ", ".join(sorted(oo - nn)))
         for verb in sorted(oo & nn):
-            lines += [f"{verb} {d}" for d in diff_operation(old, new, p, verb)]
+            lines += [f"{verb} {d}"
+                      for d in diff_operation(old, new, p, verb, old_q, new_q)]
         breaking += sum(1 for ln in lines if "~response" in ln or ln.startswith("-verbs"))
         changed.append(f"   {p}" + ("\n" + "\n".join(f"       {ln}" for ln in lines) if lines
                                     else "  (docs only)"))
@@ -729,16 +768,22 @@ def normalise_type(t: str, lang: str) -> str:
     t = t.lstrip("*&").replace(" | null", "").replace(" | undefined", "")
     t = re.sub(r"\s*\|\s*None$", "", t)
     t = t.rstrip("?")
+    # The escape hatches come FIRST. `byte[]` and `[]byte` are whole-blob
+    # returns, but they also match the array patterns below, so testing shape
+    # first turned every binary endpoint into an `array<byte>` and graded it a
+    # SHAPE MISMATCH against the spec's object — a hard error, exit 1, on code
+    # that is correct. Nothing in UNTYPED is a real list, so this cannot mask
+    # `list[dict[str, Any]]`, which is not in the table.
+    if t in NO_RETURN.get(lang, set()):
+        return "none"
+    if t in UNTYPED.get(lang, set()):
+        return "?"
     for arr in (r"^List<(.+)>$", r"^IReadOnlyList<(.+)>$", r"^\[\](.+)$",
                 r"^list\[(.+)\]$", r"^List\[(.+)\]$", r"^(.+)\[\]$"):
         m = re.match(arr, t)
         if m:
             return f"array<{normalise_type(m.group(1), lang)}>"
-    if t in NO_RETURN.get(lang, set()):
-        return "none"
-    if t in UNTYPED.get(lang, set()):
-        return "?"
-    return strip_generated_prefix(t.lstrip("*"))
+    return strip_generated_prefix(t)
 
 
 def block_return(body: str, cfg: dict) -> str | None:
@@ -771,11 +816,22 @@ def block_return(body: str, cfg: dict) -> str | None:
 
 def cmd_returns(args) -> int:
     repo = Path(args.repo).resolve()
+    if repo.name in NOT_APPLICABLE:
+        print(f"{repo.name}: not applicable — {NOT_APPLICABLE[repo.name]}")
+        return 0
     lang = args.lang or detect_lang(repo)
+    if not lang:
+        die(f"cannot detect SDK language in {repo}")
     cfg = LANGS[lang]
     if "return_re" not in cfg and "return_head_re" not in cfg:
         print(f"{repo.name} [{lang}] — return types are not declared; nothing to check.")
         return 0
+    files = source_files(repo, cfg)
+    if not files:
+        # Silence here is a false pass: no sources means no methods means
+        # "nothing disagrees with the spec", which is what a mis-pointed repo
+        # argument looks like.
+        die(f"no client sources found for {lang} in {repo}")
     spec = load_spec(args.rev, args.spec, repo)
 
     want: dict[tuple[str, str], str] = {}
@@ -790,7 +846,7 @@ def cmd_returns(args) -> int:
                     break
 
     mismatched, renamed, untyped, n = [], [], [], 0
-    for path in source_files(repo, cfg):
+    for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
         for mname, body in method_blocks(text, cfg["method_re"], cfg.get("boundary_re")):
             if mname in cfg.get("skip", set()):
@@ -858,30 +914,19 @@ def public_surface(text: str, cfg: dict) -> dict[str, set[tuple[str, str]]]:
     both allow overloads/variants under one name."""
     out: dict[str, set[tuple[str, str]]] = {}
     order = cfg["sig_groups"]
+
+    def norm(x: str | None) -> str:
+        return " ".join((x or "").split())
+
     for m in re.finditer(cfg["sig_re"], text, re.S):
         parts = dict(zip(order, m.groups()))
-        norm = lambda x: " ".join((x or "").split())
         out.setdefault(norm(parts["name"]), set()).add((norm(parts["ret"]), norm(parts["params"])))
     return out
 
 
 
-def _params(sig: str) -> list[str]:
-    """Split a parameter list, ignoring nesting inside generics and defaults."""
-    out, depth, cur = [], 0, ""
-    for ch in sig:
-        if ch in "<([{":
-            depth += 1
-        elif ch in ">)]}":
-            depth -= 1
-        if ch == "," and depth == 0:
-            out.append(cur.strip())
-            cur = ""
-        else:
-            cur += ch
-    if cur.strip():
-        out.append(cur.strip())
-    return [p for p in out if p and p != "*"]
+# Kept as an alias: the tests and the older call sites name it `_params`.
+_params = split_args
 
 
 def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str]) -> tuple[str, str]:
@@ -897,8 +942,14 @@ def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str]) -> tu
     old_ret, old_par = old
     new_ret, new_par = new
     if old_par != new_par:
-        op, np_ = _params(old_par), _params(new_par)
-        added_optional = (np_[:len(op)] == op
+        op, np_ = split_args(old_par), split_args(new_par)
+        # `len(np_) > len(op)` matters: `split_args` drops Python's bare `*`, so
+        # `f(self, a, b)` -> `f(self, a, *, b)` yields two IDENTICAL lists, the
+        # empty tail passes `all()` vacuously, and making a parameter
+        # keyword-only — which breaks every positional caller — was graded
+        # "optional parameters added — source compatible".
+        added_optional = (len(np_) > len(op)
+                          and np_[:len(op)] == op
                           and all("=" in a for a in np_[len(op):]))
         if added_optional:
             if lang == "csharp":
@@ -937,11 +988,26 @@ def cmd_surface(args) -> int:
     verify_rev(repo, args.rev)
 
     files = source_files(repo, cfg)
+    if not files:
+        die(f"no client sources found for {lang} in {repo}")
     rel = [str(f.relative_to(repo)) for f in files]
-    old_text = "".join(
-        subprocess.run(["git", "-C", str(repo), "show", f"{args.rev}:{r}"],
-                       capture_output=True, text=True).stdout for r in rel)
-    new_text = "".join(f.read_text(encoding="utf-8", errors="replace") for f in files)
+    # `verify_rev` proves the rev resolves; it does not prove the sources existed
+    # under these paths back then. A rename since the tag makes every `git show`
+    # fail, and swallowing that yields an empty baseline — zero removed, zero
+    # changed, "no breaking change" — the same confident wrong answer one level
+    # down. Joined with newlines so the last line of one file cannot merge with
+    # the first line of the next.
+    old_parts = []
+    for r in rel:
+        p = subprocess.run(["git", "-C", str(repo), "show", f"{args.rev}:{r}"],
+                           capture_output=True, text=True)
+        if p.returncode == 0:
+            old_parts.append(p.stdout)
+    if not old_parts:
+        die(f"none of the client sources exist at {args.rev} in {repo.name} "
+            f"({', '.join(rel)}) — were they renamed since the tag?")
+    old_text = "\n".join(old_parts)
+    new_text = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in files)
 
     old, new = public_surface(old_text, cfg), public_surface(new_text, cfg)
     removed = sorted(set(old) - set(new))
@@ -1008,17 +1074,28 @@ def git_location(spec: Path, fallback: Path) -> tuple[Path, str]:
     the file's own directory silently fails. seclai-csharp bundles no spec and
     is always audited with --spec pointing into seclai-python, so this is the
     normal case, not the edge case.
+
+    A RELATIVE path is resolved against `fallback` first, exactly as `load_spec`
+    resolves it. `--spec ../seclai-python/openapi/seclai.openapi.json` is the
+    form `load_spec`'s own error message recommends, and treating it as
+    repo-root-relative sent `git show` looking for `../seclai-python/...` inside
+    seclai-csharp, so `models --since` died on the one workflow it exists for.
     """
-    if not spec.is_absolute():
+    full = spec if spec.is_absolute() else (fallback / spec)
+    if not full.exists():
+        # Nothing on disk to locate; assume repo-root-relative, as before.
         return fallback, str(spec)
     try:
         top = subprocess.check_output(
-            ["git", "-C", str(spec.parent), "rev-parse", "--show-toplevel"],
+            ["git", "-C", str(full.parent), "rev-parse", "--show-toplevel"],
             stderr=subprocess.DEVNULL, text=True).strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
-        die(f"{spec} is not inside a git work tree; --since needs one")
+        die(f"{full} is not inside a git work tree; --since needs one")
     root = Path(top)
-    return root, str(spec.resolve().relative_to(root.resolve()))
+    try:
+        return root, str(full.resolve().relative_to(root.resolve()))
+    except ValueError:
+        die(f"{full} resolves outside its own work tree {root}; --since cannot read it")
 
 
 def spec_schema_index(spec: dict) -> dict[str, list[tuple[str, set[str]]]]:
@@ -1037,7 +1114,14 @@ def spec_schema_index(spec: dict) -> dict[str, list[tuple[str, set[str]]]]:
 
 def cmd_models(args) -> int:
     repo = Path(args.repo).resolve()
+    if repo.name in NOT_APPLICABLE:
+        print(f"{repo.name}: not applicable — {NOT_APPLICABLE[repo.name]}")
+        return 0
     lang = args.lang or detect_lang(repo)
+    if not lang:
+        # `MODEL_LANGS.get(None)` is None, so without this an undetectable repo
+        # printed "models are generated; nothing to check" and exited 0.
+        die(f"cannot detect SDK language in {repo}")
     cfg = MODEL_LANGS.get(lang)
     if not cfg:
         print(f"{repo.name} [{lang}] — models are generated; nothing to check by hand.")

@@ -32,8 +32,8 @@ MARKER = "<!-- sdksync:check -->"
 SCRATCH = ".doccheck"
 
 LANGS = {
-    "javascript": {"detect": "src/client.ts", "fence": "ts"},
-    "go": {"detect": "client.go", "fence": "go"},
+    "javascript": {"detect": "src/client.ts", "fence": "ts", "tool": "npx"},
+    "go": {"detect": "client.go", "fence": "go", "tool": "go"},
 }
 
 
@@ -64,6 +64,8 @@ def check_javascript(repo: Path, marked: list[tuple[int, str]]) -> list[str]:
     scratch = repo / SCRATCH
     shutil.rmtree(scratch, ignore_errors=True)
     scratch.mkdir()
+    # (README line of the fence, number of lines prepended before the body).
+    origin: list[tuple[int, int]] = []
     try:
         for i, (line, body) in enumerate(marked):
             parts = []
@@ -72,7 +74,9 @@ def check_javascript(repo: Path, marked: list[tuple[int, str]]) -> list[str]:
             if not re.search(r"\b(const|let|var)\s+client\b", body):
                 parts.append("declare const client: Seclai;")
             # Wrapped so top-level `await` is legal in a fragment.
-            parts += ["export async function _example() {", body, "}"]
+            parts.append("export async function _example() {")
+            origin.append((line, len(parts)))
+            parts += [body, "}"]
             (scratch / f"ex{i}.ts").write_text("\n".join(parts))
 
         r = subprocess.run(
@@ -84,13 +88,21 @@ def check_javascript(repo: Path, marked: list[tuple[int, str]]) -> list[str]:
             cwd=repo, capture_output=True, text=True)
         if r.returncode == 0:
             return []
-        # Map "ex3.ts(12,5): error ..." back to a README line number.
+        # Map "ex3.ts(12,5): error ..." back to a README line number. SCRATCH is
+        # escaped because it starts with a `.`, which as a regex metachar would
+        # match any character. The tsc line number is used rather than discarded:
+        # without it every error in a fence pointed at the fence header, so a
+        # 30-line example gave the reader one line number for all of them.
+        pat = re.compile(rf"^{re.escape(SCRATCH)}/ex(\d+)\.ts\((\d+),\d+\):\s*(.*)$")
         out = []
         for ln in (r.stdout + r.stderr).splitlines():
-            m = re.match(rf"{SCRATCH}/ex(\d+)\.ts\((\d+),", ln)
+            m = pat.match(ln)
             if m:
-                readme_line = marked[int(m.group(1))][0]
-                out.append(f"README.md:{readme_line} — {ln.split('): ', 1)[-1]}")
+                readme_line, prefix = origin[int(m.group(1))]
+                # Body line 1 sits at generated line prefix+1 and at README line
+                # readme_line+1, so the two differ by exactly `prefix`.
+                out.append(f"README.md:{max(readme_line, readme_line + int(m.group(2)) - prefix)}"
+                           f" — {m.group(3)}")
             elif ln.strip():
                 out.append(ln)
         return out
@@ -114,19 +126,48 @@ def check_go(repo: Path, marked: list[tuple[int, str]]) -> list[str]:
         if (repo / "go.sum").exists():
             shutil.copy(repo / "go.sum", scratch / "go.sum")
 
-        body = "\n\n".join(f"func _example{i}() {{\n{b}\n}}" for i, (_l, b) in enumerate(marked))
-        (scratch / "main.go").write_text(
-            "package main\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n"
-            f"\t\"{module.group(1)}\"\n)\n\n"
-            "var (\n\tctx = context.Background()\n\t_   = fmt.Sprint\n"
-            f"\tclient, _ = seclai.NewClient(seclai.Options{{APIKey: \"k\"}})\n)\n\n"
-            f"{body}\n\nfunc main() {{}}\n")
+        # Every example goes into one file, so remember where each body landed.
+        # `go build` reports `./main.go:42:3: ...` and the finally block deletes
+        # main.go, so an unmapped diagnostic points the reader at a file that no
+        # longer exists. (first generated line, last generated line, README line)
+        text = ("package main\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n"
+                f"\t\"{module.group(1)}\"\n)\n\n"
+                "var (\n\tctx = context.Background()\n\t_   = fmt.Sprint\n"
+                f"\tclient, _ = seclai.NewClient(seclai.Options{{APIKey: \"k\"}})\n)\n\n")
+        spans: list[tuple[int, int, int]] = []
+        for i, (line, b) in enumerate(marked):
+            if i:
+                text += "\n\n"
+            text += f"func _example{i}() {{\n"
+            first = text.count("\n") + 1
+            text += f"{b}\n"
+            spans.append((first, text.count("\n"), line))
+            text += "}"
+        text += "\n\nfunc main() {}\n"
+        (scratch / "main.go").write_text(text)
 
         subprocess.run(["go", "mod", "tidy"], cwd=scratch,
                        capture_output=True, text=True)
         r = subprocess.run(["go", "build", "./..."], cwd=scratch,
                            capture_output=True, text=True)
-        return [] if r.returncode == 0 else (r.stdout + r.stderr).splitlines()
+        if r.returncode == 0:
+            return []
+        pat = re.compile(r"^\.?/?main\.go:(\d+):(?:\d+:)?\s*(.*)$")
+        out = []
+        for ln in (r.stdout + r.stderr).splitlines():
+            m = pat.match(ln.strip())
+            if not m:
+                if ln.strip():
+                    out.append(ln)
+                continue
+            gen = int(m.group(1))
+            hit = next(((f, la, rl) for f, la, rl in spans if f <= gen <= la), None)
+            if hit is None:
+                out.append(ln)
+            else:
+                first, _last, readme_line = hit
+                out.append(f"README.md:{readme_line + gen - first + 1} — {m.group(2)}")
+        return out
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
@@ -167,6 +208,12 @@ def main() -> int:
     if not marked:
         print(f"{repo.name} [{lang}] — no fences marked with {MARKER}; nothing to check")
         return 0
+
+    # The docstring promises this "only runs where that toolchain exists"; say so
+    # instead of letting subprocess raise FileNotFoundError at the reader.
+    tool = LANGS[lang]["tool"]
+    if not shutil.which(tool):
+        die(f"{tool} is not on PATH; `docexamples check` needs the {lang} toolchain")
 
     problems = CHECKERS[lang](repo, marked)
     print(f"{repo.name} [{lang}] — compiled {len(marked)} marked fence(s)")
