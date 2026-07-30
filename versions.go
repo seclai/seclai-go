@@ -2,10 +2,14 @@ package seclai
 
 // Dated API versions known to this release, for use with [Options.APIVersion].
 //
-// The set is open: the API adds versions without an SDK release, and
-// Options.APIVersion is a plain string, so a date newer than this release knows
-// about can be passed directly. Treat these as convenience constants rather than
-// an exhaustive list — [Client.GetAPIVersion] reports what the server supports.
+// The type stays a plain string so the API can add versions without an SDK
+// release, but [NewClient] rejects a version this release was not built against:
+// a newer one can reshape responses that this client would decode incorrectly
+// rather than reject. Upgrade the module to adopt a new version, or set
+// Options.AllowUnknownAPIVersion to move first and accept that risk.
+//
+// Treat these as what this release understands, not as everything the server
+// offers — [Client.GetAPIVersion] reports the latter.
 const (
 	// APIVersion20260701 is the 2026-07-01 API version.
 	APIVersion20260701 = "2026-07-01"

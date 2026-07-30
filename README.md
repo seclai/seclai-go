@@ -371,7 +371,8 @@ _ = client.MarkAgentAiSuggestion(ctx, "agent_id", "conversation_id", seclai.Mark
 
 ```go
 criteria, _ := client.ListEvaluationCriteria(ctx, "agent_id", seclai.ListOptions{Page: 1, Limit: 50})
-// ListEvaluationCriteriaPage returns the same items plus Total/Page/Limit.
+// ListEvaluationCriteriaPage returns the same items plus a Pagination field,
+// which is nil until you opt in with APIVersion 2026-07-27 or later.
 created, _ := client.CreateEvaluationCriteria(ctx, "agent_id", seclai.CreateEvaluationCriteriaRequest{})
 detail, _ := client.GetEvaluationCriteria(ctx, "criteria_id")
 _, _ = client.UpdateEvaluationCriteria(ctx, "criteria_id", seclai.UpdateEvaluationCriteriaRequest{})

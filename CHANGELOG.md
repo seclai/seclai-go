@@ -23,6 +23,9 @@
 
 ### Fixed
 
+- Read the canonical key by presence rather than length in `AlertConfigListResponse.Items()` and `ModelAlertListResponse.Items()`. An empty canonical page (`{"data": []}`) fell through to the legacy key and reported the wrong list
+- Validate a `Seclai-Version` supplied through `Options.DefaultHeaders`, not just `Options.APIVersion`. `DefaultHeaders` is applied last so it wins, which left the unknown-version guard one header away from being bypassed; a differently-cased key also emitted two wire headers
+- Return an error from `GetAgentAiConversationHistoryWithOptions` when `StepType` is empty, rather than omitting the parameter and deferring to a 422 naming the wire parameter
 - Decode either wire shape in `ListRunEvaluationResults`. The endpoint answers with a bare array, which the declared envelope type could not read, so the method returned nothing; it now also reads the canonical `{data, pagination}` envelope. `ListAgentEvaluationResults` is genuinely flat and is unaffected
 - Paginate `ListModelAlerts` with the `offset` the endpoint declares instead of `page`, which it does not accept — every page after the first returned page 1
 - Request `GET /sources` rather than `GET /sources/`. The trailing-slash form is no longer declared by the API

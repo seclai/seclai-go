@@ -2596,3 +2596,118 @@ func TestAPIVersion_KnownNeedsNoEscapeHatch(t *testing.T) {
 		t.Fatalf("a known version must be accepted: %v", err)
 	}
 }
+
+func TestNewClient_VersionGuardCannotBeBypassedViaDefaultHeaders(t *testing.T) {
+	// DefaultHeaders is applied last so it wins, which means it can carry a
+	// Seclai-Version. Validating only Options.APIVersion left the guard one
+	// header away from being bypassed.
+	_, err := NewClient(Options{
+		APIKey:         "k",
+		DefaultHeaders: map[string]string{"Seclai-Version": "2099-01-01"},
+	})
+	if err == nil {
+		t.Fatal("expected an unknown version in DefaultHeaders to be rejected")
+	}
+	if !strings.Contains(err.Error(), "2099-01-01") || !strings.Contains(err.Error(), "DefaultHeaders") {
+		t.Fatalf("error should name the version and its source, got: %v", err)
+	}
+
+	// Case-insensitively, since header names are.
+	if _, err := NewClient(Options{
+		APIKey:         "k",
+		DefaultHeaders: map[string]string{"seclai-version": "2099-01-01"},
+	}); err == nil {
+		t.Fatal("expected a lowercase header key to be caught too")
+	}
+
+	// The escape hatch still covers the header form.
+	if _, err := NewClient(Options{
+		APIKey:                 "k",
+		DefaultHeaders:         map[string]string{"Seclai-Version": "2099-01-01"},
+		AllowUnknownAPIVersion: true,
+	}); err != nil {
+		t.Fatalf("escape hatch should permit it: %v", err)
+	}
+}
+
+func TestNewClient_DefaultHeaderOverridesRatherThanDuplicating(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Values("Seclai-Version")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{
+		APIKey: "k", BaseURL: srv.URL,
+		APIVersion:     APIVersion20260701,
+		DefaultHeaders: map[string]string{"seclai-version": APIVersion20260727},
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := c.ListAgents(context.Background(), ListOptions{}); err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if len(seen) != 1 || seen[0] != APIVersion20260727 {
+		t.Fatalf("expected exactly the caller's value on the wire, got %v", seen)
+	}
+}
+
+func TestClient_ConversationHistory_RequiresStepType(t *testing.T) {
+	// Omitting it only drops the parameter and defers to a 422 naming the wire
+	// parameter — the failure this method exists to avoid.
+	c, _ := NewClient(Options{APIKey: "k"})
+	if _, err := c.GetAgentAiConversationHistoryWithOptions(
+		context.Background(), "a_1", AiConversationHistoryOptions{}); err == nil {
+		t.Fatal("expected a missing StepType to be rejected")
+	} else if !strings.Contains(err.Error(), "StepType") {
+		t.Fatalf("error should name the field, got: %v", err)
+	}
+}
+
+func TestItems_EmptyCanonicalPageIsNotMistakenForTheLegacyKey(t *testing.T) {
+	// `{"data": []}` is a valid empty page. Deciding by len() rather than
+	// presence fell through to the legacy key, so an empty canonical page
+	// reported whatever the legacy field held — and the existing tests never
+	// caught it because they all used non-empty lists.
+	var cfg AlertConfigListResponse
+	if err := json.Unmarshal([]byte(`{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`), &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.Items() == nil || len(cfg.Items()) != 0 {
+		t.Fatalf("expected the empty canonical page, got %+v", cfg.Items())
+	}
+	if cfg.Pagination == nil || cfg.Pagination.Limit != 20 {
+		t.Fatalf("pagination should survive an empty page, got %+v", cfg.Pagination)
+	}
+
+	var alerts ModelAlertListResponse
+	if err := json.Unmarshal([]byte(`{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`), &alerts); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if alerts.Items() == nil || len(alerts.Items()) != 0 {
+		t.Fatalf("expected the empty canonical page, got %+v", alerts.Items())
+	}
+}
+
+func TestItems_LegacyKeyStillWinsWhenCanonicalIsAbsent(t *testing.T) {
+	// Guard the over-correction: with no `data` key at all the legacy list must
+	// still be returned.
+	var cfg AlertConfigListResponse
+	if err := json.Unmarshal([]byte(`{"configs":[{}],"total":1}`), &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(cfg.Items()) != 1 {
+		t.Fatalf("expected the legacy list, got %+v", cfg.Items())
+	}
+
+	var alerts ModelAlertListResponse
+	if err := json.Unmarshal([]byte(`{"alerts":[{}],"total":1}`), &alerts); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(alerts.Items()) != 1 {
+		t.Fatalf("expected the legacy list, got %+v", alerts.Items())
+	}
+}

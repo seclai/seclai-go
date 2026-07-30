@@ -129,13 +129,24 @@ func NewClient(opts Options) (*Client, error) {
 	}
 	state.httpClient = hc
 
-	if opts.APIVersion != "" && !opts.AllowUnknownAPIVersion && !isKnownAPIVersion(opts.APIVersion) {
+	// DefaultHeaders is applied last so an explicit entry wins, which means it
+	// can also carry a Seclai-Version. Validate whichever value actually reaches
+	// the wire, not just the option — otherwise the guard is one header away
+	// from being bypassed.
+	effectiveVersion, versionSource := opts.APIVersion, "Options.APIVersion"
+	for k, v := range opts.DefaultHeaders {
+		if strings.EqualFold(k, "Seclai-Version") {
+			effectiveVersion, versionSource = v, `Options.DefaultHeaders["Seclai-Version"]`
+			break
+		}
+	}
+	if effectiveVersion != "" && !opts.AllowUnknownAPIVersion && !isKnownAPIVersion(effectiveVersion) {
 		return nil, &ConfigurationError{Message: fmt.Sprintf(
-			"unknown APIVersion %q: this release was built against %s. A newer API "+
-				"version can change response shapes, which this client would decode "+
-				"incorrectly rather than reject. Upgrade the module, or set "+
+			"unknown API version %q (via %s): this release was built against %s. A "+
+				"newer API version can change response shapes, which this client would "+
+				"decode incorrectly rather than reject. Upgrade the module, or set "+
 				"Options.AllowUnknownAPIVersion to proceed anyway.",
-			opts.APIVersion, strings.Join(KnownAPIVersions, ", "))}
+			effectiveVersion, versionSource, strings.Join(KnownAPIVersions, ", "))}
 	}
 
 	defHeaders := make(map[string]string, len(opts.DefaultHeaders)+1)
@@ -145,6 +156,12 @@ func NewClient(opts Options) (*Client, error) {
 		defHeaders["Seclai-Version"] = opts.APIVersion
 	}
 	for k, v := range opts.DefaultHeaders {
+		// Drop a differently-cased duplicate so only one value reaches the wire.
+		for existing := range defHeaders {
+			if strings.EqualFold(existing, k) && existing != k {
+				delete(defHeaders, existing)
+			}
+		}
 		defHeaders[k] = v
 	}
 
@@ -675,6 +692,14 @@ func (c *Client) GetAgentAiConversationHistory(ctx context.Context, agentID stri
 //
 // StepType is required by the API — the endpoint answers 422 without it.
 func (c *Client) GetAgentAiConversationHistoryWithOptions(ctx context.Context, agentID string, opts AiConversationHistoryOptions) (*AiConversationHistoryResponse, error) {
+	// Leaving StepType empty only means the parameter is omitted and the server
+	// answers 422 naming the wire parameter, which is the failure this method
+	// exists to avoid. Fail here instead, naming the field.
+	if opts.StepType == "" {
+		return nil, &ConfigurationError{
+			Message: `AiConversationHistoryOptions.StepType is required by the API; set e.g. StepType: "llm"`,
+		}
+	}
 	q := map[string]string{}
 	if opts.StepType != "" {
 		q["step_type"] = opts.StepType
@@ -728,10 +753,10 @@ func (c *Client) ListEvaluationCriteria(ctx context.Context, agentID string, opt
 // ListEvaluationCriteriaPage lists evaluation criteria for an agent with
 // pagination metadata.
 //
-// Either wire shape is accepted: the endpoint answered with a bare array before
-// 2026-07 and with a paginated envelope after, so a client that decodes only one
-// breaks the day the other ships. Total, Page and Limit are zero when the
-// endpoint answers with a bare array.
+// Either wire shape is accepted: the endpoint answers with a bare array by
+// default and the canonical {data, pagination} envelope once Options.APIVersion
+// is 2026-07-27 or later, so a client that decodes only one breaks the day the
+// other arrives. Pagination is nil on the bare-array shape.
 func (c *Client) ListEvaluationCriteriaPage(ctx context.Context, agentID string, opts ListOptions) (*EvaluationCriteriaListResponse, error) {
 	var raw json.RawMessage
 	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-criteria", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, nil, &raw); err != nil {

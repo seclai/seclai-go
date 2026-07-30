@@ -197,7 +197,10 @@ type AlertConfigListResponse struct {
 
 // Items returns the configurations from whichever key the response used.
 func (r AlertConfigListResponse) Items() []AlertConfigResponse {
-	if len(r.Data) > 0 {
+	// Presence, not length. An empty canonical page is `{"data": [], ...}`, which
+	// unmarshals to a non-nil empty slice; testing len() would fall through to
+	// the legacy key and report the legacy list for a perfectly valid empty page.
+	if r.Data != nil {
 		return r.Data
 	}
 	return r.Configs
@@ -221,7 +224,8 @@ type ModelAlertListResponse struct {
 
 // Items returns the alerts from whichever key the response used.
 func (r ModelAlertListResponse) Items() []ModelAlertResponse {
-	if len(r.Data) > 0 {
+	// Presence, not length — see AlertConfigListResponse.Items.
+	if r.Data != nil {
 		return r.Data
 	}
 	return r.Alerts
