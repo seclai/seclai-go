@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -112,7 +114,7 @@ func TestClient_RunStreamingAgentAndWait_Timeout(t *testing.T) {
 
 func TestGeneratedClient_ListSources_SetsAuthAndDecodes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/sources/" {
+		if r.URL.Path != "/sources" {
 			w.WriteHeader(404)
 			return
 		}
@@ -464,7 +466,7 @@ func TestClient_UploadFileToContent_Multipart(t *testing.T) {
 
 func TestClient_ListSources_PathMatchesSpec(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/sources/" {
+		if r.URL.Path != "/sources" {
 			w.WriteHeader(404)
 			return
 		}
@@ -2125,5 +2127,587 @@ func TestClient_SearchDocs(t *testing.T) {
 	}
 	if len(got) == 0 {
 		t.Fatal("expected payload")
+	}
+}
+
+func TestClient_Search_RequiresQuery(t *testing.T) {
+	// `q` is required by the spec. Silently omitting it produced a 422 whose
+	// message named the wire parameter rather than the field the caller set.
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: "http://127.0.0.1:1"})
+	if _, err := c.Search(context.Background(), SearchOptions{}); err == nil {
+		t.Fatal("expected an error when Query is empty")
+	}
+	if _, err := c.SearchDocs(context.Background(), DocsSearchOptions{}); err == nil {
+		t.Fatal("expected an error when Query is empty")
+	}
+}
+
+func TestClient_ListEvaluationCriteria_ReturnsPaginatedEnvelope(t *testing.T) {
+	// The endpoint returned a bare array until 2026-07. Nothing covered this
+	// method, so the switch to a paginated envelope broke it silently: the
+	// client kept decoding into []EvaluationCriteriaResponse and got nothing.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/a_1/evaluation-criteria" {
+			w.WriteHeader(404)
+			return
+		}
+		if r.URL.Query().Get("page") != "2" || r.URL.Query().Get("limit") != "25" {
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[{"id":"3f1a0d6e-0000-4000-8000-000000000009"}],`+
+			`"pagination":{"page":2,"limit":25,"total":7,"pages":1,"has_next":false,"has_prev":true}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.ListEvaluationCriteriaPage(context.Background(), "a_1", ListOptions{Page: 2, Limit: 25})
+	if err != nil {
+		t.Fatalf("ListEvaluationCriteriaPage: %v", err)
+	}
+	if len(got.Data) != 1 || got.Data[0].Id.String() != "3f1a0d6e-0000-4000-8000-000000000009" {
+		t.Fatalf("unexpected data: %+v", got.Data)
+	}
+	if got.Pagination == nil {
+		t.Fatal("expected the canonical envelope to carry pagination")
+	}
+	if got.Pagination.Total != 7 || got.Pagination.Page != 2 || got.Pagination.Limit != 25 {
+		t.Fatalf("unexpected pagination: %+v", *got.Pagination)
+	}
+}
+
+func TestClient_ListEvaluationCriteria_AcceptsABareArray(t *testing.T) {
+	// The envelope is merged on main but not deployed, so both shapes are live
+	// realities. Decoding only one breaks the client the day the other ships.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/agents/a_1/evaluation-criteria" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `[{"id":"3f1a0d6e-0000-4000-8000-000000000009"}]`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.ListEvaluationCriteria(context.Background(), "a_1", ListOptions{})
+	if err != nil {
+		t.Fatalf("ListEvaluationCriteria: %v", err)
+	}
+	if len(got) != 1 || got[0].Id.String() != "3f1a0d6e-0000-4000-8000-000000000009" {
+		t.Fatalf("unexpected data: %+v", got)
+	}
+}
+
+func TestClient_APIVersionHeader_OmittedUnlessOptedIn(t *testing.T) {
+	// The point of the option: upgrading the SDK must not silently move an
+	// account onto a newer API version and change response shapes.
+	var seen string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Get("Seclai-Version")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if _, err := c.ListAgents(context.Background(), ListOptions{}); err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if seen != "" {
+		t.Fatalf("expected no Seclai-Version header, got %q", seen)
+	}
+}
+
+func TestClient_APIVersionHeader_SentWhenSet(t *testing.T) {
+	var seen string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Get("Seclai-Version")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL, APIVersion: "2026-07-27"})
+	if _, err := c.ListAgents(context.Background(), ListOptions{}); err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if seen != "2026-07-27" {
+		t.Fatalf("expected the version header, got %q", seen)
+	}
+}
+
+func TestClient_GetAPIVersion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/version" {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"pinned_version":null,"effective_version":"2026-01-01",`+
+			`"default_version":"2026-01-01","latest_version":"2026-07-27",`+
+			`"known_versions":["2026-01-01","2026-07-27"]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.GetAPIVersion(context.Background())
+	if err != nil {
+		t.Fatalf("GetAPIVersion: %v", err)
+	}
+	if got.LatestVersion != "2026-07-27" || len(got.KnownVersions) != 2 {
+		t.Fatalf("unexpected version state: %+v", *got)
+	}
+}
+
+func TestClient_UpdateAPIVersion_SendsExplicitNullToClearThePin(t *testing.T) {
+	// null is the documented way to clear the pin, so it must reach the wire
+	// rather than being omitted as an unset field.
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/version" {
+			w.WriteHeader(404)
+			return
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"pinned_version":null,"effective_version":"2026-01-01",`+
+			`"default_version":"2026-01-01","latest_version":"2026-07-27","known_versions":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if _, err := c.UpdateAPIVersion(context.Background(), nil); err != nil {
+		t.Fatalf("UpdateAPIVersion: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected exactly the version field, got %v", body)
+	}
+	if v, ok := body["version"]; !ok || v != nil {
+		t.Fatalf("expected an explicit null version, got %v", body)
+	}
+}
+
+func TestClient_ListAlerts_DoesNotSendSeverity(t *testing.T) {
+	// GET /alerts declares no severity filter: it never filtered anything, and
+	// sending it is a 422 once Options.APIVersion is 2026-07-27 or later.
+	var query url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if _, err := c.ListAlerts(context.Background(), ListAlertsOptions{Severity: "high"}); err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if query.Has("severity") {
+		t.Fatalf("severity must not reach the wire, got %v", query)
+	}
+}
+
+func TestClient_ListModelAlerts_TranslatesPageToOffset(t *testing.T) {
+	// The endpoint declares limit/offset, not page, so page 2 used to return
+	// page 1.
+	var query url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if _, err := c.ListModelAlerts(context.Background(), ListOptions{Page: 3, Limit: 25}); err != nil {
+		t.Fatalf("ListModelAlerts: %v", err)
+	}
+	if query.Get("offset") != "50" || query.Get("limit") != "25" || query.Has("page") {
+		t.Fatalf("expected offset=50&limit=25 with no page, got %v", query)
+	}
+}
+
+func TestClient_GetAgentAiConversationHistoryWithOptions_SendsStepType(t *testing.T) {
+	// step_type is required by the API and the original signature could not
+	// supply it, so every call answered 422.
+	var query url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"turns":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if _, err := c.GetAgentAiConversationHistoryWithOptions(context.Background(), "a_1",
+		AiConversationHistoryOptions{StepType: "llm", Limit: 5}); err != nil {
+		t.Fatalf("GetAgentAiConversationHistoryWithOptions: %v", err)
+	}
+	if query.Get("step_type") != "llm" || query.Get("limit") != "5" {
+		t.Fatalf("expected step_type and limit on the wire, got %v", query)
+	}
+}
+
+func TestClient_ListRunEvaluationResults_ReadsCanonicalPagination(t *testing.T) {
+	// The run-level endpoint is version-gated to {data, pagination}. Reading
+	// only the flat total/page/limit reported 0 for every opted-in caller.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"pagination":{"page":2,"limit":25,"total":7,`+
+			`"pages":1,"has_next":false,"has_prev":true}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL, APIVersion: "2026-07-27"})
+	got, err := c.ListRunEvaluationResults(context.Background(), "a_1", "r_1", ListOptions{Page: 2, Limit: 25})
+	if err != nil {
+		t.Fatalf("ListRunEvaluationResults: %v", err)
+	}
+	if got.Pagination == nil || got.Pagination.Total != 7 {
+		t.Fatalf("expected canonical pagination, got %+v", got)
+	}
+}
+
+func TestClient_ListAgentEvaluationResults_StillReadsTheFlatShape(t *testing.T) {
+	// The agent-level endpoint is not version-gated and stays flat, so the
+	// shared type must keep serving both.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"total":7,"page":2,"limit":25}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.ListAgentEvaluationResults(context.Background(), "a_1", ListOptions{Page: 2, Limit: 25})
+	if err != nil {
+		t.Fatalf("ListAgentEvaluationResults: %v", err)
+	}
+	if got.Total != 7 || got.Pagination != nil {
+		t.Fatalf("expected the flat shape, got %+v", got)
+	}
+}
+
+func TestClient_ListAlerts_DecodesTypedEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[{"id":"3f1a0d6e-0000-4000-8000-00000000000a","title":"Disk full"}],`+
+			`"pagination":{"page":1,"limit":20,"total":1,"pages":1,"has_next":false,"has_prev":false}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.Typed().ListAlerts(context.Background(), ListAlertsOptions{})
+	if err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if len(got.Data) != 1 || got.Data[0].Title != "Disk full" {
+		t.Fatalf("unexpected alerts: %+v", got.Data)
+	}
+	if got.Pagination.Total != 1 {
+		t.Fatalf("unexpected pagination: %+v", got.Pagination)
+	}
+}
+
+func TestClient_ListAlertConfigs_ReadsEitherTopLevelKey(t *testing.T) {
+	// "configs" by default, "data" once opted in. Items papers over the flip.
+	for _, tc := range []struct{ name, body string }{
+		{"legacy", `{"configs":[{"id":"3f1a0d6e-0000-4000-8000-00000000000b"}],"total":1}`},
+		{"canonical", `{"data":[{"id":"3f1a0d6e-0000-4000-8000-00000000000b"}],` +
+			`"pagination":{"page":1,"limit":20,"total":1,"pages":1,"has_next":false,"has_prev":false}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			t.Cleanup(srv.Close)
+
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			got, err := c.Typed().ListAlertConfigs(context.Background(), ListOptions{})
+			if err != nil {
+				t.Fatalf("ListAlertConfigs: %v", err)
+			}
+			if len(got.Items()) != 1 {
+				t.Fatalf("expected one config from either key, got %+v", got)
+			}
+		})
+	}
+}
+
+func TestClient_ListModelAlerts_ReadsEitherTopLevelKey(t *testing.T) {
+	for _, tc := range []struct{ name, body string }{
+		{"legacy", `{"alerts":[{"id":"3f1a0d6e-0000-4000-8000-00000000000c"}],"total":1}`},
+		{"canonical", `{"data":[{"id":"3f1a0d6e-0000-4000-8000-00000000000c"}],` +
+			`"pagination":{"page":1,"limit":20,"total":1,"pages":1,"has_next":false,"has_prev":false}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			t.Cleanup(srv.Close)
+
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			got, err := c.Typed().ListModelAlerts(context.Background(), ListOptions{})
+			if err != nil {
+				t.Fatalf("ListModelAlerts: %v", err)
+			}
+			if len(got.Items()) != 1 {
+				t.Fatalf("expected one alert from either key, got %+v", got)
+			}
+		})
+	}
+}
+
+func TestTypedClient_IssuesTheSameRequestAsTheRawMethod(t *testing.T) {
+	// The façade delegates rather than rebuilding the request, so the two
+	// surfaces cannot drift. This pins that.
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.RequestURI())
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"results":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	opts := SearchOptions{Query: "hello", Limit: 5}
+	if _, err := c.Search(context.Background(), opts); err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if _, err := c.Typed().Search(context.Background(), opts); err != nil {
+		t.Fatalf("Typed().Search: %v", err)
+	}
+	if len(seen) != 2 || seen[0] != seen[1] {
+		t.Fatalf("expected identical requests, got %v", seen)
+	}
+}
+
+func TestTypedClient_SearchDecodesTheEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"results":[{"entity_type":"agent","name":"Support"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	got, err := c.Typed().Search(context.Background(), SearchOptions{Query: "support"})
+	if err != nil {
+		t.Fatalf("Typed().Search: %v", err)
+	}
+	if len(got.Results) != 1 || got.Results[0].Name != "Support" {
+		t.Fatalf("unexpected results: %+v", got.Results)
+	}
+}
+
+func TestTypedClient_RawSurfaceIsUnchanged(t *testing.T) {
+	// The point of the façade: the existing methods still hand back raw JSON,
+	// so no call site had to change.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"results":[]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	var raw json.RawMessage
+	raw, err := c.Search(context.Background(), SearchOptions{Query: "x"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(raw) == 0 {
+		t.Fatal("expected a raw body")
+	}
+}
+
+func TestAPIVersionConstants_TrackTheSpec(t *testing.T) {
+	raw, err := os.ReadFile("openapi/seclai.openapi.json")
+	if err != nil {
+		t.Fatalf("read spec: %v", err)
+	}
+	var spec struct {
+		Versions struct {
+			Default string   `json:"default"`
+			Latest  string   `json:"latest"`
+			Known   []string `json:"known"`
+		} `json:"x-seclai-versions"`
+	}
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		t.Fatalf("parse spec: %v", err)
+	}
+	if APIVersionDefault != spec.Versions.Default {
+		t.Fatalf("default: constant %q, spec %q", APIVersionDefault, spec.Versions.Default)
+	}
+	if APIVersionLatest != spec.Versions.Latest {
+		t.Fatalf("latest: constant %q, spec %q", APIVersionLatest, spec.Versions.Latest)
+	}
+	known := []string{APIVersion20260701, APIVersion20260727}
+	if len(known) != len(spec.Versions.Known) {
+		t.Fatalf("known versions: constants %v, spec %v", known, spec.Versions.Known)
+	}
+	for i, v := range spec.Versions.Known {
+		if known[i] != v {
+			t.Fatalf("known[%d]: constant %q, spec %q", i, known[i], v)
+		}
+	}
+}
+
+func TestAPIVersion_UnknownIsRejected(t *testing.T) {
+	// A newer server version can reshape responses, and this client would
+	// mis-decode them silently rather than error. Fail closed at construction.
+	_, err := NewClient(Options{APIKey: "k", APIVersion: "2099-01-01"})
+	if err == nil {
+		t.Fatal("expected an unknown APIVersion to be rejected")
+	}
+	if !strings.Contains(err.Error(), "2099-01-01") ||
+		!strings.Contains(err.Error(), "AllowUnknownAPIVersion") {
+		t.Fatalf("error should name the version and the escape hatch, got: %v", err)
+	}
+}
+
+func TestAPIVersion_UnknownIsAllowedWhenAsked(t *testing.T) {
+	var seen string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Get("Seclai-Version")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{
+		APIKey: "k", BaseURL: srv.URL,
+		APIVersion: "2099-01-01", AllowUnknownAPIVersion: true,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := c.ListAgents(context.Background(), ListOptions{}); err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if seen != "2099-01-01" {
+		t.Fatalf("expected the unknown version on the wire, got %q", seen)
+	}
+}
+
+func TestAPIVersion_KnownNeedsNoEscapeHatch(t *testing.T) {
+	if _, err := NewClient(Options{APIKey: "k", APIVersion: APIVersionLatest}); err != nil {
+		t.Fatalf("a known version must be accepted: %v", err)
+	}
+}
+
+func TestNewClient_VersionGuardCannotBeBypassedViaDefaultHeaders(t *testing.T) {
+	// DefaultHeaders is applied last so it wins, which means it can carry a
+	// Seclai-Version. Validating only Options.APIVersion left the guard one
+	// header away from being bypassed.
+	_, err := NewClient(Options{
+		APIKey:         "k",
+		DefaultHeaders: map[string]string{"Seclai-Version": "2099-01-01"},
+	})
+	if err == nil {
+		t.Fatal("expected an unknown version in DefaultHeaders to be rejected")
+	}
+	if !strings.Contains(err.Error(), "2099-01-01") || !strings.Contains(err.Error(), "DefaultHeaders") {
+		t.Fatalf("error should name the version and its source, got: %v", err)
+	}
+
+	// Case-insensitively, since header names are.
+	if _, err := NewClient(Options{
+		APIKey:         "k",
+		DefaultHeaders: map[string]string{"seclai-version": "2099-01-01"},
+	}); err == nil {
+		t.Fatal("expected a lowercase header key to be caught too")
+	}
+
+	// The escape hatch still covers the header form.
+	if _, err := NewClient(Options{
+		APIKey:                 "k",
+		DefaultHeaders:         map[string]string{"Seclai-Version": "2099-01-01"},
+		AllowUnknownAPIVersion: true,
+	}); err != nil {
+		t.Fatalf("escape hatch should permit it: %v", err)
+	}
+}
+
+func TestNewClient_DefaultHeaderOverridesRatherThanDuplicating(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Values("Seclai-Version")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{
+		APIKey: "k", BaseURL: srv.URL,
+		APIVersion:     APIVersion20260701,
+		DefaultHeaders: map[string]string{"seclai-version": APIVersion20260727},
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := c.ListAgents(context.Background(), ListOptions{}); err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if len(seen) != 1 || seen[0] != APIVersion20260727 {
+		t.Fatalf("expected exactly the caller's value on the wire, got %v", seen)
+	}
+}
+
+func TestClient_ConversationHistory_RequiresStepType(t *testing.T) {
+	// Omitting it only drops the parameter and defers to a 422 naming the wire
+	// parameter — the failure this method exists to avoid.
+	c, _ := NewClient(Options{APIKey: "k"})
+	if _, err := c.GetAgentAiConversationHistoryWithOptions(
+		context.Background(), "a_1", AiConversationHistoryOptions{}); err == nil {
+		t.Fatal("expected a missing StepType to be rejected")
+	} else if !strings.Contains(err.Error(), "StepType") {
+		t.Fatalf("error should name the field, got: %v", err)
+	}
+}
+
+func TestItems_EmptyCanonicalPageIsNotMistakenForTheLegacyKey(t *testing.T) {
+	// `{"data": []}` is a valid empty page. Deciding by len() rather than
+	// presence fell through to the legacy key, so an empty canonical page
+	// reported whatever the legacy field held — and the existing tests never
+	// caught it because they all used non-empty lists.
+	var cfg AlertConfigListResponse
+	if err := json.Unmarshal([]byte(`{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`), &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.Items() == nil || len(cfg.Items()) != 0 {
+		t.Fatalf("expected the empty canonical page, got %+v", cfg.Items())
+	}
+	if cfg.Pagination == nil || cfg.Pagination.Limit != 20 {
+		t.Fatalf("pagination should survive an empty page, got %+v", cfg.Pagination)
+	}
+
+	var alerts ModelAlertListResponse
+	if err := json.Unmarshal([]byte(`{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`), &alerts); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if alerts.Items() == nil || len(alerts.Items()) != 0 {
+		t.Fatalf("expected the empty canonical page, got %+v", alerts.Items())
+	}
+}
+
+func TestItems_LegacyKeyStillWinsWhenCanonicalIsAbsent(t *testing.T) {
+	// Guard the over-correction: with no `data` key at all the legacy list must
+	// still be returned.
+	var cfg AlertConfigListResponse
+	if err := json.Unmarshal([]byte(`{"configs":[{}],"total":1}`), &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(cfg.Items()) != 1 {
+		t.Fatalf("expected the legacy list, got %+v", cfg.Items())
+	}
+
+	var alerts ModelAlertListResponse
+	if err := json.Unmarshal([]byte(`{"alerts":[{}],"total":1}`), &alerts); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(alerts.Items()) != 1 {
+		t.Fatalf("expected the legacy list, got %+v", alerts.Items())
 	}
 }

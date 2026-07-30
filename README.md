@@ -128,6 +128,70 @@ Online API documentation (latest):
 
 https://seclai.github.io/seclai-go/latest/
 
+## API versioning
+
+The API dates its backward-incompatible changes. Nothing changes for you until
+you opt in, either per client or by pinning the account:
+
+```go
+client, _ := seclai.NewClient(seclai.Options{
+    APIKey:     "...",
+    APIVersion: seclai.APIVersion20260727, // sent as the Seclai-Version header
+})
+
+state, _ := client.GetAPIVersion(ctx)                       // what this request resolved to
+pinned := seclai.APIVersion20260727
+_, _ = client.UpdateAPIVersion(ctx, &pinned)                 // pin the whole account
+```
+
+Leave `APIVersion` empty and the header is omitted, so the account's pinned
+baseline applies and responses keep their current shapes. Upgrading this module
+alone never changes the wire contract.
+
+Known versions are package constants (`APIVersion20260701`, `APIVersion20260727`,
+plus `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
+this release was **not** built against makes `NewClient` fail: a newer version
+can reshape responses, and this client would decode them incorrectly rather than
+reject them. Upgrade the module to adopt a new version, or set
+`Options.AllowUnknownAPIVersion` if you have to move first and accept that risk.
+
+The guard only covers the header. An account pinned server-side can still be
+newer than this release — `GetAPIVersion` reports the `EffectiveVersion` the
+request resolved to, and comparing it against `APIVersionLatest` is how you
+detect the gap.
+
+**What `2026-07-27` changes.** Undeclared query parameters become a 422 instead
+of being ignored, and list endpoints move to the canonical `{data, pagination}`
+envelope. The affected methods read both shapes, so they keep working either way
+— but the metadata moves:
+
+| Method | Before | From 2026-07-27 |
+| --- | --- | --- |
+| `ListEvaluationCriteriaPage` | bare array | `Data` + `Pagination` |
+| `ListRunEvaluationResults` | bare array | `Data` + `Pagination` |
+| `Typed().ListAlertConfigs` | `Configs` + `Total` | `Data` + `Pagination` |
+| `Typed().ListModelAlerts` | `Alerts` + `Total` | `Data` + `Pagination` |
+
+Read the last two through `Items()`, which returns whichever key arrived, and
+prefer `Pagination` over the flat `Total`/`Page`/`Limit` fields. The flat fields
+will be deprecated and then removed once the canonical envelope is the default.
+
+## Typed responses
+
+Some methods return `json.RawMessage` for historical reasons. The same endpoints
+are available decoded under `Typed()`, which issues the identical request:
+
+```go
+raw, _ := client.Search(ctx, opts)             // json.RawMessage
+typed, _ := client.Typed().Search(ctx, opts)   // *seclai.SearchResponse
+for _, hit := range typed.Results {
+    fmt.Println(hit.Name)
+}
+```
+
+**Prefer `Typed()`.** The raw methods are kept only for source compatibility;
+they will be deprecated and then removed in a future major.
+
 ## Resources
 
 ### Identity
@@ -298,14 +362,17 @@ config, _ := client.GenerateStepConfig(ctx, "agent_id", seclai.GenerateStepConfi
 })
 
 // Conversation history
-history, _ := client.GetAgentAiConversationHistory(ctx, "agent_id")
+history, _ := client.GetAgentAiConversationHistoryWithOptions(ctx, "agent_id",
+    seclai.AiConversationHistoryOptions{StepType: "llm"}) // step_type is required
 _ = client.MarkAgentAiSuggestion(ctx, "agent_id", "conversation_id", seclai.MarkAiSuggestionRequest{Accepted: true})
 ```
 
 ### Agent evaluations
 
 ```go
-criteria, _ := client.ListEvaluationCriteria(ctx, "agent_id", seclai.ListOptions{})
+criteria, _ := client.ListEvaluationCriteria(ctx, "agent_id", seclai.ListOptions{Page: 1, Limit: 50})
+// ListEvaluationCriteriaPage returns the same items plus a Pagination field,
+// which is nil until you opt in with APIVersion 2026-07-27 or later.
 created, _ := client.CreateEvaluationCriteria(ctx, "agent_id", seclai.CreateEvaluationCriteriaRequest{})
 detail, _ := client.GetEvaluationCriteria(ctx, "criteria_id")
 _, _ = client.UpdateEvaluationCriteria(ctx, "criteria_id", seclai.UpdateEvaluationCriteriaRequest{})

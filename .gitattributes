@@ -1,0 +1,20 @@
+# Files produced by tooling rather than written by hand.
+#
+# `linguist-generated` collapses them in GitHub's diff view and drops them from
+# the repository language stats, so a sync PR opens on the files a reviewer can
+# actually act on. A 2026-07 sync changed 14,000 lines of which 864 were
+# hand-written; everything else was regenerated, exported or vendored.
+#
+# They are still committed and still reviewable — just expand-on-demand.
+
+# oapi-codegen output. Regenerated wholesale by `make generate`.
+generated/** linguist-generated=true
+
+# Exported from the API repo, never edited here. Review it with
+# `sdksync.py spec-diff`, which reports the client-observable changes; the raw
+# JSON diff runs to thousands of lines that nobody reads line by line.
+openapi/*.json linguist-generated=true
+
+# Vendored from seclai/sdk-tools by `sync.sh` via git subtree. Edited upstream,
+# never here, so it is noise in a diff for this repo.
+.claude/skills/** linguist-generated=true

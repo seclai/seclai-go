@@ -14,6 +14,35 @@ description: Write or update CHANGELOG.md in a Seclai SDK repo (seclai-python, s
 
 All six Seclai SDK repos keep a root `CHANGELOG.md` in [Common Changelog](https://common-changelog.org) format. This skill covers writing a new entry and backfilling from tags.
 
+## Write against the last release, not against the branch
+
+An entry describes what changed between the **last released tag** and now.
+Anything introduced and then revised inside the same unreleased version is
+invisible to consumers and must not appear.
+
+Three of these shipped into a draft in 2026-07:
+
+- "Return `JsonElement` from `ListAlertsAsync` **as before**" — typed and then
+  untyped again within an unreleased version. Net change: nothing.
+- "Omit unset properties on `SetEmailTriggerConfigRequest`" — that class was
+  *introduced* in the same version, so its serialization is not a change from
+  anything. Fold such detail into the `Added` entry instead.
+- "`Total`/`Page`/`Limit` were always 0 **for callers who opted in**" — opting in
+  was itself new in that release, so no released version could have hit it. The
+  real defect predated it and needed describing on its own terms.
+
+Check it mechanically before publishing:
+
+```bash
+python3 .claude/skills/seclai-sdk-sync/sdksync.py surface <last-tag>
+git diff <last-tag> -- <client sources>
+```
+
+If an entry does not correspond to something in that diff, delete it. Counts age
+badly for the same reason: "adding 22 paths" was written mid-sync and was 23 by
+the time the version shipped — derive them from the tag, do not carry them
+forward.
+
 ## Format rules
 
 - File starts with `# Changelog`, then releases sorted latest-first.

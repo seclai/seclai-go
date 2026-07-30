@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.6.0] - 2026-07-28
+
+### Changed
+
+- Stop sending `Severity` from `ListAlerts`. `GET /alerts` declares no such filter, so it never filtered, and it becomes a 422 once `Options.APIVersion` is `2026-07-27` or later. The field is still accepted and ignored
+- Deprecate `GetAgentAiConversationHistory`. The API requires a `step_type` query parameter its signature cannot supply, so every call answered 422. Use `GetAgentAiConversationHistoryWithOptions`
+- Accept either wire shape from `ListEvaluationCriteria`. The endpoint returns a bare array by default and the canonical `{data, pagination}` envelope once opted in, so the client reads both and keeps returning `[]EvaluationCriteriaResponse`
+- Return an error from `Search` and `SearchDocs` when `Query` is empty, rather than deferring to a 422 that names the wire parameter `q` instead of the field
+- Sync the bundled OpenAPI spec: dated API versioning, `agent_id` on the non-manual evaluation summary, and `page`/`limit` on the evaluation and alert-config listings
+
+### Added
+
+- Add `APIVersion20260701` / `APIVersion20260727` constants, plus `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`. An `Options.APIVersion` this release was not built against makes `NewClient` fail, since a newer version can reshape responses this client would mis-decode; set `Options.AllowUnknownAPIVersion` to override
+- Add `Client.Typed()`, an opt-in surface carrying typed forms of the 23 methods that return `json.RawMessage` — alerts, alert configs, model alerts and recommendations, playground experiments, search, docs search, generation tiers and the AI assistant acknowledgements. Each delegates to its raw counterpart and unmarshals, so both issue the same request
+- Add 20 response type aliases covering those endpoints, including `AlertResponse`, `AlertDetailResponse`, `AlertConfigResponse`, `ModelAlertResponse`, `ExperimentDetailResponse` and `SearchResponse`
+- Add an `Options.APIVersion` field, sent as the `Seclai-Version` header, opting into dated API changes released on or before that date. Omitted by default, so upgrading the SDK alone never changes response shapes
+- Add `GetAPIVersion` and `UpdateAPIVersion` to read the version a request resolves to and to pin or clear the account's version
+- Add `ListEvaluationCriteriaPage` for the canonical `{data, pagination}` envelope, which the endpoint emits once `Options.APIVersion` is `2026-07-27` or later
+- Add `GetAgentAiConversationHistoryWithOptions` and `AiConversationHistoryOptions`, carrying the required `step_type` plus `step_id`, `limit` and `offset`
+- Add the `ApiVersionResponse` and `UpdateApiVersionRequest` type aliases
+
+### Fixed
+
+- Read the canonical key by presence rather than length in `AlertConfigListResponse.Items()` and `ModelAlertListResponse.Items()`. An empty canonical page (`{"data": []}`) fell through to the legacy key and reported the wrong list
+- Validate a `Seclai-Version` supplied through `Options.DefaultHeaders`, not just `Options.APIVersion`. `DefaultHeaders` is applied last so it wins, which left the unknown-version guard one header away from being bypassed; a differently-cased key also emitted two wire headers
+- Return an error from `GetAgentAiConversationHistoryWithOptions` when `StepType` is empty, rather than omitting the parameter and deferring to a 422 naming the wire parameter
+- Decode either wire shape in `ListRunEvaluationResults`. The endpoint answers with a bare array, which the declared envelope type could not read, so the method returned nothing; it now also reads the canonical `{data, pagination}` envelope. `ListAgentEvaluationResults` is genuinely flat and is unaffected
+- Paginate `ListModelAlerts` with the `offset` the endpoint declares instead of `page`, which it does not accept — every page after the first returned page 1
+- Request `GET /sources` rather than `GET /sources/`. The trailing-slash form is no longer declared by the API
+
 ## [1.5.0] - 2026-07-26
 
 ### Changed
@@ -112,6 +142,7 @@ _Stable release. No functional changes since 0.0.2._
 
 _Initial release._
 
+[1.6.0]: https://github.com/seclai/seclai-go/releases/tag/v1.6.0
 [1.5.0]: https://github.com/seclai/seclai-go/releases/tag/v1.5.0
 [1.4.0]: https://github.com/seclai/seclai-go/releases/tag/v1.4.0
 [1.3.0]: https://github.com/seclai/seclai-go/releases/tag/v1.3.0

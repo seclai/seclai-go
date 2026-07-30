@@ -64,6 +64,30 @@ type Options struct {
 	// DefaultHeaders are HTTP headers applied to every request.
 	DefaultHeaders map[string]string
 
+	// AllowUnknownAPIVersion permits an APIVersion this release was not built
+	// against.
+	//
+	// Off by default. A newer API version can change response shapes, and this
+	// client would decode them incorrectly rather than reject them — a
+	// request-side mistake answers 422, but a reshaped response just
+	// mis-decodes, silently. Prefer upgrading the module.
+	AllowUnknownAPIVersion bool
+
+	// APIVersion is a dated API version (YYYY-MM-DD) sent as the Seclai-Version
+	// header, opting this client into backward-incompatible API changes released
+	// on or before that date.
+	//
+	// Left empty the header is omitted and the account's pinned baseline applies,
+	// so responses keep their current shapes and upgrading the SDK alone never
+	// changes the wire contract. Pin the account instead with
+	// [Client.UpdateAPIVersion], and read what a request resolves to with
+	// [Client.GetAPIVersion].
+	//
+	// From 2026-07-27 the API rejects undeclared query parameters with a 422
+	// rather than ignoring them, and list endpoints return the canonical
+	// {data, pagination} envelope.
+	APIVersion string
+
 	// HTTPClient is used for requests. Defaults to a client with a 30s timeout.
 	HTTPClient *http.Client
 }
@@ -105,8 +129,39 @@ func NewClient(opts Options) (*Client, error) {
 	}
 	state.httpClient = hc
 
-	defHeaders := make(map[string]string, len(opts.DefaultHeaders))
+	// DefaultHeaders is applied last so an explicit entry wins, which means it
+	// can also carry a Seclai-Version. Validate whichever value actually reaches
+	// the wire, not just the option — otherwise the guard is one header away
+	// from being bypassed.
+	effectiveVersion, versionSource := opts.APIVersion, "Options.APIVersion"
 	for k, v := range opts.DefaultHeaders {
+		if strings.EqualFold(k, "Seclai-Version") {
+			effectiveVersion, versionSource = v, `Options.DefaultHeaders["Seclai-Version"]`
+			break
+		}
+	}
+	if effectiveVersion != "" && !opts.AllowUnknownAPIVersion && !isKnownAPIVersion(effectiveVersion) {
+		return nil, &ConfigurationError{Message: fmt.Sprintf(
+			"unknown API version %q (via %s): this release was built against %s. A "+
+				"newer API version can change response shapes, which this client would "+
+				"decode incorrectly rather than reject. Upgrade the module, or set "+
+				"Options.AllowUnknownAPIVersion to proceed anyway.",
+			effectiveVersion, versionSource, strings.Join(KnownAPIVersions, ", "))}
+	}
+
+	defHeaders := make(map[string]string, len(opts.DefaultHeaders)+1)
+	// Set first so an explicit DefaultHeaders entry still wins. Omitted unless
+	// the caller opts in: with no header the account's pinned baseline applies.
+	if opts.APIVersion != "" {
+		defHeaders["Seclai-Version"] = opts.APIVersion
+	}
+	for k, v := range opts.DefaultHeaders {
+		// Drop a differently-cased duplicate so only one value reaches the wire.
+		for existing := range defHeaders {
+			if strings.EqualFold(existing, k) && existing != k {
+				delete(defHeaders, existing)
+			}
+		}
 		defHeaders[k] = v
 	}
 
@@ -236,6 +291,37 @@ func (c *Client) Do(ctx context.Context, method, apiPath string, query map[strin
 func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	var out MeResponse
 	if err := c.Do(ctx, http.MethodGet, "/me", nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ── API Version ─────────────────────────────────────────────────────────────
+
+// GetAPIVersion reports the API version this request resolved to, and the
+// versions available.
+//
+// Resolution order is the Seclai-Version header, then the account pin, then the
+// default — so EffectiveVersion reflects [Options.APIVersion] when it is set.
+func (c *Client) GetAPIVersion(ctx context.Context) (*ApiVersionResponse, error) {
+	var out ApiVersionResponse
+	if err := c.Do(ctx, http.MethodGet, "/version", nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateAPIVersion pins the account to a dated API version, or clears the pin
+// when version is nil. Owner/admin only.
+//
+// The pin applies to later header-less requests; a Seclai-Version header still
+// overrides it, so EffectiveVersion in the response describes this request
+// rather than the pin just written.
+func (c *Client) UpdateAPIVersion(ctx context.Context, version *string) (*ApiVersionResponse, error) {
+	var out ApiVersionResponse
+	// A literal null clears the pin, so the field is always marshalled.
+	body := UpdateApiVersionRequest{Version: version}
+	if err := c.Do(ctx, http.MethodPut, "/version", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -594,12 +680,56 @@ func (c *Client) GenerateStepConfig(ctx context.Context, agentID string, body Ge
 }
 
 // GetAgentAiConversationHistory retrieves AI assistant conversation history for an agent.
+// Deprecated: the API requires a step_type query parameter that this signature
+// cannot supply, so every call answers 422. Use
+// [Client.GetAgentAiConversationHistoryWithOptions].
 func (c *Client) GetAgentAiConversationHistory(ctx context.Context, agentID string) (*AiConversationHistoryResponse, error) {
+	return c.GetAgentAiConversationHistoryWithOptions(ctx, agentID, AiConversationHistoryOptions{})
+}
+
+// GetAgentAiConversationHistoryWithOptions returns the AI assistant conversation
+// history for an agent.
+//
+// StepType is required by the API — the endpoint answers 422 without it.
+func (c *Client) GetAgentAiConversationHistoryWithOptions(ctx context.Context, agentID string, opts AiConversationHistoryOptions) (*AiConversationHistoryResponse, error) {
+	// Leaving StepType empty only means the parameter is omitted and the server
+	// answers 422 naming the wire parameter, which is the failure this method
+	// exists to avoid. Fail here instead, naming the field.
+	if opts.StepType == "" {
+		return nil, &ConfigurationError{
+			Message: `AiConversationHistoryOptions.StepType is required by the API; set e.g. StepType: "llm"`,
+		}
+	}
+	q := map[string]string{}
+	if opts.StepType != "" {
+		q["step_type"] = opts.StepType
+	}
+	if opts.StepID != "" {
+		q["step_id"] = opts.StepID
+	}
+	if opts.Limit > 0 {
+		q["limit"] = fmt.Sprintf("%d", opts.Limit)
+	}
+	if opts.Offset > 0 {
+		q["offset"] = fmt.Sprintf("%d", opts.Offset)
+	}
 	var out AiConversationHistoryResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/ai-assistant/conversations", url.PathEscape(agentID)), nil, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/ai-assistant/conversations", url.PathEscape(agentID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// AiConversationHistoryOptions filters the AI assistant conversation history.
+type AiConversationHistoryOptions struct {
+	// StepType is the step type to look up. Required by the API.
+	StepType string
+	// StepID filters to a single step.
+	StepID string
+	// Limit is the max turns to return (1-50, default 10).
+	Limit int
+	// Offset is the number of recent turns to skip.
+	Offset int
 }
 
 // MarkAgentAiSuggestion marks an AI assistant suggestion as accepted/rejected.
@@ -610,12 +740,39 @@ func (c *Client) MarkAgentAiSuggestion(ctx context.Context, agentID, conversatio
 // ── Agent Evaluations ───────────────────────────────────────────────────────
 
 // ListEvaluationCriteria lists evaluation criteria for an agent.
+//
+// Use [Client.ListEvaluationCriteriaPage] for the pagination metadata.
 func (c *Client) ListEvaluationCriteria(ctx context.Context, agentID string, opts ListOptions) ([]EvaluationCriteriaResponse, error) {
-	var out []EvaluationCriteriaResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-criteria", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	page, err := c.ListEvaluationCriteriaPage(ctx, agentID, opts)
+	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	return page.Data, nil
+}
+
+// ListEvaluationCriteriaPage lists evaluation criteria for an agent with
+// pagination metadata.
+//
+// Either wire shape is accepted: the endpoint answers with a bare array by
+// default and the canonical {data, pagination} envelope once Options.APIVersion
+// is 2026-07-27 or later, so a client that decodes only one breaks the day the
+// other arrives. Pagination is nil on the bare-array shape.
+func (c *Client) ListEvaluationCriteriaPage(ctx context.Context, agentID string, opts ListOptions) (*EvaluationCriteriaListResponse, error) {
+	var raw json.RawMessage
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-criteria", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, nil, &raw); err != nil {
+		return nil, err
+	}
+	var out EvaluationCriteriaListResponse
+	if bytes.HasPrefix(bytes.TrimLeft(raw, " \t\r\n"), []byte("[")) {
+		if err := json.Unmarshal(raw, &out.Data); err != nil {
+			return nil, err
+		}
+		return &out, nil
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // CreateEvaluationCriteria creates new evaluation criteria for an agent.
@@ -705,9 +862,23 @@ func (c *Client) ListAgentEvaluationResults(ctx context.Context, agentID string,
 }
 
 // ListRunEvaluationResults lists evaluation results for a specific run.
+//
+// Either wire shape is accepted: the endpoint returns a bare array by default
+// and an envelope once the caller opts in with Options.APIVersion of 2026-07-27
+// or later, so Total, Page and Limit are zero in the former case.
 func (c *Client) ListRunEvaluationResults(ctx context.Context, agentID, runID string, opts ListOptions) (*EvaluationResultWithCriteriaListResponse, error) {
+	var raw json.RawMessage
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s/evaluation-results", url.PathEscape(agentID), url.PathEscape(runID)), listQuery(opts.Page, opts.Limit), nil, nil, &raw); err != nil {
+		return nil, err
+	}
 	var out EvaluationResultWithCriteriaListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s/evaluation-results", url.PathEscape(agentID), url.PathEscape(runID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if bytes.HasPrefix(bytes.TrimLeft(raw, " \t\r\n"), []byte("[")) {
+		if err := json.Unmarshal(raw, &out.Data); err != nil {
+			return nil, err
+		}
+		return &out, nil
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1604,7 +1775,7 @@ func (c *Client) ListSources(ctx context.Context, opts ListSourcesOptions) (*Sou
 		q["account_id"] = opts.AccountID
 	}
 	var out SourceListResponse
-	if err := c.Do(ctx, http.MethodGet, "/sources/", q, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/sources", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2005,13 +2176,13 @@ type ListAlertsOptions struct {
 }
 
 // ListAlerts lists alerts.
+// Severity is accepted and dropped: GET /alerts declares no such filter, so it
+// never filtered anything, and sending it is a 422 once Options.APIVersion is
+// 2026-07-27 or later.
 func (c *Client) ListAlerts(ctx context.Context, opts ListAlertsOptions) (json.RawMessage, error) {
 	q := listQuery(opts.Page, opts.Limit)
 	if opts.Status != "" {
 		q["status"] = opts.Status
-	}
-	if opts.Severity != "" {
-		q["severity"] = opts.Severity
 	}
 	var out json.RawMessage
 	if err := c.Do(ctx, http.MethodGet, "/alerts", q, nil, nil, &out); err != nil {
@@ -2068,6 +2239,10 @@ func (c *Client) UnsubscribeFromAlert(ctx context.Context, alertID string) (json
 // ── Alert Configs ───────────────────────────────────────────────────────────
 
 // ListAlertConfigs lists alert configurations.
+// The configurations arrive under "configs" alongside "total" by default. Once
+// the caller opts in with Options.APIVersion of 2026-07-27 or later the endpoint
+// returns the canonical {data, pagination} envelope instead, so the top-level
+// key changes.
 func (c *Client) ListAlertConfigs(ctx context.Context, opts ListOptions) (json.RawMessage, error) {
 	var out json.RawMessage
 	if err := c.Do(ctx, http.MethodGet, "/alerts/configs", listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
@@ -2131,9 +2306,22 @@ func (c *Client) UpdateOrganizationAlertPreference(ctx context.Context, organiza
 // ── Models & Alerts ─────────────────────────────────────────────────────────
 
 // ListModelAlerts lists model alerts.
+// The endpoint declares limit/offset, not page, so opts.Page is translated —
+// previously it was ignored and every page after the first returned page 1.
 func (c *Client) ListModelAlerts(ctx context.Context, opts ListOptions) (json.RawMessage, error) {
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	q := map[string]string{}
+	if opts.Page > 1 {
+		q["offset"] = fmt.Sprintf("%d", (opts.Page-1)*limit)
+	}
+	if opts.Limit > 0 {
+		q["limit"] = fmt.Sprintf("%d", opts.Limit)
+	}
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/models/alerts", listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/models/alerts", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2303,10 +2491,12 @@ type SearchOptions struct {
 
 // Search performs a general search across resources.
 func (c *Client) Search(ctx context.Context, opts SearchOptions) (json.RawMessage, error) {
-	q := map[string]string{}
-	if opts.Query != "" {
-		q["q"] = opts.Query
+	// `q` is required by the spec. Omitting it when empty only defers the
+	// failure to a 422 whose message points at the wire name, not the field.
+	if opts.Query == "" {
+		return nil, fmt.Errorf("seclai: SearchOptions.Query is required")
 	}
+	q := map[string]string{"q": opts.Query}
 	if opts.Limit > 0 {
 		q["limit"] = fmt.Sprintf("%d", opts.Limit)
 	}
@@ -2334,10 +2524,11 @@ type DocsSearchOptions struct {
 // (default; titles and summaries) or semantic (body content by meaning).
 // Documentation is global, so results are not account-scoped.
 func (c *Client) SearchDocs(ctx context.Context, opts DocsSearchOptions) (json.RawMessage, error) {
-	q := map[string]string{}
-	if opts.Query != "" {
-		q["q"] = opts.Query
+	// `q` is required by the spec — see [Client.Search].
+	if opts.Query == "" {
+		return nil, fmt.Errorf("seclai: DocsSearchOptions.Query is required")
 	}
+	q := map[string]string{"q": opts.Query}
 	if opts.Mode != "" {
 		q["mode"] = opts.Mode
 	}

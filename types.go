@@ -163,6 +163,136 @@ type ExamplePrompt = generated.ExamplePrompt
 // EvaluationCriteriaResponse is the evaluation criteria configuration for an agent.
 type EvaluationCriteriaResponse = generated.EvaluationCriteriaResponse
 
+// EvaluationCriteriaListResponse is a page of evaluation criteria.
+//
+// Not a generated type: the endpoint returns a bare array by default and only
+// emits the canonical {data, pagination} envelope once the caller opts in with
+// Options.APIVersion of 2026-07-27 or later, so Pagination is nil unless opted in.
+type EvaluationCriteriaListResponse struct {
+	Data       []EvaluationCriteriaResponse `json:"data"`
+	Pagination *PaginationResponse          `json:"pagination,omitempty"`
+}
+
+// AlertResponse is a single alert.
+type AlertResponse = generated.RoutersApiAlertsAlertResponse
+
+// AlertListResponse is a page of alerts. Always the canonical {data, pagination} envelope.
+type AlertListResponse = generated.RoutersApiAlertsAlertListResponse
+
+// AlertConfigResponse is a single alert configuration.
+type AlertConfigResponse = generated.AlertConfigResponse
+
+// AlertConfigListResponse is a page of alert configurations.
+//
+// Not a generated type: the top-level key is version-gated. By default the
+// configurations arrive under Configs alongside Total; once Options.APIVersion
+// is 2026-07-27 or later the endpoint returns the canonical {data, pagination}
+// envelope instead. Items returns whichever arrived.
+type AlertConfigListResponse struct {
+	Configs    []AlertConfigResponse `json:"configs,omitempty"`
+	Data       []AlertConfigResponse `json:"data,omitempty"`
+	Pagination *PaginationResponse   `json:"pagination,omitempty"`
+	Total      int                   `json:"total,omitempty"`
+}
+
+// Items returns the configurations from whichever key the response used.
+func (r AlertConfigListResponse) Items() []AlertConfigResponse {
+	// Presence, not length. An empty canonical page is `{"data": [], ...}`, which
+	// unmarshals to a non-nil empty slice; testing len() would fall through to
+	// the legacy key and report the legacy list for a perfectly valid empty page.
+	if r.Data != nil {
+		return r.Data
+	}
+	return r.Configs
+}
+
+// ModelAlertResponse is a single model lifecycle alert.
+type ModelAlertResponse = generated.RoutersApiModelLifecycleModelAlertResponse
+
+// ModelAlertListResponse is a page of model lifecycle alerts.
+//
+// Not a generated type: the top-level key is version-gated. By default the
+// alerts arrive under Alerts alongside Total; once Options.APIVersion is
+// 2026-07-27 or later the endpoint returns the canonical {data, pagination}
+// envelope instead. Items returns whichever arrived.
+type ModelAlertListResponse struct {
+	Alerts     []ModelAlertResponse `json:"alerts,omitempty"`
+	Data       []ModelAlertResponse `json:"data,omitempty"`
+	Pagination *PaginationResponse  `json:"pagination,omitempty"`
+	Total      int                  `json:"total,omitempty"`
+}
+
+// Items returns the alerts from whichever key the response used.
+func (r ModelAlertListResponse) Items() []ModelAlertResponse {
+	// Presence, not length — see AlertConfigListResponse.Items.
+	if r.Data != nil {
+		return r.Data
+	}
+	return r.Alerts
+}
+
+// ── Typed response models (see [TypedClient]) ───────────────────────────────
+
+// AlertDetailResponse is a single alert with its comments, subscribers and history.
+type AlertDetailResponse = generated.RoutersApiAlertsAlertDetailResponse
+
+// AlertCommentResponse is a comment on an alert.
+type AlertCommentResponse = generated.RoutersApiAlertsAlertCommentResponse
+
+// AlertSubscriberResponse is a subscriber to an alert.
+type AlertSubscriberResponse = generated.RoutersApiAlertsAlertSubscriberResponse
+
+// UnreadCountResponse is a count of unread items.
+type UnreadCountResponse = generated.UnreadCountResponse
+
+// ModelRecommendationsResponse is the set of successor recommendations for a model.
+type ModelRecommendationsResponse = generated.RoutersApiModelLifecycleModelRecommendationsResponse
+
+// ModelRecommendationResponse is a single successor recommendation.
+type ModelRecommendationResponse = generated.RoutersApiModelLifecycleModelRecommendationResponse
+
+// GenerationTierListResponse maps each media-generation modality and tier to its model and cost.
+type GenerationTierListResponse = generated.GenerationTierListResponse
+
+// GenerationTierResponse is one media-generation tier.
+type GenerationTierResponse = generated.GenerationTierResponse
+
+// ExperimentListResponse is a page of model playground experiments.
+type ExperimentListResponse = generated.ExperimentListResponse
+
+// ExperimentSummaryResponse is a model playground experiment in a listing.
+type ExperimentSummaryResponse = generated.ExperimentSummaryResponse
+
+// ExperimentDetailResponse is a model playground experiment with its results.
+type ExperimentDetailResponse = generated.ExperimentDetailResponse
+
+// CreateExperimentResponse is the acknowledgement of a created experiment.
+type CreateExperimentResponse = generated.CreateExperimentResponse
+
+// CancelExperimentResponse is the acknowledgement of a cancelled experiment.
+type CancelExperimentResponse = generated.CancelExperimentResponse
+
+// SearchResponse is a ranked set of search results. Deliberately not paginated.
+type SearchResponse = generated.RoutersApiSearchSearchResponse
+
+// SearchResultResponse is a single search hit.
+type SearchResultResponse = generated.RoutersApiSearchSearchResultResponse
+
+// DocsSearchResponse is a set of documentation search results.
+type DocsSearchResponse = generated.RoutersApiDocsSearchDocsSearchResponse
+
+// DocsSearchResultResponse is a single documentation search hit.
+type DocsSearchResultResponse = generated.DocsSearchResultResponse
+
+// OkResponse is a simple acknowledgement.
+type OkResponse = generated.OkResponse
+
+// ApiVersionResponse is the API version a request resolved to, and the versions available.
+type ApiVersionResponse = generated.ApiVersionResponse
+
+// UpdateApiVersionRequest sets or clears the account's sticky API version pin.
+type UpdateApiVersionRequest = generated.UpdateApiVersionRequest
+
 // CreateEvaluationCriteriaRequest is the request body for creating evaluation criteria.
 type CreateEvaluationCriteriaRequest = generated.CreateEvaluationCriteriaRequest
 
@@ -179,7 +309,27 @@ type EvaluationResultListResponse = generated.EvaluationResultListResponse
 type EvaluationResultSummaryResponse = generated.EvaluationResultSummaryResponse
 
 // EvaluationResultWithCriteriaListResponse is a paginated list of evaluation results with criteria context.
-type EvaluationResultWithCriteriaListResponse = generated.EvaluationResultWithCriteriaListResponse
+// EvaluationResultWithCriteriaListResponse is a page of evaluation results with
+// criteria context.
+//
+// Not a generated type: two endpoints share this shape and populate different
+// halves of it.
+//
+//   - GET /agents/{id}/evaluation-results is always paginated and fills Total,
+//     Page and Limit.
+//   - GET /agents/{id}/runs/{runID}/evaluation-results is version-gated: a bare
+//     array by default, and the canonical {data, pagination} envelope once
+//     Options.APIVersion is 2026-07-27 or later — in which case the metadata is
+//     on Pagination and the flat fields stay zero.
+type EvaluationResultWithCriteriaListResponse struct {
+	Data []EvaluationResultWithCriteriaResponse `json:"data"`
+	// Pagination carries the canonical metadata; nil on the flat and legacy shapes.
+	Pagination *PaginationResponse `json:"pagination,omitempty"`
+	// Total, Page and Limit are the flat shape; zero when Pagination is set.
+	Total int `json:"total,omitempty"`
+	Page  int `json:"page,omitempty"`
+	Limit int `json:"limit,omitempty"`
+}
 
 // CreateEvaluationResultRequest is the request body for creating a manual evaluation result.
 type CreateEvaluationResultRequest = generated.CreateEvaluationResultRequest

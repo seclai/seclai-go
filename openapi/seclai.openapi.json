@@ -1,6 +1,16 @@
 {
   "components": {
     "parameters": {
+      "Seclai-Version": {
+        "description": "Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it \u2014 e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.",
+        "in": "header",
+        "name": "Seclai-Version",
+        "required": false,
+        "schema": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
       "X-Account-Id": {
         "description": "Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication \u2014 the key's account is always used.",
         "in": "header",
@@ -687,7 +697,7 @@
                 "type": "null"
               }
             ],
-            "description": "MIME type of `output` \u2014 mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` \u2014 fetch each attachment via `GET /api/v2/agent-runs/{run_id}/attachments/{attachment_id}`, where `attachment_id` is the URL-safe base64 of the attachment's `storage_key` (accepts an API key or OAuth token).  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.",
+            "description": "MIME type of `output` \u2014 mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` \u2014 fetch each attachment via `GET /v2/agent-runs/{run_id}/attachments/{attachment_id}`, where `attachment_id` is the URL-safe base64 of the attachment's `storage_key` (accepts an API key or OAuth token).  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.",
             "title": "Output Content Type"
           },
           "priority": {
@@ -1620,6 +1630,273 @@
         "title": "AiConversationTurnResponse",
         "type": "object"
       },
+      "AlertConfigListResponse": {
+        "description": "``GET /alerts/configs`` legacy/default shape (header-less clients).\n\n``Seclai-Version: 2026-07-27+`` clients receive the canonical\n``{data, pagination}`` envelope instead (the handler returns a ``JSONResponse``\nthat bypasses this ``response_model``); this documents the default shape.",
+        "properties": {
+          "configs": {
+            "items": {
+              "$ref": "#/components/schemas/AlertConfigResponse"
+            },
+            "title": "Configs",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "configs",
+          "total"
+        ],
+        "title": "AlertConfigListResponse",
+        "type": "object"
+      },
+      "AlertConfigResponse": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "alert_type": {
+            "title": "Alert Type",
+            "type": "string"
+          },
+          "cooldown_minutes": {
+            "title": "Cooldown Minutes",
+            "type": "integer"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "distribution_type": {
+            "title": "Distribution Type",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_alerted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Alerted At"
+          },
+          "recipient_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recipient User Ids",
+            "type": "array"
+          },
+          "source_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Connection Id"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "agent_id",
+          "source_connection_id",
+          "account_id",
+          "alert_type",
+          "enabled",
+          "threshold",
+          "cooldown_minutes",
+          "last_alerted_at",
+          "distribution_type",
+          "recipient_user_ids",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AlertConfigResponse",
+        "type": "object"
+      },
+      "AlertHistoryEntryResponse": {
+        "properties": {
+          "changed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By Name"
+          },
+          "changed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By User Id"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "new_status": {
+            "title": "New Status",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "previous_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Status"
+          }
+        },
+        "required": [
+          "id",
+          "previous_status",
+          "new_status",
+          "changed_by_user_id",
+          "changed_by_name",
+          "note",
+          "created_at"
+        ],
+        "title": "AlertHistoryEntryResponse",
+        "type": "object"
+      },
+      "ApiVersionResponse": {
+        "properties": {
+          "default_version": {
+            "description": "Baseline for an unpinned, header-less caller.",
+            "title": "Default Version",
+            "type": "string"
+          },
+          "effective_version": {
+            "description": "The version THIS request resolved to (header > pin > default).",
+            "title": "Effective Version",
+            "type": "string"
+          },
+          "known_versions": {
+            "description": "All dated versions, oldest first.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Known Versions",
+            "type": "array"
+          },
+          "latest_version": {
+            "description": "Newest version the server knows about.",
+            "title": "Latest Version",
+            "type": "string"
+          },
+          "pinned_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account's sticky pinned version, or null when unpinned (the account resolves to the default). Applies to header-less requests.",
+            "title": "Pinned Version"
+          }
+        },
+        "required": [
+          "pinned_version",
+          "effective_version",
+          "default_version",
+          "latest_version",
+          "known_versions"
+        ],
+        "title": "ApiVersionResponse",
+        "type": "object"
+      },
       "AppliedActionResponse": {
         "description": "Result of a single executed governance action.",
         "properties": {
@@ -1881,6 +2158,19 @@
         "title": "Body_upload_file_to_source_api_sources__source_connection_id__upload_post",
         "type": "object"
       },
+      "CancelExperimentResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "CancelExperimentResponse",
+        "type": "object"
+      },
       "CancelQueuedRunsResponse": {
         "properties": {
           "cancelled": {
@@ -1945,6 +2235,25 @@
           "reasoning"
         ],
         "title": "CompactionEvaluationModel",
+        "type": "object"
+      },
+      "CompactionScheduledResponse": {
+        "description": "Acknowledgement that an on-demand compaction run was scheduled.",
+        "properties": {
+          "memory_bank_id": {
+            "title": "Memory Bank Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "memory_bank_id",
+          "status"
+        ],
+        "title": "CompactionScheduledResponse",
         "type": "object"
       },
       "CompactionTestResponseModel": {
@@ -2381,6 +2690,24 @@
           "status"
         ],
         "title": "CreateEvaluationResultRequest",
+        "type": "object"
+      },
+      "CreateExperimentResponse": {
+        "properties": {
+          "experiment_id": {
+            "title": "Experiment Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "experiment_id",
+          "status"
+        ],
+        "title": "CreateExperimentResponse",
         "type": "object"
       },
       "CreateKnowledgeBaseBody": {
@@ -3037,6 +3364,65 @@
           "ok"
         ],
         "title": "DnsRecordResponse",
+        "type": "object"
+      },
+      "DocsSearchResultResponse": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "doc_slug": {
+            "title": "Doc Slug",
+            "type": "string"
+          },
+          "highlight": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Highlight"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snippet"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "doc_slug",
+          "title",
+          "snippet",
+          "score",
+          "anchor",
+          "highlight"
+        ],
+        "title": "DocsSearchResultResponse",
         "type": "object"
       },
       "EmailDomainResponse": {
@@ -3903,6 +4289,246 @@
         "title": "ExecutedActionResponse",
         "type": "object"
       },
+      "ExperimentDetailResponse": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "evaluation_complexity": {
+            "title": "Evaluation Complexity",
+            "type": "string"
+          },
+          "evaluation_mode": {
+            "title": "Evaluation Mode",
+            "type": "string"
+          },
+          "evaluator_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluator Model Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "include_step_output_in_evaluation": {
+            "title": "Include Step Output In Evaluation",
+            "type": "boolean"
+          },
+          "json_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Template"
+          },
+          "progress_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Current"
+          },
+          "progress_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Message"
+          },
+          "progress_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Total"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "result_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Data"
+          },
+          "selected_model_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Model Ids",
+            "type": "array"
+          },
+          "selected_step_output": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Step Output"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "system_prompt": {
+            "title": "System Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "selected_model_ids",
+          "evaluation_mode",
+          "evaluation_complexity",
+          "prompt",
+          "system_prompt",
+          "evaluator_model_id",
+          "include_step_output_in_evaluation",
+          "selected_step_output",
+          "json_template",
+          "started_at",
+          "completed_at",
+          "error_message",
+          "progress_current",
+          "progress_total",
+          "progress_message",
+          "result_data"
+        ],
+        "title": "ExperimentDetailResponse",
+        "type": "object"
+      },
+      "ExperimentListResponse": {
+        "description": "``GET /models/playground/experiments`` legacy/default shape; 2026-07-27+\nclients get the canonical ``{data, pagination}`` envelope.",
+        "properties": {
+          "experiments": {
+            "items": {
+              "$ref": "#/components/schemas/ExperimentSummaryResponse"
+            },
+            "title": "Experiments",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "experiments",
+          "total"
+        ],
+        "title": "ExperimentListResponse",
+        "type": "object"
+      },
+      "ExperimentSummaryResponse": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "evaluation_complexity": {
+            "title": "Evaluation Complexity",
+            "type": "string"
+          },
+          "evaluation_mode": {
+            "title": "Evaluation Mode",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "selected_model_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Selected Model Ids",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "selected_model_ids",
+          "evaluation_mode",
+          "evaluation_complexity"
+        ],
+        "title": "ExperimentSummaryResponse",
+        "type": "object"
+      },
       "ExportFormat": {
         "description": "Supported export file formats.",
         "enum": [
@@ -4174,6 +4800,87 @@
           "success"
         ],
         "title": "GenerateStepConfigResponse",
+        "type": "object"
+      },
+      "GenerationTierListResponse": {
+        "description": "``GET /models/generation-tiers`` legacy/default shape; 2026-07-27+ clients\nget the canonical ``{data, pagination}`` envelope.",
+        "properties": {
+          "tiers": {
+            "items": {
+              "$ref": "#/components/schemas/GenerationTierResponse"
+            },
+            "title": "Tiers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tiers"
+        ],
+        "title": "GenerationTierListResponse",
+        "type": "object"
+      },
+      "GenerationTierResponse": {
+        "properties": {
+          "credits_per_unit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits Per Unit"
+          },
+          "modality": {
+            "title": "Modality",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "price_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Label"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          },
+          "unit_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Label"
+          }
+        },
+        "required": [
+          "modality",
+          "tier",
+          "model_id",
+          "model_name",
+          "credits_per_unit",
+          "unit_label",
+          "price_label"
+        ],
+        "title": "GenerationTierResponse",
         "type": "object"
       },
       "GovernanceAiAcceptResponse": {
@@ -5213,6 +5920,20 @@
           "modality"
         ],
         "title": "ModalityRateResponse",
+        "type": "object"
+      },
+      "OkResponse": {
+        "description": "A minimal ``{\"ok\": true}`` acknowledgement for state-mutating actions\nthat have no richer resource to return (e.g. accept/decline a suggestion).",
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "OkResponse",
         "type": "object"
       },
       "OrganizationAlertPreferenceListResponse": {
@@ -6609,6 +7330,19 @@
         "title": "UnlinkResourcesRequest",
         "type": "object"
       },
+      "UnreadCountResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "UnreadCountResponse",
+        "type": "object"
+      },
       "UpdateAgentDefinitionRequest": {
         "properties": {
           "definition": {
@@ -6698,6 +7432,24 @@
           }
         },
         "title": "UpdateAlertConfigRequest",
+        "type": "object"
+      },
+      "UpdateApiVersionRequest": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A YYYY-MM-DD date to pin the account to, or null to clear the pin (revert to the default baseline).",
+            "title": "Version"
+          }
+        },
+        "title": "UpdateApiVersionRequest",
         "type": "object"
       },
       "UpdateEvaluationCriteriaRequest": {
@@ -7338,7 +8090,7 @@
         "properties": {
           "agent_definition": {
             "additionalProperties": true,
-            "description": "Payload in the same shape as GET /api/agents/{agent_id}/export.",
+            "description": "Payload in the same shape as GET /agents/{agent_id}/export.",
             "title": "Agent Definition",
             "type": "object"
           }
@@ -7997,6 +8749,311 @@
         "title": "AddCommentRequest",
         "type": "object"
       },
+      "routers__api__alerts__AlertCommentResponse": {
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "user_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Name"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "user_name",
+          "body",
+          "created_at"
+        ],
+        "title": "AlertCommentResponse",
+        "type": "object"
+      },
+      "routers__api__alerts__AlertDetailResponse": {
+        "properties": {
+          "alert": {
+            "$ref": "#/components/schemas/routers__api__alerts__AlertResponse"
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/routers__api__alerts__AlertCommentResponse"
+            },
+            "title": "Comments",
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/AlertHistoryEntryResponse"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "subscribers": {
+            "items": {
+              "$ref": "#/components/schemas/routers__api__alerts__AlertSubscriberResponse"
+            },
+            "title": "Subscribers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "alert",
+          "history",
+          "comments",
+          "subscribers"
+        ],
+        "title": "AlertDetailResponse",
+        "type": "object"
+      },
+      "routers__api__alerts__AlertListResponse": {
+        "description": "``GET /alerts`` \u2014 always the canonical ``{data, pagination}`` envelope.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/routers__api__alerts__AlertResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationResponse"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "AlertListResponse",
+        "type": "object"
+      },
+      "routers__api__alerts__AlertResponse": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "agent_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Run Id"
+          },
+          "alert_config_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Config Id"
+          },
+          "alert_type": {
+            "title": "Alert Type",
+            "type": "string"
+          },
+          "comment_count": {
+            "title": "Comment Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "details": {
+            "title": "Details"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_subscribed": {
+            "title": "Is Subscribed",
+            "type": "boolean"
+          },
+          "mcp_client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcp Client Id"
+          },
+          "source_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Connection Id"
+          },
+          "source_connection_pull_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Connection Pull Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subscriber_count": {
+            "title": "Subscriber Count",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "alert_config_id",
+          "alert_type",
+          "title",
+          "description",
+          "status",
+          "agent_id",
+          "agent_run_id",
+          "source_connection_id",
+          "source_connection_pull_id",
+          "mcp_client_id",
+          "subscriber_count",
+          "comment_count",
+          "is_subscribed",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AlertResponse",
+        "type": "object"
+      },
+      "routers__api__alerts__AlertSubscriberResponse": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "user_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Name"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "user_name",
+          "created_at"
+        ],
+        "title": "AlertSubscriberResponse",
+        "type": "object"
+      },
       "routers__api__alerts__OrganizationAlertPreferenceResponse": {
         "properties": {
           "alert_type": {
@@ -8317,6 +9374,23 @@
         "title": "FileUploadResponse",
         "type": "object"
       },
+      "routers__api__docs_search__DocsSearchResponse": {
+        "description": "Ranked results, NOT a paginated collection \u2014 the ``{results}`` shape is a\ndeliberate carve-out matching the MCP ``search_docs`` tool.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/DocsSearchResultResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "DocsSearchResponse",
+        "type": "object"
+      },
       "routers__api__governance__GovernanceAiAssistantRequest": {
         "description": "Request body for the governance AI assistant.",
         "properties": {
@@ -8568,6 +9642,344 @@
           }
         },
         "title": "MemoryBankLastConversationResponse",
+        "type": "object"
+      },
+      "routers__api__model_lifecycle__ModelAlertListResponse": {
+        "description": "``GET /models/alerts`` legacy/default shape; 2026-07-27+ clients get the\ncanonical ``{data, pagination}`` envelope (bypasses this ``response_model``).",
+        "properties": {
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/routers__api__model_lifecycle__ModelAlertResponse"
+            },
+            "title": "Alerts",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "alerts",
+          "total"
+        ],
+        "title": "ModelAlertListResponse",
+        "type": "object"
+      },
+      "routers__api__model_lifecycle__ModelAlertResponse": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "alert_type": {
+            "title": "Alert Type",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "prompt_model_id": {
+            "title": "Prompt Model Id",
+            "type": "string"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "successor_model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Successor Model Name"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "agent_id",
+          "prompt_model_id",
+          "model_name",
+          "alert_type",
+          "message",
+          "read_at",
+          "successor_model_name",
+          "created_at"
+        ],
+        "title": "ModelAlertResponse",
+        "type": "object"
+      },
+      "routers__api__model_lifecycle__ModelRecommendationResponse": {
+        "properties": {
+          "deprecated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecated At"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "family_generation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family Generation"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "max_context_tokens": {
+            "title": "Max Context Tokens",
+            "type": "integer"
+          },
+          "max_output_tokens": {
+            "title": "Max Output Tokens",
+            "type": "integer"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "recommendation_type": {
+            "title": "Recommendation Type",
+            "type": "string"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "sunset_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sunset At"
+          },
+          "supports_openai_arguments": {
+            "title": "Supports Openai Arguments",
+            "type": "boolean"
+          },
+          "supports_streaming": {
+            "title": "Supports Streaming",
+            "type": "boolean"
+          },
+          "supports_structured_output": {
+            "title": "Supports Structured Output",
+            "type": "boolean"
+          },
+          "supports_thinking": {
+            "title": "Supports Thinking",
+            "type": "boolean"
+          },
+          "supports_tool_use": {
+            "title": "Supports Tool Use",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "model_id",
+          "name",
+          "provider",
+          "description",
+          "max_context_tokens",
+          "max_output_tokens",
+          "supports_tool_use",
+          "supports_structured_output",
+          "supports_thinking",
+          "supports_openai_arguments",
+          "supports_streaming",
+          "recommendation_type",
+          "reason"
+        ],
+        "title": "ModelRecommendationResponse",
+        "type": "object"
+      },
+      "routers__api__model_lifecycle__ModelRecommendationsResponse": {
+        "properties": {
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/routers__api__model_lifecycle__ModelRecommendationResponse"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
+          "current_model_id": {
+            "title": "Current Model Id",
+            "type": "string"
+          },
+          "current_model_name": {
+            "title": "Current Model Name",
+            "type": "string"
+          },
+          "same_provider": {
+            "items": {
+              "$ref": "#/components/schemas/routers__api__model_lifecycle__ModelRecommendationResponse"
+            },
+            "title": "Same Provider",
+            "type": "array"
+          },
+          "successor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/routers__api__model_lifecycle__ModelRecommendationResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "upgrades": {
+            "items": {
+              "$ref": "#/components/schemas/routers__api__model_lifecycle__ModelRecommendationResponse"
+            },
+            "title": "Upgrades",
+            "type": "array"
+          }
+        },
+        "required": [
+          "current_model_id",
+          "current_model_name",
+          "upgrades",
+          "same_provider",
+          "alternatives"
+        ],
+        "title": "ModelRecommendationsResponse",
+        "type": "object"
+      },
+      "routers__api__search__SearchResponse": {
+        "description": "Ranked results, NOT a paginated collection \u2014 the ``{results}`` shape is a\ndeliberate carve-out matching the MCP ``search_resources`` tool.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/routers__api__search__SearchResultResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "routers__api__search__SearchResultResponse": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "entity_type",
+          "name",
+          "description"
+        ],
+        "title": "SearchResultResponse",
         "type": "object"
       },
       "routers__api__solutions__AiAssistantAcceptRequest": {
@@ -9914,6 +11326,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -9944,11 +11359,14 @@
         ]
       },
       "post": {
-        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n- `email_received`: a virtual email inbox; runs when mail arrives at the agent's address. Configure the alias/allowlist with `PUT /api/agents/{agent_id}/triggers/{trigger_id}/email-config`.\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
+        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n- `email_received`: a virtual email inbox; runs when mail arrives at the agent's address. Configure the alias/allowlist with `PUT /agents/{agent_id}/triggers/{trigger_id}/email-config`.\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
         "operationId": "create_agent_api_agents_post",
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -10040,6 +11458,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10086,6 +11507,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10139,6 +11563,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10174,6 +11601,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -10221,6 +11651,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -10277,6 +11710,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10316,6 +11752,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10353,6 +11792,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10397,6 +11839,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -10493,6 +11938,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10620,6 +12068,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10664,6 +12115,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -10720,6 +12174,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10752,9 +12209,27 @@
     },
     "/agents/evaluation-results/non-manual-summary": {
       "get": {
-        "description": "Get account-level evaluation summary for API key clients.\n\nReturns aggregated pass/fail/flagged counts and pass rates for each evaluation mode (eval_and_retry, sample_and_flag).",
+        "description": "Get an evaluation summary for API key clients.\n\nReturns aggregated pass/fail/flagged counts and pass rates for each evaluation mode (eval_and_retry, sample_and_flag).\n\nThe ``agent_id`` scoping parameter is part of the ``2026-07-27`` changeset\n(opt in via the ``Seclai-Version`` header). Clients on the legacy baseline\nalways receive the account-wide rollup; ``agent_id`` is ignored for them so\nthe endpoint's behavior is frozen. With ``2026-07-27`` or later, the summary\nis scoped to ``agent_id`` when supplied (and returns 404 if it doesn't exist).",
         "operationId": "get_non_manual_evaluation_summary_api_agents_evaluation_results_non_manual_summary_get",
         "parameters": [
+          {
+            "description": "Scope the summary to a single agent. Omit for account-wide.",
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scope the summary to a single agent. Omit for account-wide.",
+              "title": "Agent Id"
+            }
+          },
           {
             "in": "query",
             "name": "days",
@@ -10801,6 +12276,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10868,6 +12346,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10909,6 +12390,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10936,6 +12420,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10963,6 +12450,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -10985,11 +12475,14 @@
     },
     "/agents/preview-import": {
       "post": {
-        "description": "Validate an `agent_definition` payload (the same shape produced by `GET /api/agents/{agent_id}/export`) without creating or modifying any agent. On success returns a summary the client can show before commit (counts of steps, schedules, alert configs, evaluation criteria, governance policies). On failure returns the same 422 body shape used by `POST /api/agents` and `PUT /api/agents/{id}` so callers can render line/column-anchored errors.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. No DB writes.",
+        "description": "Validate an `agent_definition` payload (the same shape produced by `GET /agents/{agent_id}/export`) without creating or modifying any agent. On success returns a summary the client can show before commit (counts of steps, schedules, alert configs, evaluation criteria, governance policies). On failure returns the same 422 body shape used by `POST /agents` and `PUT /agents/{id}` so callers can render line/column-anchored errors.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. No DB writes.",
         "operationId": "preview_import_agent_api_agents_preview_import_post",
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -11037,6 +12530,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -11079,7 +12575,7 @@
     },
     "/agents/runs/{run_id}": {
       "delete": {
-        "description": "Cancel a running agent run.\n\nIf the run is already in a terminal state (`completed` or `failed`), cancellation will be rejected.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only cancel runs belonging to your account.",
+        "description": "Cancel an in-flight (`processing`) or queued (`queued`) agent run.\n\nA `queued` run is an inbound-email run parked by the per-plan rate quota that has not yet been dispatched; cancelling it consumes no quota or credits.\n\nIf the run is already in a terminal state (`completed` or `failed`), cancellation will be rejected.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only cancel runs belonging to your account.",
         "operationId": "delete_agent_run_api_agents_runs__run_id__delete",
         "parameters": [
           {
@@ -11093,6 +12589,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11149,6 +12648,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11195,6 +12697,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11232,6 +12737,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11276,6 +12784,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -11388,6 +12899,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11434,6 +12948,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -11490,6 +13007,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -11555,6 +13075,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -11572,11 +13095,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "boolean"
-                  },
-                  "title": "Response Mark Ai Suggestion Api Agents  Agent Id  Ai Assistant  Conversation Id  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             },
@@ -11615,6 +13134,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11661,6 +13183,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11711,6 +13236,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11741,7 +13269,7 @@
         ]
       },
       "put": {
-        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /api/agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `regex_replace`, `gate`, `retry`, `evaluate_step`, `extract_data`, `extract_content`, `add_chat_turn`, `load_chat_history`, `add_memory`, `search_memory`, `load_memory`, `streaming_result`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `merge`, `text`, `for_each`, `if_else`, and `switch`. Non-composite step types (`display_result`, `join`, `retry`, `streaming_result`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\n**if_else** runs `then_steps` when its `conditions` (same shape as `gate`) match, otherwise its optional `else_steps`. Either branch's output flows to the if_else step's own `child_steps` (the post-branch continuation chain).\n\n**switch** dispatches on a `discriminator` template (default `{{input}}`) to the first matching case (equality by default; pass a list in `match` for `$in` semantics) or to `else_steps` when no case matches. Cases own their own `steps` subtrees; the chosen branch's output flows to the switch step's own `child_steps`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
+        "description": "Update the agent's definition on the main branch.\n\nUses **optimistic locking**: provide `expected_change_id` from the last `GET /agents/{agent_id}/definition`. Returns `409 Conflict` if the definition was modified since your last read.\n\nThe definition contains the agent's step workflow. Step types include `prompt_call`, `retrieval`, `regex_replace`, `gate`, `retry`, `evaluate_step`, `extract_data`, `extract_content`, `add_chat_turn`, `load_chat_history`, `add_memory`, `search_memory`, `load_memory`, `streaming_result`, `send_email`, `webhook_call`, `write_aws_s3_object`, `call_agent`, `write_metadata`, `write_content_attachment`, `load_content_attachment`, `load_content`, `display_result`, `join`, `merge`, `text`, `for_each`, `if_else`, and `switch`. Non-composite step types (`display_result`, `join`, `retry`, `streaming_result`) cannot contain child steps.\n\n**Retry steps** re-execute from a target ancestor step for quality-control loops. Configure with `target_step_id` (ancestor step ID) and `max_retries` (1\u201310). Best practice: place a `gate` step before the retry to make retries conditional.\n\n**if_else** runs `then_steps` when its `conditions` (same shape as `gate`) match, otherwise its optional `else_steps`. Either branch's output flows to the if_else step's own `child_steps` (the post-branch continuation chain).\n\n**switch** dispatches on a `discriminator` template (default `{{input}}`) to the first matching case (equality by default; pass a list in `match` for `$in` semantics) or to `else_steps` when no case matches. Cases own their own `steps` subtrees; the chosen branch's output flows to the switch step's own `child_steps`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
         "operationId": "update_agent_definition_api_agents__agent_id__definition_put",
         "parameters": [
           {
@@ -11755,6 +13283,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -11797,7 +13328,7 @@
     },
     "/agents/{agent_id}/disable": {
       "post": {
-        "description": "Disable an agent so it stops firing from every trigger path (API runs return 409, inbound email is turned away, scheduled/content triggers are skipped).\n\nReturns **409** with the blocking callers when other live agents still call this one via a `call_agent` step \u2014 disable those first.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token bound to a user; the agent must belong to the key's account.",
+        "description": "Disable an agent so it stops firing from every trigger path (API runs return 409, inbound email is turned away, scheduled/content triggers are skipped).\n\nReturns **409** with the blocking callers when other live agents still call this one via a `call_agent` step \u2014 disable those first.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token bound to a user (the acting user is recorded); the agent must belong to the key's account.",
         "operationId": "disable_agent_api_api_agents__agent_id__disable_post",
         "parameters": [
           {
@@ -11811,6 +13342,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11843,7 +13377,7 @@
     },
     "/agents/{agent_id}/enable": {
       "post": {
-        "description": "Re-enable a paused agent (clears the disable state, whether it was paused manually or auto-paused by the inbound-email overload safeguard).\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token bound to a user; the agent must belong to the key's account.",
+        "description": "Re-enable a paused agent (clears the disable state, whether it was paused manually or auto-paused by the inbound-email overload safeguard).\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token bound to a user (the acting user is recorded); the agent must belong to the key's account.",
         "operationId": "enable_agent_api_api_agents__agent_id__enable_post",
         "parameters": [
           {
@@ -11857,6 +13391,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11889,7 +13426,7 @@
     },
     "/agents/{agent_id}/evaluation-criteria": {
       "get": {
-        "description": "List all evaluation criteria configured for an agent.\n\nReturns every criteria with its type, configuration, and a summary of\nresults (pass / fail counts).  Criteria can be filtered client-side by\ntype or enabled status.",
+        "description": "List evaluation criteria configured for an agent.\n\nResponse shape is version-gated by the ``Seclai-Version`` header:\n\n- **Default / legacy** (no header, or a date before ``2026-07-27``): a bare\n  JSON array of criteria (unpaginated \u2014 every criterion for the agent).\n- **``Seclai-Version: 2026-07-27`` or later**: the canonical paginated\n  envelope ``{data, pagination: {page, limit, total, pages, has_next,\n  has_prev}}``.\n\nEach criterion carries its type, configuration, and a summary of results\n(pass / fail counts).  Criteria can be filtered client-side by type or\nenabled status.",
         "operationId": "list_evaluation_criteria_api_agents__agent_id__evaluation_criteria_get",
         "parameters": [
           {
@@ -11902,7 +13439,33 @@
             }
           },
           {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -11951,6 +13514,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -12007,6 +13573,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -12160,6 +13729,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -12293,6 +13865,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -12351,6 +13926,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -12406,6 +13984,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -12497,6 +14078,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -12541,6 +14125,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -12607,6 +14194,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -12632,7 +14222,7 @@
                 }
               }
             },
-            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /api/agents/runs/{run_id}`."
+            "description": "Streams agent run events via Server-Sent Events (SSE); run is always created as priority.\n\nSSE events:\n- `event: init` \u2014 `data` is an `AgentRunResponse` snapshot (includes `run_id`).\n- `event: done` \u2014 `data` is the final `AgentRunResponse` snapshot (includes `output`, `credits`, etc).\n- Other events (e.g. `status`, step events) are forwarded from the run event stream.\n- On `timeout` / `error`, the payload includes `run_id` so clients can fetch status via `GET /agents/runs/{run_id}`."
           },
           "402": {
             "content": {
@@ -12663,7 +14253,7 @@
     },
     "/agents/{agent_id}/runs/{run_id}/evaluation-results": {
       "get": {
-        "description": "List all evaluation results recorded for a specific agent run.\n\nReturns results across all evaluation criteria for the given run,\nuseful for getting a complete quality snapshot of a single execution.",
+        "description": "List evaluation results recorded for a specific agent run.\n\nResponse shape is version-gated by the ``Seclai-Version`` header:\n\n- **Default / legacy** (no header, or a date before ``2026-07-27``): a bare\n  JSON array of results (unpaginated \u2014 every result for the run).\n- **``Seclai-Version: 2026-07-27`` or later**: the canonical paginated\n  envelope ``{data, pagination: {page, limit, total, pages, has_next,\n  has_prev}}``.\n\nResults span all evaluation criteria for the given run, useful for getting a\ncomplete quality snapshot of a single execution.",
         "operationId": "list_run_evaluation_results_api_agents__agent_id__runs__run_id__evaluation_results_get",
         "parameters": [
           {
@@ -12685,7 +14275,33 @@
             }
           },
           {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -12745,6 +14361,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -12801,6 +14420,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -12838,6 +14460,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -12885,6 +14510,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -12932,6 +14560,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13006,6 +14637,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -13053,6 +14687,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13070,11 +14707,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "boolean"
-                  },
-                  "title": "Response Api Ai Memory Bank Accept Api Ai Assistant Memory Bank  Conversation Id  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             },
@@ -13104,6 +14737,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13151,6 +14787,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13208,6 +14847,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13265,6 +14907,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -13414,6 +15059,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -13421,9 +15069,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Alerts Api Alerts Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__alerts__AlertListResponse"
                 }
               }
             },
@@ -13506,7 +15152,37 @@
             }
           },
           {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -13514,9 +15190,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Alert Configs Api Alerts Configs Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AlertConfigListResponse"
                 }
               }
             },
@@ -13544,6 +15218,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13561,9 +15238,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Alert Config Api Alerts Configs Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AlertConfigResponse"
                 }
               }
             },
@@ -13602,6 +15277,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -13639,6 +15317,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -13646,9 +15327,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Alert Config Api Alerts Configs  Config Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AlertConfigResponse"
                 }
               }
             },
@@ -13685,6 +15364,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13702,9 +15384,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Update Alert Config Api Alerts Configs  Config Id  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AlertConfigResponse"
                 }
               }
             },
@@ -13765,6 +15445,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -13821,6 +15504,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13877,6 +15563,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -13884,9 +15573,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Alert Detail Api Alerts  Alert Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__alerts__AlertDetailResponse"
                 }
               }
             },
@@ -13925,6 +15612,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -13942,9 +15632,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Add Alert Comment Api Alerts  Alert Id  Comments Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__alerts__AlertDetailResponse"
                 }
               }
             },
@@ -13983,6 +15671,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -14000,9 +15691,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Change Alert Status Api Alerts  Alert Id  Status Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__alerts__AlertDetailResponse"
                 }
               }
             },
@@ -14041,6 +15730,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14048,9 +15740,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Subscribe To Alert Api Alerts  Alert Id  Subscribe Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__alerts__AlertDetailResponse"
                 }
               }
             },
@@ -14089,6 +15779,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14096,9 +15789,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Unsubscribe From Alert Api Alerts  Alert Id  Unsubscribe Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__alerts__AlertDetailResponse"
                 }
               }
             },
@@ -14137,6 +15828,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14194,6 +15888,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14238,6 +15935,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -14314,6 +16014,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14360,6 +16063,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -14450,6 +16156,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14457,9 +16166,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Docs Search Api Docs Search Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__docs_search__DocsSearchResponse"
                 }
               }
             },
@@ -14489,6 +16196,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14514,6 +16224,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -14561,6 +16274,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14591,6 +16307,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14658,6 +16377,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14705,6 +16427,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14752,6 +16477,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14799,6 +16527,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14836,6 +16567,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -14903,6 +16637,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -14957,6 +16694,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15010,6 +16750,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15091,12 +16834,16 @@
             "schema": {
               "default": "desc",
               "description": "Sort direction: asc or desc.",
+              "pattern": "^(asc|desc)$",
               "title": "Order",
               "type": "string"
             }
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15132,6 +16879,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -15191,6 +16941,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15228,6 +16981,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15272,6 +17028,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -15319,6 +17078,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15391,6 +17153,7 @@
             "schema": {
               "default": "desc",
               "description": "Sort direction: asc or desc.",
+              "pattern": "^(asc|desc)$",
               "title": "Order",
               "type": "string"
             }
@@ -15415,6 +17178,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15450,6 +17216,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -15497,6 +17266,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -15574,6 +17346,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15621,6 +17396,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -15638,11 +17416,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "type": "boolean"
-                  },
-                  "title": "Response Memory Bank Ai Accept Api Memory Banks Ai Assistant  Conversation Id  Patch",
-                  "type": "object"
+                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             },
@@ -15672,6 +17446,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15679,12 +17456,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "title": "Response List Templates Api Memory Banks Templates Get",
-                  "type": "array"
+                  "title": "Response List Templates Api Memory Banks Templates Get"
                 }
               }
             },
@@ -15704,6 +17476,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -15760,6 +17535,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15797,6 +17575,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15841,6 +17622,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -15897,6 +17681,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15904,14 +17691,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "additionalProperties": {
-                      "type": "string"
-                    },
-                    "type": "object"
-                  },
-                  "title": "Response Get Agents Using Bank Api Memory Banks  Memory Bank Id  Agents Get",
-                  "type": "array"
+                  "title": "Response Get Agents Using Bank Api Memory Banks  Memory Bank Id  Agents Get"
                 }
               }
             },
@@ -15950,6 +17730,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -15957,9 +17740,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Compact Memory Bank Api Memory Banks  Memory Bank Id  Compact Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CompactionScheduledResponse"
                 }
               }
             },
@@ -15998,6 +17779,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16083,6 +17867,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16131,6 +17918,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -16268,6 +18058,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16366,6 +18159,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16373,9 +18169,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Alerts Api Models Alerts Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__model_lifecycle__ModelAlertListResponse"
                 }
               }
             },
@@ -16405,6 +18199,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16425,6 +18222,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16432,9 +18232,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Alert Unread Count Api Models Alerts Unread Count Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UnreadCountResponse"
                 }
               }
             },
@@ -16464,6 +18262,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16494,6 +18295,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16501,9 +18305,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Generation Tiers Api Models Generation Tiers Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/GenerationTierListResponse"
                 }
               }
             },
@@ -16602,6 +18404,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16609,9 +18414,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Experiments Api Models Playground Experiments Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExperimentListResponse"
                 }
               }
             },
@@ -16639,6 +18442,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -16656,9 +18462,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Experiment Api Models Playground Experiments Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CreateExperimentResponse"
                 }
               }
             },
@@ -16698,6 +18502,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16736,6 +18543,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16743,9 +18553,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Experiment Api Models Playground Experiments  Experiment Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExperimentDetailResponse"
                 }
               }
             },
@@ -16785,6 +18593,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16792,9 +18603,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cancel Experiment Endpoint Api Models Playground Experiments  Experiment Id  Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CancelExperimentResponse"
                 }
               }
             },
@@ -16833,6 +18642,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16969,6 +18781,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -16976,9 +18791,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Recommendations Api Models  Model Id  Recommendations Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__model_lifecycle__ModelRecommendationsResponse"
                 }
               }
             },
@@ -17053,6 +18866,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -17060,9 +18876,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Search Api Search Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/routers__api__search__SearchResponse"
                 }
               }
             },
@@ -17150,6 +18964,8 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 200,
+                  "minLength": 1,
                   "type": "string"
                 },
                 {
@@ -17162,6 +18978,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -17197,6 +19016,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17254,6 +19076,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -17292,6 +19117,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -17337,6 +19165,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17394,6 +19225,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17449,6 +19283,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17506,6 +19343,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17563,6 +19403,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17620,6 +19463,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17687,6 +19533,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17754,6 +19603,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -17794,6 +19646,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -17843,6 +19698,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17910,6 +19768,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -17960,6 +19821,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18015,6 +19879,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18072,6 +19939,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18127,6 +19997,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18168,59 +20041,9 @@
       }
     },
     "/sources": {
-      "post": {
-        "description": "Create a new content source.\n\nSource types: `rss`, `website`, `custom_index`.\n\nFor RSS and website sources, provide the URL. For custom index sources, the URL is created automatically.\n\nFor custom_index sources, you can optionally specify an `index_mode`: `fast_and_cheap` (default), `balanced`, `slow_and_thorough`, or `custom`. The legacy `file_uploads` source type is accepted as an alias for `custom_index` with `index_mode=fast_and_cheap`.",
-        "operationId": "create_source_api_sources_post",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/X-Account-Id"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSourceBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SourceResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "402": {
-            "description": "Insufficient credits or no active subscription \u2014 the account has exhausted its credits or does not have a valid subscription."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Source",
-        "tags": [
-          "sources"
-        ]
-      }
-    },
-    "/sources/": {
       "get": {
         "description": "List content sources for your account.\n\nA *source* is where Seclai pulls or receives content from \u2014 RSS feeds, websites, or content stores (``custom_index``). Content stores support file uploads and API-driven content ingestion with configurable index modes (``fast_and_cheap``, ``balanced``, ``slow_and_thorough``, or ``custom``).\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/updated_at/name) and `order` (asc/desc).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Results are scoped to the caller's account.\n- The optional `account_id` query param is only allowed when it matches the caller's account.",
-        "operationId": "list_sources_api_sources__get",
+        "operationId": "list_sources_api_sources_get",
         "parameters": [
           {
             "description": "Page number",
@@ -18294,6 +20117,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -18322,6 +20148,57 @@
         "tags": [
           "sources"
         ]
+      },
+      "post": {
+        "description": "Create a new content source.\n\nSource types: `rss`, `website`, `custom_index`.\n\nFor RSS and website sources, provide the URL. For custom index sources, the URL is created automatically.\n\nFor custom_index sources, you can optionally specify an `index_mode`: `fast_and_cheap` (default), `balanced`, `slow_and_thorough`, or `custom`. The legacy `file_uploads` source type is accepted as an alias for `custom_index` with `index_mode=fast_and_cheap`.",
+        "operationId": "create_source_api_sources_post",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "402": {
+            "description": "Insufficient credits or no active subscription \u2014 the account has exhausted its credits or does not have a valid subscription."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Source",
+        "tags": [
+          "sources"
+        ]
       }
     },
     "/sources/{source_connection_id}": {
@@ -18341,6 +20218,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -18379,6 +20259,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -18424,6 +20307,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18479,6 +20365,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18536,6 +20425,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -18574,7 +20466,7 @@
         ]
       },
       "post": {
-        "description": "Start an embedding model migration for a custom-index source.\n\nThe migration runs asynchronously in the background.  Poll `GET /api/sources/{id}/embedding-migration` to track progress.\n\nOptionally override chunking configuration (`chunk_size`, `chunk_overlap`, `chunk_language`, `chunk_separators`, `chunk_regex_separators`).  When a chunking field is omitted (null), the current source's value is preserved.\n\nConstraints:\n- Only `custom_index` source types support migration.\n- A migration cannot be started while another is already active.\n- The target model + dimensions must differ from the source's current settings.",
+        "description": "Start an embedding model migration for a custom-index source.\n\nThe migration runs asynchronously in the background.  Poll `GET /sources/{id}/embedding-migration` to track progress.\n\nOptionally override chunking configuration (`chunk_size`, `chunk_overlap`, `chunk_language`, `chunk_separators`, `chunk_regex_separators`).  When a chunking field is omitted (null), the current source's value is preserved.\n\nConstraints:\n- Only `custom_index` source types support migration.\n- A migration cannot be started while another is already active.\n- The target model + dimensions must differ from the source's current settings.",
         "operationId": "start_source_embedding_migration_api_sources__source_connection_id__embedding_migration_post",
         "parameters": [
           {
@@ -18589,6 +20481,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18649,6 +20544,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -18719,6 +20617,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -18764,6 +20665,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18821,6 +20725,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -18888,6 +20795,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -18936,6 +20846,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -18993,6 +20906,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -19050,6 +20966,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -19094,6 +21013,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "requestBody": {
@@ -19177,6 +21099,9 @@
           },
           {
             "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
           }
         ],
         "responses": {
@@ -19243,6 +21168,84 @@
           "agent_run_attachments"
         ]
       }
+    },
+    "/version": {
+      "get": {
+        "description": "Returns the account's pinned `Seclai-Version` (null when unpinned), the version this request resolved to, and the default/latest/known versions. Pin your account with `PUT /version` or override per request with the `Seclai-Version` header.",
+        "operationId": "get_api_version_api_version_get",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiVersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get the account's API version",
+        "tags": [
+          "version"
+        ]
+      },
+      "put": {
+        "description": "Sets the account's sticky `Seclai-Version` to the given `YYYY-MM-DD` date, or clears it with `null`. The new pin applies to subsequent header-less requests; a `Seclai-Version` request header still overrides it. Owner/admin only. `effective_version` in the response reflects the current request, not the new pin.",
+        "operationId": "update_api_version_api_version_put",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateApiVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiVersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pin (or clear) the account's API version",
+        "tags": [
+          "version"
+        ]
+      }
     }
   },
   "security": [
@@ -19252,5 +21255,13 @@
     {
       "BearerAuth": []
     }
-  ]
+  ],
+  "x-seclai-versions": {
+    "default": "2026-07-01",
+    "known": [
+      "2026-07-01",
+      "2026-07-27"
+    ],
+    "latest": "2026-07-27"
+  }
 }

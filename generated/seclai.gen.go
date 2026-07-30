@@ -295,7 +295,7 @@ type AgentRunResponse struct {
 	// Output Output produced by the agent run.
 	Output *string `json:"output"`
 
-	// OutputContentType MIME type of `output` — mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` — fetch each attachment via `GET /api/v2/agent-runs/{run_id}/attachments/{attachment_id}`, where `attachment_id` is the URL-safe base64 of the attachment's `storage_key` (accepts an API key or OAuth token).  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.
+	// OutputContentType MIME type of `output` — mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` — fetch each attachment via `GET /v2/agent-runs/{run_id}/attachments/{attachment_id}`, where `attachment_id` is the URL-safe base64 of the attachment's `storage_key` (accepts an API key or OAuth token).  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.
 	OutputContentType *string `json:"output_content_type"`
 
 	// Priority Indicates if the run was treated as a priority execution.
@@ -581,6 +581,62 @@ type AiConversationTurnResponse struct {
 	UserInput string `json:"user_input"`
 }
 
+// AlertConfigListResponse “GET /alerts/configs“ legacy/default shape (header-less clients).
+//
+// “Seclai-Version: 2026-07-27+“ clients receive the canonical
+// “{data, pagination}“ envelope instead (the handler returns a “JSONResponse“
+// that bypasses this “response_model“); this documents the default shape.
+type AlertConfigListResponse struct {
+	Configs []AlertConfigResponse `json:"configs"`
+	Total   int                   `json:"total"`
+}
+
+// AlertConfigResponse defines model for AlertConfigResponse.
+type AlertConfigResponse struct {
+	AccountId          string                  `json:"account_id"`
+	AgentId            *string                 `json:"agent_id"`
+	AlertType          string                  `json:"alert_type"`
+	CooldownMinutes    int                     `json:"cooldown_minutes"`
+	CreatedAt          *string                 `json:"created_at"`
+	DistributionType   string                  `json:"distribution_type"`
+	Enabled            bool                    `json:"enabled"`
+	Id                 string                  `json:"id"`
+	LastAlertedAt      *string                 `json:"last_alerted_at"`
+	RecipientUserIds   []string                `json:"recipient_user_ids"`
+	SourceConnectionId *string                 `json:"source_connection_id"`
+	Threshold          *map[string]interface{} `json:"threshold"`
+	UpdatedAt          *string                 `json:"updated_at"`
+}
+
+// AlertHistoryEntryResponse defines model for AlertHistoryEntryResponse.
+type AlertHistoryEntryResponse struct {
+	ChangedByName   *string `json:"changed_by_name"`
+	ChangedByUserId *string `json:"changed_by_user_id"`
+	CreatedAt       *string `json:"created_at"`
+	Id              string  `json:"id"`
+	NewStatus       string  `json:"new_status"`
+	Note            *string `json:"note"`
+	PreviousStatus  *string `json:"previous_status"`
+}
+
+// ApiVersionResponse defines model for ApiVersionResponse.
+type ApiVersionResponse struct {
+	// DefaultVersion Baseline for an unpinned, header-less caller.
+	DefaultVersion string `json:"default_version"`
+
+	// EffectiveVersion The version THIS request resolved to (header > pin > default).
+	EffectiveVersion string `json:"effective_version"`
+
+	// KnownVersions All dated versions, oldest first.
+	KnownVersions []string `json:"known_versions"`
+
+	// LatestVersion Newest version the server knows about.
+	LatestVersion string `json:"latest_version"`
+
+	// PinnedVersion The account's sticky pinned version, or null when unpinned (the account resolves to the default). Applies to header-less requests.
+	PinnedVersion *string `json:"pinned_version"`
+}
+
 // AppliedActionResponse Result of a single executed governance action.
 type AppliedActionResponse struct {
 	// ActionType Type of action that was executed.
@@ -655,6 +711,11 @@ type BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost struct {
 	Title *string `json:"title,omitempty"`
 }
 
+// CancelExperimentResponse defines model for CancelExperimentResponse.
+type CancelExperimentResponse struct {
+	Status string `json:"status"`
+}
+
 // CancelQueuedRunsResponse defines model for CancelQueuedRunsResponse.
 type CancelQueuedRunsResponse struct {
 	Cancelled int `json:"cancelled"`
@@ -679,6 +740,12 @@ type CompactionEvaluationModel struct {
 
 	// Verdict 'pass' or 'fail'.
 	Verdict string `json:"verdict"`
+}
+
+// CompactionScheduledResponse Acknowledgement that an on-demand compaction run was scheduled.
+type CompactionScheduledResponse struct {
+	MemoryBankId string `json:"memory_bank_id"`
+	Status       string `json:"status"`
 }
 
 // CompactionTestResponseModel Response from a compaction prompt test.
@@ -789,6 +856,12 @@ type CreateEvaluationResultRequest struct {
 
 	// Status Result status of a single evaluation run.
 	Status EvaluationStatus `json:"status"`
+}
+
+// CreateExperimentResponse defines model for CreateExperimentResponse.
+type CreateExperimentResponse struct {
+	ExperimentId string `json:"experiment_id"`
+	Status       string `json:"status"`
 }
 
 // CreateKnowledgeBaseBody Request body for creating a knowledge base.
@@ -962,6 +1035,16 @@ type DnsRecordResponse struct {
 	RelativeName string  `json:"relative_name"`
 	Type         string  `json:"type"`
 	Value        string  `json:"value"`
+}
+
+// DocsSearchResultResponse defines model for DocsSearchResultResponse.
+type DocsSearchResultResponse struct {
+	Anchor    *string `json:"anchor"`
+	DocSlug   string  `json:"doc_slug"`
+	Highlight *string `json:"highlight"`
+	Score     float32 `json:"score"`
+	Snippet   *string `json:"snippet"`
+	Title     string  `json:"title"`
 }
 
 // EmailDomainResponse defines model for EmailDomainResponse.
@@ -1160,6 +1243,46 @@ type ExecutedActionResponse struct {
 	Success *bool `json:"success,omitempty"`
 }
 
+// ExperimentDetailResponse defines model for ExperimentDetailResponse.
+type ExperimentDetailResponse struct {
+	CompletedAt                   *string                 `json:"completed_at"`
+	CreatedAt                     string                  `json:"created_at"`
+	ErrorMessage                  *string                 `json:"error_message"`
+	EvaluationComplexity          string                  `json:"evaluation_complexity"`
+	EvaluationMode                string                  `json:"evaluation_mode"`
+	EvaluatorModelId              *string                 `json:"evaluator_model_id"`
+	Id                            string                  `json:"id"`
+	IncludeStepOutputInEvaluation bool                    `json:"include_step_output_in_evaluation"`
+	JsonTemplate                  *string                 `json:"json_template"`
+	ProgressCurrent               *int                    `json:"progress_current"`
+	ProgressMessage               *string                 `json:"progress_message"`
+	ProgressTotal                 *int                    `json:"progress_total"`
+	Prompt                        string                  `json:"prompt"`
+	ResultData                    *map[string]interface{} `json:"result_data"`
+	SelectedModelIds              []string                `json:"selected_model_ids"`
+	SelectedStepOutput            *string                 `json:"selected_step_output"`
+	StartedAt                     *string                 `json:"started_at"`
+	Status                        string                  `json:"status"`
+	SystemPrompt                  string                  `json:"system_prompt"`
+}
+
+// ExperimentListResponse “GET /models/playground/experiments“ legacy/default shape; 2026-07-27+
+// clients get the canonical “{data, pagination}“ envelope.
+type ExperimentListResponse struct {
+	Experiments []ExperimentSummaryResponse `json:"experiments"`
+	Total       int                         `json:"total"`
+}
+
+// ExperimentSummaryResponse defines model for ExperimentSummaryResponse.
+type ExperimentSummaryResponse struct {
+	CreatedAt            string   `json:"created_at"`
+	EvaluationComplexity string   `json:"evaluation_complexity"`
+	EvaluationMode       string   `json:"evaluation_mode"`
+	Id                   string   `json:"id"`
+	SelectedModelIds     []string `json:"selected_model_ids"`
+	Status               string   `json:"status"`
+}
+
 // ExportFormat Supported export file formats.
 type ExportFormat string
 
@@ -1250,6 +1373,23 @@ type GenerateStepConfigResponse struct {
 
 	// Success Whether a valid configuration was generated.
 	Success bool `json:"success"`
+}
+
+// GenerationTierListResponse “GET /models/generation-tiers“ legacy/default shape; 2026-07-27+ clients
+// get the canonical “{data, pagination}“ envelope.
+type GenerationTierListResponse struct {
+	Tiers []GenerationTierResponse `json:"tiers"`
+}
+
+// GenerationTierResponse defines model for GenerationTierResponse.
+type GenerationTierResponse struct {
+	CreditsPerUnit *int    `json:"credits_per_unit"`
+	Modality       string  `json:"modality"`
+	ModelId        string  `json:"model_id"`
+	ModelName      string  `json:"model_name"`
+	PriceLabel     *string `json:"price_label"`
+	Tier           string  `json:"tier"`
+	UnitLabel      *string `json:"unit_label"`
 }
 
 // GovernanceAiAcceptResponse Response from accepting a governance AI assistant plan.
@@ -1605,6 +1745,12 @@ type ModalityRateResponse struct {
 	InputCreditsPer1000Tokens  *float32 `json:"input_credits_per_1000_tokens"`
 	Modality                   string   `json:"modality"`
 	OutputCreditsPer1000Tokens *float32 `json:"output_credits_per_1000_tokens"`
+}
+
+// OkResponse A minimal “{"ok": true}“ acknowledgement for state-mutating actions
+// that have no richer resource to return (e.g. accept/decline a suggestion).
+type OkResponse struct {
+	Ok bool `json:"ok"`
 }
 
 // OrganizationAlertPreferenceListResponse defines model for OrganizationAlertPreferenceListResponse.
@@ -2048,6 +2194,11 @@ type UnlinkResourcesRequest struct {
 	Ids []openapi_types.UUID `json:"ids"`
 }
 
+// UnreadCountResponse defines model for UnreadCountResponse.
+type UnreadCountResponse struct {
+	Count int `json:"count"`
+}
+
 // UpdateAgentDefinitionRequest defines model for UpdateAgentDefinitionRequest.
 type UpdateAgentDefinitionRequest struct {
 	// Definition The full agent definition (name, description, tags, steps). Steps form a tree workflow. Each step has a `step_type`, `id`, `name`, and type-specific config. Content enrichment steps (write_metadata, write_content_attachment, load_content_attachment, load_content) require content-triggered agents.
@@ -2073,6 +2224,12 @@ type UpdateAlertConfigRequest struct {
 
 	// Threshold Threshold configuration
 	Threshold *map[string]interface{} `json:"threshold"`
+}
+
+// UpdateApiVersionRequest defines model for UpdateApiVersionRequest.
+type UpdateApiVersionRequest struct {
+	// Version A YYYY-MM-DD date to pin the account to, or null to clear the pin (revert to the default baseline).
+	Version *string `json:"version"`
 }
 
 // UpdateEvaluationCriteriaRequest Request body for updating an evaluation criteria.
@@ -2237,7 +2394,7 @@ type VariantOptionResponse struct {
 
 // RoutersApiAgentsAgentImportPreviewRequest Dry-run import request — same payload shape as the export endpoint.
 type RoutersApiAgentsAgentImportPreviewRequest struct {
-	// AgentDefinition Payload in the same shape as GET /api/agents/{agent_id}/export.
+	// AgentDefinition Payload in the same shape as GET /agents/{agent_id}/export.
 	AgentDefinition map[string]interface{} `json:"agent_definition"`
 }
 
@@ -2448,6 +2605,61 @@ type RoutersApiAlertsAddCommentRequest struct {
 	Body string `json:"body"`
 }
 
+// RoutersApiAlertsAlertCommentResponse defines model for routers__api__alerts__AlertCommentResponse.
+type RoutersApiAlertsAlertCommentResponse struct {
+	Body      string  `json:"body"`
+	CreatedAt *string `json:"created_at"`
+	Id        string  `json:"id"`
+	UserId    string  `json:"user_id"`
+	UserName  *string `json:"user_name"`
+}
+
+// RoutersApiAlertsAlertDetailResponse defines model for routers__api__alerts__AlertDetailResponse.
+type RoutersApiAlertsAlertDetailResponse struct {
+	Alert       RoutersApiAlertsAlertResponse             `json:"alert"`
+	Comments    []RoutersApiAlertsAlertCommentResponse    `json:"comments"`
+	History     []AlertHistoryEntryResponse               `json:"history"`
+	Subscribers []RoutersApiAlertsAlertSubscriberResponse `json:"subscribers"`
+}
+
+// RoutersApiAlertsAlertListResponse “GET /alerts“ — always the canonical “{data, pagination}“ envelope.
+type RoutersApiAlertsAlertListResponse struct {
+	Data []RoutersApiAlertsAlertResponse `json:"data"`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:"pagination"`
+}
+
+// RoutersApiAlertsAlertResponse defines model for routers__api__alerts__AlertResponse.
+type RoutersApiAlertsAlertResponse struct {
+	AccountId              string       `json:"account_id"`
+	AgentId                *string      `json:"agent_id"`
+	AgentRunId             *string      `json:"agent_run_id"`
+	AlertConfigId          *string      `json:"alert_config_id"`
+	AlertType              string       `json:"alert_type"`
+	CommentCount           int          `json:"comment_count"`
+	CreatedAt              *string      `json:"created_at"`
+	Description            *string      `json:"description"`
+	Details                *interface{} `json:"details,omitempty"`
+	Id                     string       `json:"id"`
+	IsSubscribed           bool         `json:"is_subscribed"`
+	McpClientId            *string      `json:"mcp_client_id"`
+	SourceConnectionId     *string      `json:"source_connection_id"`
+	SourceConnectionPullId *string      `json:"source_connection_pull_id"`
+	Status                 string       `json:"status"`
+	SubscriberCount        int          `json:"subscriber_count"`
+	Title                  string       `json:"title"`
+	UpdatedAt              *string      `json:"updated_at"`
+}
+
+// RoutersApiAlertsAlertSubscriberResponse defines model for routers__api__alerts__AlertSubscriberResponse.
+type RoutersApiAlertsAlertSubscriberResponse struct {
+	CreatedAt *string `json:"created_at"`
+	Id        string  `json:"id"`
+	UserId    string  `json:"user_id"`
+	UserName  *string `json:"user_name"`
+}
+
 // RoutersApiAlertsOrganizationAlertPreferenceResponse defines model for routers__api__alerts__OrganizationAlertPreferenceResponse.
 type RoutersApiAlertsOrganizationAlertPreferenceResponse struct {
 	AlertType      string `json:"alert_type"`
@@ -2554,6 +2766,12 @@ type RoutersApiContentsFileUploadResponse struct {
 	Status string `json:"status"`
 }
 
+// RoutersApiDocsSearchDocsSearchResponse Ranked results, NOT a paginated collection — the “{results}“ shape is a
+// deliberate carve-out matching the MCP “search_docs“ tool.
+type RoutersApiDocsSearchDocsSearchResponse struct {
+	Results []DocsSearchResultResponse `json:"results"`
+}
+
 // RoutersApiGovernanceGovernanceAiAssistantRequest Request body for the governance AI assistant.
 type RoutersApiGovernanceGovernanceAiAssistantRequest struct {
 	// UserInput Natural-language request for the governance AI assistant.
@@ -2633,6 +2851,74 @@ type RoutersApiMemoryBanksMemoryBankLastConversationResponse struct {
 
 	// UserInput Most recent user input.
 	UserInput *string `json:"user_input"`
+}
+
+// RoutersApiModelLifecycleModelAlertListResponse “GET /models/alerts“ legacy/default shape; 2026-07-27+ clients get the
+// canonical “{data, pagination}“ envelope (bypasses this “response_model“).
+type RoutersApiModelLifecycleModelAlertListResponse struct {
+	Alerts []RoutersApiModelLifecycleModelAlertResponse `json:"alerts"`
+	Total  int                                          `json:"total"`
+}
+
+// RoutersApiModelLifecycleModelAlertResponse defines model for routers__api__model_lifecycle__ModelAlertResponse.
+type RoutersApiModelLifecycleModelAlertResponse struct {
+	AccountId          string  `json:"account_id"`
+	AgentId            *string `json:"agent_id"`
+	AlertType          string  `json:"alert_type"`
+	CreatedAt          string  `json:"created_at"`
+	Id                 string  `json:"id"`
+	Message            string  `json:"message"`
+	ModelName          string  `json:"model_name"`
+	PromptModelId      string  `json:"prompt_model_id"`
+	ReadAt             *string `json:"read_at"`
+	SuccessorModelName *string `json:"successor_model_name"`
+}
+
+// RoutersApiModelLifecycleModelRecommendationResponse defines model for routers__api__model_lifecycle__ModelRecommendationResponse.
+type RoutersApiModelLifecycleModelRecommendationResponse struct {
+	DeprecatedAt             *string  `json:"deprecated_at"`
+	Description              string   `json:"description"`
+	Family                   *string  `json:"family"`
+	FamilyGeneration         *float32 `json:"family_generation"`
+	Id                       string   `json:"id"`
+	MaxContextTokens         int      `json:"max_context_tokens"`
+	MaxOutputTokens          int      `json:"max_output_tokens"`
+	ModelId                  string   `json:"model_id"`
+	Name                     string   `json:"name"`
+	Provider                 string   `json:"provider"`
+	Reason                   string   `json:"reason"`
+	RecommendationType       string   `json:"recommendation_type"`
+	ReleasedAt               *string  `json:"released_at"`
+	SunsetAt                 *string  `json:"sunset_at"`
+	SupportsOpenaiArguments  bool     `json:"supports_openai_arguments"`
+	SupportsStreaming        bool     `json:"supports_streaming"`
+	SupportsStructuredOutput bool     `json:"supports_structured_output"`
+	SupportsThinking         bool     `json:"supports_thinking"`
+	SupportsToolUse          bool     `json:"supports_tool_use"`
+}
+
+// RoutersApiModelLifecycleModelRecommendationsResponse defines model for routers__api__model_lifecycle__ModelRecommendationsResponse.
+type RoutersApiModelLifecycleModelRecommendationsResponse struct {
+	Alternatives     []RoutersApiModelLifecycleModelRecommendationResponse `json:"alternatives"`
+	CurrentModelId   string                                                `json:"current_model_id"`
+	CurrentModelName string                                                `json:"current_model_name"`
+	SameProvider     []RoutersApiModelLifecycleModelRecommendationResponse `json:"same_provider"`
+	Successor        *RoutersApiModelLifecycleModelRecommendationResponse  `json:"successor,omitempty"`
+	Upgrades         []RoutersApiModelLifecycleModelRecommendationResponse `json:"upgrades"`
+}
+
+// RoutersApiSearchSearchResponse Ranked results, NOT a paginated collection — the “{results}“ shape is a
+// deliberate carve-out matching the MCP “search_resources“ tool.
+type RoutersApiSearchSearchResponse struct {
+	Results []RoutersApiSearchSearchResultResponse `json:"results"`
+}
+
+// RoutersApiSearchSearchResultResponse defines model for routers__api__search__SearchResultResponse.
+type RoutersApiSearchSearchResultResponse struct {
+	Description *string `json:"description"`
+	EntityType  string  `json:"entity_type"`
+	Id          string  `json:"id"`
+	Name        string  `json:"name"`
 }
 
 // RoutersApiSolutionsAiAssistantAcceptRequest Request body for accepting a proposed plan.
@@ -2969,6 +3255,9 @@ type SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse struct {
 	Total       int                                                            `json:"total"`
 }
 
+// SeclaiVersion defines model for Seclai-Version.
+type SeclaiVersion = string
+
 // XAccountId defines model for X-Account-Id.
 type XAccountId = openapi_types.UUID
 
@@ -2982,12 +3271,18 @@ type ListAgentsApiAgentsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateAgentApiAgentsPostParams defines parameters for CreateAgentApiAgentsPost.
 type CreateAgentApiAgentsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams defines parameters for ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGet.
@@ -2999,12 +3294,18 @@ type ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams defines parameters for RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDelete.
 type RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams defines parameters for ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGet.
@@ -3014,42 +3315,63 @@ type ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams defines parameters for BlockEmailSenderApiApiAgentsBlockedEmailSendersPost.
 type BlockEmailSenderApiApiAgentsBlockedEmailSendersPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams defines parameters for SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePut.
 type SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams defines parameters for UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDelete.
 type UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams defines parameters for DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDelete.
 type DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams defines parameters for GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGet.
 type GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams defines parameters for UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatch.
 type UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetParams defines parameters for ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet.
@@ -3060,6 +3382,9 @@ type ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetPar
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams defines parameters for ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGet.
@@ -3073,28 +3398,42 @@ type ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetParams 
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams defines parameters for CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost.
 type CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams defines parameters for GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGet.
 type GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams defines parameters for GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet.
 type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams struct {
+	// AgentId Scope the summary to a single agent. Omit for account-wide.
+	AgentId   *string `form:"agent_id,omitempty" json:"agent_id,omitempty"`
 	Days      *int    `form:"days,omitempty" json:"days,omitempty"`
 	StartDate *string `form:"start_date,omitempty" json:"start_date,omitempty"`
 	EndDate   *string `form:"end_date,omitempty" json:"end_date,omitempty"`
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams defines parameters for ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet.
@@ -3105,42 +3444,63 @@ type ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams struc
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams defines parameters for GetInboundEmailStatusApiApiAgentsInboundEmailStatusGet.
 type GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams defines parameters for CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPost.
 type CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams defines parameters for ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePost.
 type ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // PreviewImportAgentApiAgentsPreviewImportPostParams defines parameters for PreviewImportAgentApiAgentsPreviewImportPost.
 type PreviewImportAgentApiAgentsPreviewImportPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // SearchAgentRunsApiAgentsRunsSearchPostParams defines parameters for SearchAgentRunsApiAgentsRunsSearchPost.
 type SearchAgentRunsApiAgentsRunsSearchPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteAgentRunApiAgentsRunsRunIdDeleteParams defines parameters for DeleteAgentRunApiAgentsRunsRunIdDelete.
 type DeleteAgentRunApiAgentsRunsRunIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAgentRunApiAgentsRunsRunIdGetParams defines parameters for GetAgentRunApiAgentsRunsRunIdGet.
@@ -3150,24 +3510,36 @@ type GetAgentRunApiAgentsRunsRunIdGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteAgentApiAgentsAgentIdDeleteParams defines parameters for DeleteAgentApiAgentsAgentIdDelete.
 type DeleteAgentApiAgentsAgentIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAgentMetadataApiAgentsAgentIdGetParams defines parameters for GetAgentMetadataApiAgentsAgentIdGet.
 type GetAgentMetadataApiAgentsAgentIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateAgentApiAgentsAgentIdPutParams defines parameters for UpdateAgentApiAgentsAgentIdPut.
 type UpdateAgentApiAgentsAgentIdPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams defines parameters for GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGet.
@@ -3186,78 +3558,120 @@ type GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetParams s
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams defines parameters for GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPost.
 type GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams defines parameters for GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPost.
 type GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams defines parameters for MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatch.
 type MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams defines parameters for ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet.
 type ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAgentCallersApiApiAgentsAgentIdCallersGetParams defines parameters for GetAgentCallersApiApiAgentsAgentIdCallersGet.
 type GetAgentCallersApiApiAgentsAgentIdCallersGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams defines parameters for GetAgentDefinitionApiAgentsAgentIdDefinitionGet.
 type GetAgentDefinitionApiAgentsAgentIdDefinitionGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams defines parameters for UpdateAgentDefinitionApiAgentsAgentIdDefinitionPut.
 type UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DisableAgentApiApiAgentsAgentIdDisablePostParams defines parameters for DisableAgentApiApiAgentsAgentIdDisablePost.
 type DisableAgentApiApiAgentsAgentIdDisablePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // EnableAgentApiApiAgentsAgentIdEnablePostParams defines parameters for EnableAgentApiApiAgentsAgentIdEnablePost.
 type EnableAgentApiApiAgentsAgentIdEnablePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams defines parameters for ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGet.
 type ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams defines parameters for CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPost.
 type CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams defines parameters for TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPost.
 type TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams defines parameters for ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet.
@@ -3272,6 +3686,9 @@ type ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams struct
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams defines parameters for ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGet.
@@ -3285,6 +3702,9 @@ type ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ExportAgentApiAgentsAgentIdExportGetParams defines parameters for ExportAgentApiAgentsAgentIdExportGet.
@@ -3294,12 +3714,18 @@ type ExportAgentApiAgentsAgentIdExportGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams defines parameters for ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGet.
 type ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListAgentRunsApiAgentsAgentIdRunsGetParams defines parameters for ListAgentRunsApiAgentsAgentIdRunsGet.
@@ -3315,54 +3741,84 @@ type ListAgentRunsApiAgentsAgentIdRunsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // RunAgentApiAgentsAgentIdRunsPostParams defines parameters for RunAgentApiAgentsAgentIdRunsPost.
 type RunAgentApiAgentsAgentIdRunsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams defines parameters for RunStreamingAgentApiAgentsAgentIdRunsStreamPost.
 type RunStreamingAgentApiAgentsAgentIdRunsStreamPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams defines parameters for ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet.
 type ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams defines parameters for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut.
 type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams defines parameters for ApiUploadAgentInputApiAgentsAgentIdUploadInputPost.
 type ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiFeedbackApiAiAssistantFeedbackPostParams defines parameters for ApiAiFeedbackApiAiAssistantFeedbackPost.
 type ApiAiFeedbackApiAiAssistantFeedbackPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams defines parameters for ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePost.
 type ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiMemoryBankApiAiAssistantMemoryBankPostParams defines parameters for ApiAiMemoryBankApiAiAssistantMemoryBankPost.
 type ApiAiMemoryBankApiAiAssistantMemoryBankPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams defines parameters for ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGet.
@@ -3375,36 +3831,54 @@ type ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetParams str
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams defines parameters for ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatch.
 type ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiSolutionApiAiAssistantSolutionPostParams defines parameters for ApiAiSolutionApiAiAssistantSolutionPost.
 type ApiAiSolutionApiAiAssistantSolutionPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiSourceApiAiAssistantSourcePostParams defines parameters for ApiAiSourceApiAiAssistantSourcePost.
 type ApiAiSourceApiAiAssistantSourcePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams defines parameters for ApiAiAcceptApiAiAssistantConversationIdAcceptPost.
 type ApiAiAcceptApiAiAssistantConversationIdAcceptPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams defines parameters for ApiAiDeclineApiAiAssistantConversationIdDeclinePost.
 type ApiAiDeclineApiAiAssistantConversationIdDeclinePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListAlertsApiAlertsGetParams defines parameters for ListAlertsApiAlertsGet.
@@ -3432,6 +3906,9 @@ type ListAlertsApiAlertsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListAlertConfigsApiAlertsConfigsGetParams defines parameters for ListAlertConfigsApiAlertsConfigsGet.
@@ -3445,32 +3922,53 @@ type ListAlertConfigsApiAlertsConfigsGetParams struct {
 	// Scope Set to 'source' to list account-level source alert configs
 	Scope *string `form:"scope,omitempty" json:"scope,omitempty"`
 
+	// Page Page number
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateAlertConfigApiAlertsConfigsPostParams defines parameters for CreateAlertConfigApiAlertsConfigsPost.
 type CreateAlertConfigApiAlertsConfigsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams defines parameters for DeleteAlertConfigApiAlertsConfigsConfigIdDelete.
 type DeleteAlertConfigApiAlertsConfigsConfigIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAlertConfigApiAlertsConfigsConfigIdGetParams defines parameters for GetAlertConfigApiAlertsConfigsConfigIdGet.
 type GetAlertConfigApiAlertsConfigsConfigIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams defines parameters for UpdateAlertConfigApiAlertsConfigsConfigIdPatch.
 type UpdateAlertConfigApiAlertsConfigsConfigIdPatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams defines parameters for ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGet.
@@ -3483,48 +3981,72 @@ type ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetParams st
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams defines parameters for UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatch.
 type UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdAlertTypePatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAlertDetailApiAlertsAlertIdGetParams defines parameters for GetAlertDetailApiAlertsAlertIdGet.
 type GetAlertDetailApiAlertsAlertIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // AddAlertCommentApiAlertsAlertIdCommentsPostParams defines parameters for AddAlertCommentApiAlertsAlertIdCommentsPost.
 type AddAlertCommentApiAlertsAlertIdCommentsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ChangeAlertStatusApiAlertsAlertIdStatusPostParams defines parameters for ChangeAlertStatusApiAlertsAlertIdStatusPost.
 type ChangeAlertStatusApiAlertsAlertIdStatusPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // SubscribeToAlertApiAlertsAlertIdSubscribePostParams defines parameters for SubscribeToAlertApiAlertsAlertIdSubscribePost.
 type SubscribeToAlertApiAlertsAlertIdSubscribePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams defines parameters for UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost.
 type UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteContentApiContentsSourceConnectionContentVersionDeleteParams defines parameters for DeleteContentApiContentsSourceConnectionContentVersionDelete.
 type DeleteContentApiContentsSourceConnectionContentVersionDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetContentDetailApiContentsSourceConnectionContentVersionGetParams defines parameters for GetContentDetailApiContentsSourceConnectionContentVersionGet.
@@ -3534,12 +4056,18 @@ type GetContentDetailApiContentsSourceConnectionContentVersionGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams defines parameters for ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut.
 type ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams defines parameters for ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet.
@@ -3549,12 +4077,18 @@ type ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams defines parameters for UploadFileToContentApiContentsSourceConnectionContentVersionUploadPost.
 type UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DocsSearchApiDocsSearchGetParams defines parameters for DocsSearchApiDocsSearchGet.
@@ -3570,6 +4104,9 @@ type DocsSearchApiDocsSearchGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DocsSearchApiDocsSearchGetParamsMode defines parameters for DocsSearchApiDocsSearchGet.
@@ -3579,24 +4116,36 @@ type DocsSearchApiDocsSearchGetParamsMode string
 type ListEmailDomainsApiApiEmailDomainsGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // AddEmailDomainApiApiEmailDomainsPostParams defines parameters for AddEmailDomainApiApiEmailDomainsPost.
 type AddEmailDomainApiApiEmailDomainsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams defines parameters for UseSharedDomainApiApiEmailDomainsUseSharedDomainPost.
 type UseSharedDomainApiApiEmailDomainsUseSharedDomainPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams defines parameters for RemoveEmailDomainApiApiEmailDomainsDomainIdDelete.
 type RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams defines parameters for GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGet.
@@ -3606,30 +4155,45 @@ type GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams defines parameters for SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost.
 type SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams defines parameters for SendTestEmailApiApiEmailDomainsDomainIdTestEmailPost.
 type SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams defines parameters for VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPost.
 type VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GovernanceAiGenerateApiGovernanceAiAssistantPostParams defines parameters for GovernanceAiGenerateApiGovernanceAiAssistantPost.
 type GovernanceAiGenerateApiGovernanceAiAssistantPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams defines parameters for ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGet.
@@ -3639,18 +4203,27 @@ type ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetParams
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams defines parameters for GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPost.
 type GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams defines parameters for GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePost.
 type GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListKnowledgeBasesApiKnowledgeBasesGetParams defines parameters for ListKnowledgeBasesApiKnowledgeBasesGet.
@@ -3669,36 +4242,54 @@ type ListKnowledgeBasesApiKnowledgeBasesGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateKnowledgeBaseApiKnowledgeBasesPostParams defines parameters for CreateKnowledgeBaseApiKnowledgeBasesPost.
 type CreateKnowledgeBaseApiKnowledgeBasesPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams defines parameters for DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDelete.
 type DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams defines parameters for GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGet.
 type GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams defines parameters for UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut.
 type UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetMeApiMeGetParams defines parameters for GetMeApiMeGet.
 type GetMeApiMeGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListMemoryBanksApiMemoryBanksGetParams defines parameters for ListMemoryBanksApiMemoryBanksGet.
@@ -3720,18 +4311,27 @@ type ListMemoryBanksApiMemoryBanksGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateMemoryBankApiMemoryBanksPostParams defines parameters for CreateMemoryBankApiMemoryBanksPost.
 type CreateMemoryBankApiMemoryBanksPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams defines parameters for MemoryBankAiGenerateApiMemoryBanksAiAssistantPost.
 type MemoryBankAiGenerateApiMemoryBanksAiAssistantPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetParams defines parameters for MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet.
@@ -3744,60 +4344,90 @@ type MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetPar
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams defines parameters for MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatch.
 type MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListTemplatesApiMemoryBanksTemplatesGetParams defines parameters for ListTemplatesApiMemoryBanksTemplatesGet.
 type ListTemplatesApiMemoryBanksTemplatesGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams defines parameters for TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPost.
 type TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams defines parameters for DeleteMemoryBankApiMemoryBanksMemoryBankIdDelete.
 type DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetMemoryBankApiMemoryBanksMemoryBankIdGetParams defines parameters for GetMemoryBankApiMemoryBanksMemoryBankIdGet.
 type GetMemoryBankApiMemoryBanksMemoryBankIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams defines parameters for UpdateMemoryBankApiMemoryBanksMemoryBankIdPut.
 type UpdateMemoryBankApiMemoryBanksMemoryBankIdPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams defines parameters for GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGet.
 type GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams defines parameters for CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPost.
 type CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams defines parameters for DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDelete.
 type DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams defines parameters for GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGet.
@@ -3808,12 +4438,18 @@ type GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams defines parameters for TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPost.
 type TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListModelsApiModelsGetParams defines parameters for ListModelsApiModelsGet.
@@ -3835,6 +4471,9 @@ type ListModelsApiModelsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListAlertsApiModelsAlertsGetParams defines parameters for ListAlertsApiModelsAlertsGet.
@@ -3853,30 +4492,45 @@ type ListAlertsApiModelsAlertsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // MarkAllReadApiModelsAlertsMarkAllReadPostParams defines parameters for MarkAllReadApiModelsAlertsMarkAllReadPost.
 type MarkAllReadApiModelsAlertsMarkAllReadPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams defines parameters for GetAlertUnreadCountApiModelsAlertsUnreadCountGet.
 type GetAlertUnreadCountApiModelsAlertsUnreadCountGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // MarkReadApiModelsAlertsAlertIdReadPatchParams defines parameters for MarkReadApiModelsAlertsAlertIdReadPatch.
 type MarkReadApiModelsAlertsAlertIdReadPatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetGenerationTiersApiModelsGenerationTiersGetParams defines parameters for GetGenerationTiersApiModelsGenerationTiersGet.
 type GetGenerationTiersApiModelsGenerationTiersGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListExperimentsApiModelsPlaygroundExperimentsGetParams defines parameters for ListExperimentsApiModelsPlaygroundExperimentsGet.
@@ -3898,36 +4552,54 @@ type ListExperimentsApiModelsPlaygroundExperimentsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateExperimentApiModelsPlaygroundExperimentsPostParams defines parameters for CreateExperimentApiModelsPlaygroundExperimentsPost.
 type CreateExperimentApiModelsPlaygroundExperimentsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams defines parameters for DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete.
 type DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams defines parameters for GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet.
 type GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams defines parameters for CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost.
 type CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetModelApiModelsModelIdDetailsGetParams defines parameters for GetModelApiModelsModelIdDetailsGet.
 type GetModelApiModelsModelIdDetailsGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetRecommendationsApiModelsModelIdRecommendationsGetParams defines parameters for GetRecommendationsApiModelsModelIdRecommendationsGet.
@@ -3949,6 +4621,9 @@ type GetRecommendationsApiModelsModelIdRecommendationsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // SearchApiSearchGetParams defines parameters for SearchApiSearchGet.
@@ -3964,6 +4639,9 @@ type SearchApiSearchGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListSolutionsApiSolutionsGetParams defines parameters for ListSolutionsApiSolutionsGet.
@@ -3985,120 +4663,171 @@ type ListSolutionsApiSolutionsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateSolutionApiSolutionsPostParams defines parameters for CreateSolutionApiSolutionsPost.
 type CreateSolutionApiSolutionsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteSolutionApiSolutionsSolutionIdDeleteParams defines parameters for DeleteSolutionApiSolutionsSolutionIdDelete.
 type DeleteSolutionApiSolutionsSolutionIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetSolutionApiSolutionsSolutionIdGetParams defines parameters for GetSolutionApiSolutionsSolutionIdGet.
 type GetSolutionApiSolutionsSolutionIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateSolutionApiSolutionsSolutionIdPatchParams defines parameters for UpdateSolutionApiSolutionsSolutionIdPatch.
 type UpdateSolutionApiSolutionsSolutionIdPatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams defines parameters for UnlinkAgentsApiSolutionsSolutionIdAgentsDelete.
 type UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // LinkAgentsApiSolutionsSolutionIdAgentsPostParams defines parameters for LinkAgentsApiSolutionsSolutionIdAgentsPost.
 type LinkAgentsApiSolutionsSolutionIdAgentsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams defines parameters for AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePost.
 type AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams defines parameters for AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePost.
 type AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams defines parameters for AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePost.
 type AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams defines parameters for AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPost.
 type AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams defines parameters for AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePost.
 type AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListConversationsApiSolutionsSolutionIdConversationsGetParams defines parameters for ListConversationsApiSolutionsSolutionIdConversationsGet.
 type ListConversationsApiSolutionsSolutionIdConversationsGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // AddConversationTurnApiSolutionsSolutionIdConversationsPostParams defines parameters for AddConversationTurnApiSolutionsSolutionIdConversationsPost.
 type AddConversationTurnApiSolutionsSolutionIdConversationsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams defines parameters for MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatch.
 type MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams defines parameters for UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDelete.
 type UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams defines parameters for LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPost.
 type LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams defines parameters for UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDelete.
 type UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams defines parameters for LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost.
 type LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
-}
 
-// CreateSourceApiSourcesPostParams defines parameters for CreateSourceApiSourcesPost.
-type CreateSourceApiSourcesPostParams struct {
-	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
-	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListSourcesApiSourcesGetParams defines parameters for ListSourcesApiSourcesGet.
@@ -4120,48 +4849,81 @@ type ListSourcesApiSourcesGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// CreateSourceApiSourcesPostParams defines parameters for CreateSourceApiSourcesPost.
+type CreateSourceApiSourcesPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteSourceApiSourcesSourceConnectionIdDeleteParams defines parameters for DeleteSourceApiSourcesSourceConnectionIdDelete.
 type DeleteSourceApiSourcesSourceConnectionIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetSourceApiSourcesSourceConnectionIdGetParams defines parameters for GetSourceApiSourcesSourceConnectionIdGet.
 type GetSourceApiSourcesSourceConnectionIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams defines parameters for UploadInlineTextToSourceApiSourcesSourceConnectionIdPost.
 type UploadInlineTextToSourceApiSourcesSourceConnectionIdPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UpdateSourceApiSourcesSourceConnectionIdPutParams defines parameters for UpdateSourceApiSourcesSourceConnectionIdPut.
 type UpdateSourceApiSourcesSourceConnectionIdPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams defines parameters for GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet.
 type GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams defines parameters for StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost.
 type StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams defines parameters for CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPost.
 type CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationCancelPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams defines parameters for ListSourceExportsApiSourcesSourceConnectionIdExportsGet.
@@ -4171,48 +4933,72 @@ type ListSourceExportsApiSourcesSourceConnectionIdExportsGetParams struct {
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams defines parameters for CreateSourceExportApiSourcesSourceConnectionIdExportsPost.
 type CreateSourceExportApiSourcesSourceConnectionIdExportsPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams defines parameters for EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePost.
 type EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams defines parameters for DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDelete.
 type DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams defines parameters for GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGet.
 type GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams defines parameters for CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPost.
 type CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams defines parameters for DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGet.
 type DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams defines parameters for UploadFileToSourceApiSourcesSourceConnectionIdUploadPost.
 type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams defines parameters for ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet.
@@ -4221,6 +5007,27 @@ type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams 
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// GetApiVersionApiVersionGetParams defines parameters for GetApiVersionApiVersionGet.
+type GetApiVersionApiVersionGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// UpdateApiVersionApiVersionPutParams defines parameters for UpdateApiVersionApiVersionPut.
+type UpdateApiVersionApiVersionPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
 // CreateAgentApiAgentsPostJSONRequestBody defines body for CreateAgentApiAgentsPost for application/json ContentType.
@@ -4411,6 +5218,9 @@ type EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostJSONRequ
 
 // UploadFileToSourceApiSourcesSourceConnectionIdUploadPostMultipartRequestBody defines body for UploadFileToSourceApiSourcesSourceConnectionIdUploadPost for multipart/form-data ContentType.
 type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostMultipartRequestBody = BodyUploadFileToSourceApiSourcesSourceConnectionIdUploadPost
+
+// UpdateApiVersionApiVersionPutJSONRequestBody defines body for UpdateApiVersionApiVersionPut for application/json ContentType.
+type UpdateApiVersionApiVersionPutJSONRequestBody = UpdateApiVersionRequest
 
 // AsValidationErrorLoc0 returns the union data inside the ValidationError_Loc_Item as a ValidationErrorLoc0
 func (t ValidationError_Loc_Item) AsValidationErrorLoc0() (ValidationErrorLoc0, error) {
@@ -5089,13 +5899,13 @@ type ClientInterface interface {
 
 	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPost(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListSourcesApiSourcesGet request
+	ListSourcesApiSourcesGet(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateSourceApiSourcesPostWithBody request with any body
 	CreateSourceApiSourcesPostWithBody(ctx context.Context, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateSourceApiSourcesPost(ctx context.Context, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListSourcesApiSourcesGet request
-	ListSourcesApiSourcesGet(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteSourceApiSourcesSourceConnectionIdDelete request
 	DeleteSourceApiSourcesSourceConnectionIdDelete(ctx context.Context, sourceConnectionId openapi_types.UUID, params *DeleteSourceApiSourcesSourceConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5154,6 +5964,14 @@ type ClientInterface interface {
 
 	// ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet request
 	ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet(ctx context.Context, runId openapi_types.UUID, attachmentId string, params *ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetApiVersionApiVersionGet request
+	GetApiVersionApiVersionGet(ctx context.Context, params *GetApiVersionApiVersionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateApiVersionApiVersionPutWithBody request with any body
+	UpdateApiVersionApiVersionPutWithBody(ctx context.Context, params *UpdateApiVersionApiVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateApiVersionApiVersionPut(ctx context.Context, params *UpdateApiVersionApiVersionPutParams, body UpdateApiVersionApiVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListAgentsApiAgentsGet(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7544,6 +8362,18 @@ func (c *Client) LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPos
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListSourcesApiSourcesGet(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSourcesApiSourcesGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) CreateSourceApiSourcesPostWithBody(ctx context.Context, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateSourceApiSourcesPostRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
@@ -7558,18 +8388,6 @@ func (c *Client) CreateSourceApiSourcesPostWithBody(ctx context.Context, params 
 
 func (c *Client) CreateSourceApiSourcesPost(ctx context.Context, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateSourceApiSourcesPostRequest(c.Server, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) ListSourcesApiSourcesGet(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListSourcesApiSourcesGetRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -7832,6 +8650,42 @@ func (c *Client) ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachment
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetApiVersionApiVersionGet(ctx context.Context, params *GetApiVersionApiVersionGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetApiVersionApiVersionGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateApiVersionApiVersionPutWithBody(ctx context.Context, params *UpdateApiVersionApiVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateApiVersionApiVersionPutRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateApiVersionApiVersionPut(ctx context.Context, params *UpdateApiVersionApiVersionPutParams, body UpdateApiVersionApiVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateApiVersionApiVersionPutRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // NewListAgentsApiAgentsGetRequest generates requests for ListAgentsApiAgentsGet
 func NewListAgentsApiAgentsGetRequest(server string, params *ListAgentsApiAgentsGetParams) (*http.Request, error) {
 	var err error
@@ -7907,6 +8761,17 @@ func NewListAgentsApiAgentsGetRequest(server string, params *ListAgentsApiAgents
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -7960,6 +8825,17 @@ func NewCreateAgentApiAgentsPostRequestWithBody(server string, params *CreateAge
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -8058,6 +8934,17 @@ func NewListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetRequest(server stri
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8105,6 +8992,17 @@ func NewRemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteRequest
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -8187,6 +9085,17 @@ func NewListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetRequest(server 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8240,6 +9149,17 @@ func NewBlockEmailSenderApiApiAgentsBlockedEmailSendersPostRequestWithBody(serve
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -8297,6 +9217,17 @@ func NewSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutRequestWithBody(se
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8344,6 +9275,17 @@ func NewUnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteRequest(
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -8395,6 +9337,17 @@ func NewDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteReque
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8442,6 +9395,17 @@ func NewGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetRequest(ser
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -8504,6 +9468,17 @@ func NewUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchReques
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -8607,6 +9582,17 @@ func NewListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGet
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -8760,6 +9746,17 @@ func NewListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetRequ
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8822,6 +9819,17 @@ func NewCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRe
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8871,6 +9879,17 @@ func NewGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetReque
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -8897,6 +9916,22 @@ func NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 
 	if params != nil {
 		queryValues := queryURL.Query()
+
+		if params.AgentId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "agent_id", runtime.ParamLocationQuery, *params.AgentId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
 
 		if params.Days != nil {
 
@@ -8965,6 +10000,17 @@ func NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -9047,6 +10093,17 @@ func NewListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetRequest(s
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9087,6 +10144,17 @@ func NewGetInboundEmailStatusApiApiAgentsInboundEmailStatusGetRequest(server str
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -9131,6 +10199,17 @@ func NewCancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostReque
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9171,6 +10250,17 @@ func NewResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostRequest(server
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -9228,6 +10318,17 @@ func NewPreviewImportAgentApiAgentsPreviewImportPostRequestWithBody(server strin
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9283,6 +10384,17 @@ func NewSearchAgentRunsApiAgentsRunsSearchPostRequestWithBody(server string, par
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9330,6 +10442,17 @@ func NewDeleteAgentRunApiAgentsRunsRunIdDeleteRequest(server string, runId strin
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -9403,6 +10526,17 @@ func NewGetAgentRunApiAgentsRunsRunIdGetRequest(server string, runId string, par
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9452,6 +10586,17 @@ func NewDeleteAgentApiAgentsAgentIdDeleteRequest(server string, agentId string, 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9499,6 +10644,17 @@ func NewGetAgentMetadataApiAgentsAgentIdGetRequest(server string, agentId string
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -9561,6 +10717,17 @@ func NewUpdateAgentApiAgentsAgentIdPutRequestWithBody(server string, agentId str
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -9678,6 +10845,17 @@ func NewGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetReque
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9740,6 +10918,17 @@ func NewGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostRequestWit
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9800,6 +10989,17 @@ func NewGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostRequestWithBo
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -9871,6 +11071,17 @@ func NewMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchRequestWit
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -9918,6 +11129,17 @@ func NewApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetRe
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -9969,6 +11191,17 @@ func NewGetAgentCallersApiApiAgentsAgentIdCallersGetRequest(server string, agent
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10016,6 +11249,17 @@ func NewGetAgentDefinitionApiAgentsAgentIdDefinitionGetRequest(server string, ag
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -10080,6 +11324,17 @@ func NewUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutRequestWithBody(server
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10127,6 +11382,17 @@ func NewDisableAgentApiApiAgentsAgentIdDisablePostRequest(server string, agentId
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -10178,6 +11444,17 @@ func NewEnableAgentApiApiAgentsAgentIdEnablePostRequest(server string, agentId s
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10209,6 +11486,44 @@ func NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(serve
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -10225,6 +11540,17 @@ func NewListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetRequest(serve
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -10289,6 +11615,17 @@ func NewCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostRequestWit
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10349,6 +11686,17 @@ func NewTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostReques
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -10518,6 +11866,17 @@ func NewListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetRequest(se
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10669,6 +12028,17 @@ func NewListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetRequest(server string
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10740,6 +12110,17 @@ func NewExportAgentApiAgentsAgentIdExportGetRequest(server string, agentId strin
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10794,6 +12175,17 @@ func NewApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetReque
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -10899,6 +12291,17 @@ func NewListAgentRunsApiAgentsAgentIdRunsGetRequest(server string, agentId strin
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -10959,6 +12362,17 @@ func NewRunAgentApiAgentsAgentIdRunsPostRequestWithBody(server string, agentId s
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -11023,6 +12437,17 @@ func NewRunStreamingAgentApiAgentsAgentIdRunsStreamPostRequestWithBody(server st
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11061,6 +12486,44 @@ func NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetReq
 		return nil, err
 	}
 
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -11077,6 +12540,17 @@ func NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetReq
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -11148,6 +12622,17 @@ func NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutR
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11195,6 +12680,17 @@ func NewApiUploadAgentInputApiAgentsAgentIdUploadInputPostRequest(server string,
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -11252,6 +12748,17 @@ func NewApiAiFeedbackApiAiAssistantFeedbackPostRequestWithBody(server string, pa
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11307,6 +12814,17 @@ func NewApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostRequestWithBody(server 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11360,6 +12878,17 @@ func NewApiAiMemoryBankApiAiAssistantMemoryBankPostRequestWithBody(server string
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -11442,6 +12971,17 @@ func NewApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetRequest
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11504,6 +13044,17 @@ func NewApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRequestW
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11559,6 +13110,17 @@ func NewApiAiSolutionApiAiAssistantSolutionPostRequestWithBody(server string, pa
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11612,6 +13174,17 @@ func NewApiAiSourceApiAiAssistantSourcePostRequestWithBody(server string, params
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -11676,6 +13249,17 @@ func NewApiAiAcceptApiAiAssistantConversationIdAcceptPostRequestWithBody(server 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11723,6 +13307,17 @@ func NewApiAiDeclineApiAiAssistantConversationIdDeclinePostRequest(server string
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -11885,6 +13480,17 @@ func NewListAlertsApiAlertsGetRequest(server string, params *ListAlertsApiAlerts
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -11960,6 +13566,38 @@ func NewListAlertConfigsApiAlertsConfigsGetRequest(server string, params *ListAl
 
 		}
 
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		queryURL.RawQuery = queryValues.Encode()
 	}
 
@@ -11979,6 +13617,17 @@ func NewListAlertConfigsApiAlertsConfigsGetRequest(server string, params *ListAl
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -12036,6 +13685,17 @@ func NewCreateAlertConfigApiAlertsConfigsPostRequestWithBody(server string, para
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12085,6 +13745,17 @@ func NewDeleteAlertConfigApiAlertsConfigsConfigIdDeleteRequest(server string, co
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12132,6 +13803,17 @@ func NewGetAlertConfigApiAlertsConfigsConfigIdGetRequest(server string, configId
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -12194,6 +13876,17 @@ func NewUpdateAlertConfigApiAlertsConfigsConfigIdPatchRequestWithBody(server str
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -12276,6 +13969,17 @@ func NewListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetReques
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12345,6 +14049,17 @@ func NewUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganization
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12392,6 +14107,17 @@ func NewGetAlertDetailApiAlertsAlertIdGetRequest(server string, alertId string, 
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -12456,6 +14182,17 @@ func NewAddAlertCommentApiAlertsAlertIdCommentsPostRequestWithBody(server string
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12518,6 +14255,17 @@ func NewChangeAlertStatusApiAlertsAlertIdStatusPostRequestWithBody(server string
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12565,6 +14313,17 @@ func NewSubscribeToAlertApiAlertsAlertIdSubscribePostRequest(server string, aler
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -12616,6 +14375,17 @@ func NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(server string
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12663,6 +14433,17 @@ func NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(serv
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -12752,6 +14533,17 @@ func NewGetContentDetailApiContentsSourceConnectionContentVersionGetRequest(serv
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12812,6 +14604,17 @@ func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -12901,6 +14704,17 @@ func NewListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddings
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -12950,6 +14764,17 @@ func NewUploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRe
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -13044,6 +14869,17 @@ func NewDocsSearchApiDocsSearchGetRequest(server string, params *DocsSearchApiDo
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13084,6 +14920,17 @@ func NewListEmailDomainsApiApiEmailDomainsGetRequest(server string, params *List
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -13141,6 +14988,17 @@ func NewAddEmailDomainApiApiEmailDomainsPostRequestWithBody(server string, param
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13181,6 +15039,17 @@ func NewUseSharedDomainApiApiEmailDomainsUseSharedDomainPostRequest(server strin
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -13230,6 +15099,17 @@ func NewRemoveEmailDomainApiApiEmailDomainsDomainIdDeleteRequest(server string, 
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -13319,6 +15199,17 @@ func NewGetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetRequest(server string, 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13366,6 +15257,17 @@ func NewSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostRequest(server
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -13417,6 +15319,17 @@ func NewSendTestEmailApiApiEmailDomainsDomainIdTestEmailPostRequest(server strin
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13464,6 +15377,17 @@ func NewVerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostRequest(server stri
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -13519,6 +15443,17 @@ func NewGovernanceAiGenerateApiGovernanceAiAssistantPostRequestWithBody(server s
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -13585,6 +15520,17 @@ func NewListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetReq
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13634,6 +15580,17 @@ func NewGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostReques
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13681,6 +15638,17 @@ func NewGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRequ
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -13795,6 +15763,17 @@ func NewListKnowledgeBasesApiKnowledgeBasesGetRequest(server string, params *Lis
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13850,6 +15829,17 @@ func NewCreateKnowledgeBaseApiKnowledgeBasesPostRequestWithBody(server string, p
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13899,6 +15889,17 @@ func NewDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteRequest(server 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -13946,6 +15947,17 @@ func NewGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetRequest(server string
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -14010,6 +16022,17 @@ func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(se
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14050,6 +16073,17 @@ func NewGetMeApiMeGetRequest(server string, params *GetMeApiMeGetParams) (*http.
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -14180,6 +16214,17 @@ func NewListMemoryBanksApiMemoryBanksGetRequest(server string, params *ListMemor
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14235,6 +16280,17 @@ func NewCreateMemoryBankApiMemoryBanksPostRequestWithBody(server string, params 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14288,6 +16344,17 @@ func NewMemoryBankAiGenerateApiMemoryBanksAiAssistantPostRequestWithBody(server 
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -14370,6 +16437,17 @@ func NewMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14432,6 +16510,17 @@ func NewMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchRequestWit
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14472,6 +16561,17 @@ func NewListTemplatesApiMemoryBanksTemplatesGetRequest(server string, params *Li
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -14529,6 +16629,17 @@ func NewTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostRequestWit
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14578,6 +16689,17 @@ func NewDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteRequest(server string, m
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14625,6 +16747,17 @@ func NewGetMemoryBankApiMemoryBanksMemoryBankIdGetRequest(server string, memoryB
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -14689,6 +16822,17 @@ func NewUpdateMemoryBankApiMemoryBanksMemoryBankIdPutRequestWithBody(server stri
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14736,6 +16880,17 @@ func NewGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetRequest(server stri
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -14787,6 +16942,17 @@ func NewCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostRequest(server str
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14834,6 +17000,17 @@ func NewDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteRequest(serv
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -14939,6 +17116,17 @@ func NewGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetRequest(server 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -14999,6 +17187,17 @@ func NewTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRequestW
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -15129,6 +17328,17 @@ func NewListModelsApiModelsGetRequest(server string, params *ListModelsApiModels
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -15241,6 +17451,17 @@ func NewListAlertsApiModelsAlertsGetRequest(server string, params *ListAlertsApi
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -15283,6 +17504,17 @@ func NewMarkAllReadApiModelsAlertsMarkAllReadPostRequest(server string, params *
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -15323,6 +17555,17 @@ func NewGetAlertUnreadCountApiModelsAlertsUnreadCountGetRequest(server string, p
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -15374,6 +17617,17 @@ func NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(server string, alertId op
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -15414,6 +17668,17 @@ func NewGetGenerationTiersApiModelsGenerationTiersGetRequest(server string, para
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -15544,6 +17809,17 @@ func NewListExperimentsApiModelsPlaygroundExperimentsGetRequest(server string, p
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -15599,6 +17875,17 @@ func NewCreateExperimentApiModelsPlaygroundExperimentsPostRequestWithBody(server
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -15646,6 +17933,17 @@ func NewDeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -15697,6 +17995,17 @@ func NewGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetRequest(server
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -15746,6 +18055,17 @@ func NewCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancel
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -15793,6 +18113,17 @@ func NewGetModelApiModelsModelIdDetailsGetRequest(server string, modelId string,
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -15930,6 +18261,17 @@ func NewGetRecommendationsApiModelsModelIdRecommendationsGetRequest(server strin
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16020,6 +18362,17 @@ func NewSearchApiSearchGetRequest(server string, params *SearchApiSearchGetParam
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -16150,6 +18503,17 @@ func NewListSolutionsApiSolutionsGetRequest(server string, params *ListSolutions
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16205,6 +18569,17 @@ func NewCreateSolutionApiSolutionsPostRequestWithBody(server string, params *Cre
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16254,6 +18629,17 @@ func NewDeleteSolutionApiSolutionsSolutionIdDeleteRequest(server string, solutio
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16301,6 +18687,17 @@ func NewGetSolutionApiSolutionsSolutionIdGetRequest(server string, solutionId op
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -16365,6 +18762,17 @@ func NewUpdateSolutionApiSolutionsSolutionIdPatchRequestWithBody(server string, 
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16425,6 +18833,17 @@ func NewUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteRequestWithBody(server str
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -16489,6 +18908,17 @@ func NewLinkAgentsApiSolutionsSolutionIdAgentsPostRequestWithBody(server string,
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16549,6 +18979,17 @@ func NewAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRequestW
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -16613,6 +19054,17 @@ func NewAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePo
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16673,6 +19125,17 @@ func NewAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostRequestWithB
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -16744,6 +19207,17 @@ func NewAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPo
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16800,6 +19274,17 @@ func NewAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDecline
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -16847,6 +19332,17 @@ func NewListConversationsApiSolutionsSolutionIdConversationsGetRequest(server st
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -16909,6 +19405,17 @@ func NewAddConversationTurnApiSolutionsSolutionIdConversationsPostRequestWithBod
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -16980,6 +19487,17 @@ func NewMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPat
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -17040,6 +19558,17 @@ func NewUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteRequestWit
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -17104,6 +19633,17 @@ func NewLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostRequestWithBod
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -17164,6 +19704,17 @@ func NewUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRequ
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -17228,59 +19779,15 @@ func NewLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRequestW
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
-	}
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
 
-	return req, nil
-}
-
-// NewCreateSourceApiSourcesPostRequest calls the generic CreateSourceApiSourcesPost builder with application/json body
-func NewCreateSourceApiSourcesPostRequest(server string, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateSourceApiSourcesPostRequestWithBody(server, params, "application/json", bodyReader)
-}
-
-// NewCreateSourceApiSourcesPostRequestWithBody generates requests for CreateSourceApiSourcesPost with any type of body
-func NewCreateSourceApiSourcesPostRequestWithBody(server string, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/sources")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.XAccountId != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
 			if err != nil {
 				return nil, err
 			}
 
-			req.Header.Set("X-Account-Id", headerParam0)
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -17297,7 +19804,7 @@ func NewListSourcesApiSourcesGetRequest(server string, params *ListSourcesApiSou
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/sources/")
+	operationPath := fmt.Sprintf("/sources")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -17411,6 +19918,83 @@ func NewListSourcesApiSourcesGetRequest(server string, params *ListSourcesApiSou
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewCreateSourceApiSourcesPostRequest calls the generic CreateSourceApiSourcesPost builder with application/json body
+func NewCreateSourceApiSourcesPostRequest(server string, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSourceApiSourcesPostRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateSourceApiSourcesPostRequestWithBody generates requests for CreateSourceApiSourcesPost with any type of body
+func NewCreateSourceApiSourcesPostRequestWithBody(server string, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -17460,6 +20044,17 @@ func NewDeleteSourceApiSourcesSourceConnectionIdDeleteRequest(server string, sou
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -17507,6 +20102,17 @@ func NewGetSourceApiSourcesSourceConnectionIdGetRequest(server string, sourceCon
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -17571,6 +20177,17 @@ func NewUploadInlineTextToSourceApiSourcesSourceConnectionIdPostRequestWithBody(
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -17633,6 +20250,17 @@ func NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server string
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -17680,6 +20308,17 @@ func NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigratio
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -17744,6 +20383,17 @@ func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrat
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -17791,6 +20441,17 @@ func NewCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigra
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -17880,6 +20541,17 @@ func NewListSourceExportsApiSourcesSourceConnectionIdExportsGetRequest(server st
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -17940,6 +20612,17 @@ func NewCreateSourceExportApiSourcesSourceConnectionIdExportsPostRequestWithBody
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -18004,6 +20687,17 @@ func NewEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostReque
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -18058,6 +20752,17 @@ func NewDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteReque
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -18116,6 +20821,17 @@ func NewGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetRequest(ser
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -18170,6 +20886,17 @@ func NewCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostR
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -18228,6 +20955,17 @@ func NewDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadG
 			req.Header.Set("X-Account-Id", headerParam0)
 		}
 
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -18277,6 +21015,17 @@ func NewUploadFileToSourceApiSourcesSourceConnectionIdUploadPostRequestWithBody(
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -18355,6 +21104,136 @@ func NewServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRequ
 			}
 
 			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetApiVersionApiVersionGetRequest generates requests for GetApiVersionApiVersionGet
+func NewGetApiVersionApiVersionGetRequest(server string, params *GetApiVersionApiVersionGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/version")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewUpdateApiVersionApiVersionPutRequest calls the generic UpdateApiVersionApiVersionPut builder with application/json body
+func NewUpdateApiVersionApiVersionPutRequest(server string, params *UpdateApiVersionApiVersionPutParams, body UpdateApiVersionApiVersionPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateApiVersionApiVersionPutRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewUpdateApiVersionApiVersionPutRequestWithBody generates requests for UpdateApiVersionApiVersionPut with any type of body
+func NewUpdateApiVersionApiVersionPutRequestWithBody(server string, params *UpdateApiVersionApiVersionPutParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/version")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
 		}
 
 	}
@@ -18947,13 +21826,13 @@ type ClientWithResponsesInterface interface {
 
 	LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostWithResponse(ctx context.Context, solutionId openapi_types.UUID, params *LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostParams, body LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostJSONRequestBody, reqEditors ...RequestEditorFn) (*LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse, error)
 
+	// ListSourcesApiSourcesGetWithResponse request
+	ListSourcesApiSourcesGetWithResponse(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*ListSourcesApiSourcesGetResponse, error)
+
 	// CreateSourceApiSourcesPostWithBodyWithResponse request with any body
 	CreateSourceApiSourcesPostWithBodyWithResponse(ctx context.Context, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error)
 
 	CreateSourceApiSourcesPostWithResponse(ctx context.Context, params *CreateSourceApiSourcesPostParams, body CreateSourceApiSourcesPostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error)
-
-	// ListSourcesApiSourcesGetWithResponse request
-	ListSourcesApiSourcesGetWithResponse(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*ListSourcesApiSourcesGetResponse, error)
 
 	// DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse request
 	DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *DeleteSourceApiSourcesSourceConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteSourceApiSourcesSourceConnectionIdDeleteResponse, error)
@@ -19012,6 +21891,14 @@ type ClientWithResponsesInterface interface {
 
 	// ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetWithResponse request
 	ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetWithResponse(ctx context.Context, runId openapi_types.UUID, attachmentId string, params *ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse, error)
+
+	// GetApiVersionApiVersionGetWithResponse request
+	GetApiVersionApiVersionGetWithResponse(ctx context.Context, params *GetApiVersionApiVersionGetParams, reqEditors ...RequestEditorFn) (*GetApiVersionApiVersionGetResponse, error)
+
+	// UpdateApiVersionApiVersionPutWithBodyWithResponse request with any body
+	UpdateApiVersionApiVersionPutWithBodyWithResponse(ctx context.Context, params *UpdateApiVersionApiVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateApiVersionApiVersionPutResponse, error)
+
+	UpdateApiVersionApiVersionPutWithResponse(ctx context.Context, params *UpdateApiVersionApiVersionPutParams, body UpdateApiVersionApiVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateApiVersionApiVersionPutResponse, error)
 }
 
 type ListAgentsApiAgentsGetResponse struct {
@@ -19700,7 +22587,7 @@ func (r GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse) Sta
 type MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]bool
+	JSON200      *OkResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20254,7 +23141,7 @@ func (r ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetRespons
 type ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]bool
+	JSON200      *OkResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20368,7 +23255,7 @@ func (r ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse) StatusCode(
 type ListAlertsApiAlertsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiAlertsAlertListResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20391,7 +23278,7 @@ func (r ListAlertsApiAlertsGetResponse) StatusCode() int {
 type ListAlertConfigsApiAlertsConfigsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *AlertConfigListResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20414,7 +23301,7 @@ func (r ListAlertConfigsApiAlertsConfigsGetResponse) StatusCode() int {
 type CreateAlertConfigApiAlertsConfigsPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON201      *map[string]interface{}
+	JSON201      *AlertConfigResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20459,7 +23346,7 @@ func (r DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse) StatusCode() in
 type GetAlertConfigApiAlertsConfigsConfigIdGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *AlertConfigResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20482,7 +23369,7 @@ func (r GetAlertConfigApiAlertsConfigsConfigIdGetResponse) StatusCode() int {
 type UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *AlertConfigResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20551,7 +23438,7 @@ func (r UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganization
 type GetAlertDetailApiAlertsAlertIdGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20574,7 +23461,7 @@ func (r GetAlertDetailApiAlertsAlertIdGetResponse) StatusCode() int {
 type AddAlertCommentApiAlertsAlertIdCommentsPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20597,7 +23484,7 @@ func (r AddAlertCommentApiAlertsAlertIdCommentsPostResponse) StatusCode() int {
 type ChangeAlertStatusApiAlertsAlertIdStatusPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20620,7 +23507,7 @@ func (r ChangeAlertStatusApiAlertsAlertIdStatusPostResponse) StatusCode() int {
 type SubscribeToAlertApiAlertsAlertIdSubscribePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20643,7 +23530,7 @@ func (r SubscribeToAlertApiAlertsAlertIdSubscribePostResponse) StatusCode() int 
 type UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -20780,7 +23667,7 @@ func (r UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRe
 type DocsSearchApiDocsSearchGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiDocsSearchDocsSearchResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21303,7 +24190,7 @@ func (r MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGet
 type MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]bool
+	JSON200      *OkResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21326,7 +24213,7 @@ func (r MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse) 
 type ListTemplatesApiMemoryBanksTemplatesGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]map[string]interface{}
+	JSON200      *interface{}
 }
 
 // Status returns HTTPResponse.Status
@@ -21439,7 +24326,7 @@ func (r UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse) StatusCode() int 
 type GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]map[string]string
+	JSON200      *interface{}
 	JSON422      *HTTPValidationError
 }
 
@@ -21462,7 +24349,7 @@ func (r GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse) StatusCod
 type CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON202      *map[string]interface{}
+	JSON202      *CompactionScheduledResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21576,7 +24463,7 @@ func (r ListModelsApiModelsGetResponse) StatusCode() int {
 type ListAlertsApiModelsAlertsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiModelLifecycleModelAlertListResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21620,7 +24507,7 @@ func (r MarkAllReadApiModelsAlertsMarkAllReadPostResponse) StatusCode() int {
 type GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *UnreadCountResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -21664,7 +24551,7 @@ func (r MarkReadApiModelsAlertsAlertIdReadPatchResponse) StatusCode() int {
 type GetGenerationTiersApiModelsGenerationTiersGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *GenerationTierListResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -21686,7 +24573,7 @@ func (r GetGenerationTiersApiModelsGenerationTiersGetResponse) StatusCode() int 
 type ListExperimentsApiModelsPlaygroundExperimentsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *ExperimentListResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21709,7 +24596,7 @@ func (r ListExperimentsApiModelsPlaygroundExperimentsGetResponse) StatusCode() i
 type CreateExperimentApiModelsPlaygroundExperimentsPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *CreateExperimentResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21754,7 +24641,7 @@ func (r DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDelete
 type GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *ExperimentDetailResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21777,7 +24664,7 @@ func (r GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse) Stat
 type CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *CancelExperimentResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21823,7 +24710,7 @@ func (r GetModelApiModelsModelIdDetailsGetResponse) StatusCode() int {
 type GetRecommendationsApiModelsModelIdRecommendationsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiModelLifecycleModelRecommendationsResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -21846,7 +24733,7 @@ func (r GetRecommendationsApiModelsModelIdRecommendationsGetResponse) StatusCode
 type SearchApiSearchGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *RoutersApiSearchSearchResponse
 	JSON422      *HTTPValidationError
 }
 
@@ -22300,29 +25187,6 @@ func (r LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse
 	return 0
 }
 
-type CreateSourceApiSourcesPostResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON201      *SourceResponse
-	JSON422      *HTTPValidationError
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateSourceApiSourcesPostResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateSourceApiSourcesPostResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 type ListSourcesApiSourcesGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -22340,6 +25204,29 @@ func (r ListSourcesApiSourcesGetResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListSourcesApiSourcesGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateSourceApiSourcesPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *SourceResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSourceApiSourcesPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSourceApiSourcesPostResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -22706,6 +25593,51 @@ func (r ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResp
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetApiVersionApiVersionGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ApiVersionResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetApiVersionApiVersionGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetApiVersionApiVersionGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateApiVersionApiVersionPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ApiVersionResponse
+	JSON422      *HTTPValidationError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateApiVersionApiVersionPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateApiVersionApiVersionPutResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -24448,6 +27380,15 @@ func (c *ClientWithResponses) LinkSourceConnectionsApiSolutionsSolutionIdSourceC
 	return ParseLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse(rsp)
 }
 
+// ListSourcesApiSourcesGetWithResponse request returning *ListSourcesApiSourcesGetResponse
+func (c *ClientWithResponses) ListSourcesApiSourcesGetWithResponse(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*ListSourcesApiSourcesGetResponse, error) {
+	rsp, err := c.ListSourcesApiSourcesGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSourcesApiSourcesGetResponse(rsp)
+}
+
 // CreateSourceApiSourcesPostWithBodyWithResponse request with arbitrary body returning *CreateSourceApiSourcesPostResponse
 func (c *ClientWithResponses) CreateSourceApiSourcesPostWithBodyWithResponse(ctx context.Context, params *CreateSourceApiSourcesPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSourceApiSourcesPostResponse, error) {
 	rsp, err := c.CreateSourceApiSourcesPostWithBody(ctx, params, contentType, body, reqEditors...)
@@ -24463,15 +27404,6 @@ func (c *ClientWithResponses) CreateSourceApiSourcesPostWithResponse(ctx context
 		return nil, err
 	}
 	return ParseCreateSourceApiSourcesPostResponse(rsp)
-}
-
-// ListSourcesApiSourcesGetWithResponse request returning *ListSourcesApiSourcesGetResponse
-func (c *ClientWithResponses) ListSourcesApiSourcesGetWithResponse(ctx context.Context, params *ListSourcesApiSourcesGetParams, reqEditors ...RequestEditorFn) (*ListSourcesApiSourcesGetResponse, error) {
-	rsp, err := c.ListSourcesApiSourcesGet(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListSourcesApiSourcesGetResponse(rsp)
 }
 
 // DeleteSourceApiSourcesSourceConnectionIdDeleteWithResponse request returning *DeleteSourceApiSourcesSourceConnectionIdDeleteResponse
@@ -24656,6 +27588,32 @@ func (c *ClientWithResponses) ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachme
 		return nil, err
 	}
 	return ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse(rsp)
+}
+
+// GetApiVersionApiVersionGetWithResponse request returning *GetApiVersionApiVersionGetResponse
+func (c *ClientWithResponses) GetApiVersionApiVersionGetWithResponse(ctx context.Context, params *GetApiVersionApiVersionGetParams, reqEditors ...RequestEditorFn) (*GetApiVersionApiVersionGetResponse, error) {
+	rsp, err := c.GetApiVersionApiVersionGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetApiVersionApiVersionGetResponse(rsp)
+}
+
+// UpdateApiVersionApiVersionPutWithBodyWithResponse request with arbitrary body returning *UpdateApiVersionApiVersionPutResponse
+func (c *ClientWithResponses) UpdateApiVersionApiVersionPutWithBodyWithResponse(ctx context.Context, params *UpdateApiVersionApiVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateApiVersionApiVersionPutResponse, error) {
+	rsp, err := c.UpdateApiVersionApiVersionPutWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateApiVersionApiVersionPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateApiVersionApiVersionPutWithResponse(ctx context.Context, params *UpdateApiVersionApiVersionPutParams, body UpdateApiVersionApiVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateApiVersionApiVersionPutResponse, error) {
+	rsp, err := c.UpdateApiVersionApiVersionPut(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateApiVersionApiVersionPutResponse(rsp)
 }
 
 // ParseListAgentsApiAgentsGetResponse parses an HTTP response from a ListAgentsApiAgentsGetWithResponse call
@@ -25614,7 +28572,7 @@ func ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]bool
+		var dest OkResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26423,7 +29381,7 @@ func ParseApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRespon
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]bool
+		var dest OkResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26581,7 +29539,7 @@ func ParseListAlertsApiAlertsGetResponse(rsp *http.Response) (*ListAlertsApiAler
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiAlertsAlertListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26614,7 +29572,7 @@ func ParseListAlertConfigsApiAlertsConfigsGetResponse(rsp *http.Response) (*List
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest AlertConfigListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26647,7 +29605,7 @@ func ParseCreateAlertConfigApiAlertsConfigsPostResponse(rsp *http.Response) (*Cr
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest map[string]interface{}
+		var dest AlertConfigResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26706,7 +29664,7 @@ func ParseGetAlertConfigApiAlertsConfigsConfigIdGetResponse(rsp *http.Response) 
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest AlertConfigResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26739,7 +29697,7 @@ func ParseUpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse(rsp *http.Respo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest AlertConfigResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26838,7 +29796,7 @@ func ParseGetAlertDetailApiAlertsAlertIdGetResponse(rsp *http.Response) (*GetAle
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiAlertsAlertDetailResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26871,7 +29829,7 @@ func ParseAddAlertCommentApiAlertsAlertIdCommentsPostResponse(rsp *http.Response
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiAlertsAlertDetailResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26904,7 +29862,7 @@ func ParseChangeAlertStatusApiAlertsAlertIdStatusPostResponse(rsp *http.Response
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiAlertsAlertDetailResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26937,7 +29895,7 @@ func ParseSubscribeToAlertApiAlertsAlertIdSubscribePostResponse(rsp *http.Respon
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiAlertsAlertDetailResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26970,7 +29928,7 @@ func ParseUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse(rsp *http.
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiAlertsAlertDetailResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -27161,7 +30119,7 @@ func ParseDocsSearchApiDocsSearchGetResponse(rsp *http.Response) (*DocsSearchApi
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiDocsSearchDocsSearchResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -27875,7 +30833,7 @@ func ParseMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]bool
+		var dest OkResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -27908,7 +30866,7 @@ func ParseListTemplatesApiMemoryBanksTemplatesGetResponse(rsp *http.Response) (*
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []map[string]interface{}
+		var dest interface{}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28059,7 +31017,7 @@ func ParseGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse(rsp *htt
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []map[string]string
+		var dest interface{}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28092,7 +31050,7 @@ func ParseCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse(rsp *ht
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
-		var dest map[string]interface{}
+		var dest CompactionScheduledResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28250,7 +31208,7 @@ func ParseListAlertsApiModelsAlertsGetResponse(rsp *http.Response) (*ListAlertsA
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiModelLifecycleModelAlertListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28299,7 +31257,7 @@ func ParseGetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse(rsp *http.Res
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest UnreadCountResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28351,7 +31309,7 @@ func ParseGetGenerationTiersApiModelsGenerationTiersGetResponse(rsp *http.Respon
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest GenerationTierListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28377,7 +31335,7 @@ func ParseListExperimentsApiModelsPlaygroundExperimentsGetResponse(rsp *http.Res
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest ExperimentListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28410,7 +31368,7 @@ func ParseCreateExperimentApiModelsPlaygroundExperimentsPostResponse(rsp *http.R
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest CreateExperimentResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28469,7 +31427,7 @@ func ParseGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse(rsp
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest ExperimentDetailResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28502,7 +31460,7 @@ func ParseCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCanc
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest CancelExperimentResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28568,7 +31526,7 @@ func ParseGetRecommendationsApiModelsModelIdRecommendationsGetResponse(rsp *http
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiModelLifecycleModelRecommendationsResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -28601,7 +31559,7 @@ func ParseSearchApiSearchGetResponse(rsp *http.Response) (*SearchApiSearchGetRes
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest RoutersApiSearchSearchResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -29225,39 +32183,6 @@ func ParseLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRespon
 	return response, nil
 }
 
-// ParseCreateSourceApiSourcesPostResponse parses an HTTP response from a CreateSourceApiSourcesPostWithResponse call
-func ParseCreateSourceApiSourcesPostResponse(rsp *http.Response) (*CreateSourceApiSourcesPostResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateSourceApiSourcesPostResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest SourceResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
-		var dest HTTPValidationError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON422 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseListSourcesApiSourcesGetResponse parses an HTTP response from a ListSourcesApiSourcesGetWithResponse call
 func ParseListSourcesApiSourcesGetResponse(rsp *http.Response) (*ListSourcesApiSourcesGetResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -29278,6 +32203,39 @@ func ParseListSourcesApiSourcesGetResponse(rsp *http.Response) (*ListSourcesApiS
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSourceApiSourcesPostResponse parses an HTTP response from a CreateSourceApiSourcesPostWithResponse call
+func ParseCreateSourceApiSourcesPostResponse(rsp *http.Response) (*CreateSourceApiSourcesPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSourceApiSourcesPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest SourceResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest HTTPValidationError
@@ -29802,6 +32760,65 @@ func ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRe
 
 	case rsp.StatusCode == 200:
 		// Content-type (video/*) unsupported
+
+	}
+
+	return response, nil
+}
+
+// ParseGetApiVersionApiVersionGetResponse parses an HTTP response from a GetApiVersionApiVersionGetWithResponse call
+func ParseGetApiVersionApiVersionGetResponse(rsp *http.Response) (*GetApiVersionApiVersionGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetApiVersionApiVersionGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApiVersionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateApiVersionApiVersionPutResponse parses an HTTP response from a UpdateApiVersionApiVersionPutWithResponse call
+func ParseUpdateApiVersionApiVersionPutResponse(rsp *http.Response) (*UpdateApiVersionApiVersionPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateApiVersionApiVersionPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ApiVersionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	}
 
