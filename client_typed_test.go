@@ -2711,3 +2711,49 @@ func TestItems_LegacyKeyStillWinsWhenCanonicalIsAbsent(t *testing.T) {
 		t.Fatalf("expected the legacy list, got %+v", alerts.Items())
 	}
 }
+
+func TestNewClient_DuplicateVersionHeaderSpellings(t *testing.T) {
+	// DefaultHeaders may carry two spellings of one header. Go's map order is
+	// randomised, so validating "the first match" could approve one value and
+	// send the other — nondeterministically. Run it repeatedly: a version-
+	// dependent guard would pass only some of the time.
+	for i := 0; i < 50; i++ {
+		_, err := NewClient(Options{
+			APIKey: "k",
+			DefaultHeaders: map[string]string{
+				"Seclai-Version": APIVersion20260727,
+				"seclai-version": "2099-01-01",
+			},
+		})
+		if err == nil {
+			t.Fatalf("iteration %d: an unknown spelling slipped past the guard", i)
+		}
+	}
+}
+
+func TestNewClient_OnlyOneVersionHeaderReachesTheWire(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Values("Seclai-Version")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"pagination":{"page":1,"limit":20,"total":0,"pages":0,"has_next":false,"has_prev":false}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Options{
+		APIKey: "k", BaseURL: srv.URL,
+		DefaultHeaders: map[string]string{
+			"Seclai-Version": APIVersion20260701,
+			"seclai-version": APIVersion20260727,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := c.ListAgents(context.Background(), ListOptions{}); err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if len(seen) != 1 {
+		t.Fatalf("expected exactly one Seclai-Version on the wire, got %v", seen)
+	}
+}

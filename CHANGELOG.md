@@ -23,6 +23,7 @@
 
 ### Fixed
 
+- Validate the `Seclai-Version` that survives the header merge, and order the merge deterministically. Go randomises map iteration, so two spellings in `Options.DefaultHeaders` meant the guard approved one value and the client sent another, differently on each run
 - Read the canonical key by presence rather than length in `AlertConfigListResponse.Items()` and `ModelAlertListResponse.Items()`. An empty canonical page (`{"data": []}`) fell through to the legacy key and reported the wrong list
 - Validate a `Seclai-Version` supplied through `Options.DefaultHeaders`, not just `Options.APIVersion`. `DefaultHeaders` is applied last so it wins, which left the unknown-version guard one header away from being bypassed; a differently-cased key also emitted two wire headers
 - Return an error from `GetAgentAiConversationHistoryWithOptions` when `StepType` is empty, rather than omitting the parameter and deferring to a 422 naming the wire parameter
