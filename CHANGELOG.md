@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Run the test suite under `-race`, in `make test` and both CI workflows. The tests capture request state in an httptest handler goroutine and assert on it from the test goroutine; that is safe by construction, but nothing was enforcing it
 - Stop sending `Severity` from `ListAlerts`. `GET /alerts` declares no such filter, so it never filtered, and it becomes a 422 once `Options.APIVersion` is `2026-07-27` or later. The field is still accepted and ignored
 - Deprecate `GetAgentAiConversationHistory`. The API requires a `step_type` query parameter its signature cannot supply, so every call answered 422. Use `GetAgentAiConversationHistoryWithOptions`
 - Accept either wire shape from `ListEvaluationCriteria`. The endpoint returns a bare array by default and the canonical `{data, pagination}` envelope once opted in, so the client reads both and keeps returning `[]EvaluationCriteriaResponse`
@@ -23,6 +24,7 @@
 
 ### Fixed
 
+- Validate the `Seclai-Version` that survives the header merge, and order the merge deterministically. Go randomises map iteration, so two spellings in `Options.DefaultHeaders` meant the guard approved one value and the client sent another, differently on each run
 - Read the canonical key by presence rather than length in `AlertConfigListResponse.Items()` and `ModelAlertListResponse.Items()`. An empty canonical page (`{"data": []}`) fell through to the legacy key and reported the wrong list
 - Validate a `Seclai-Version` supplied through `Options.DefaultHeaders`, not just `Options.APIVersion`. `DefaultHeaders` is applied last so it wins, which left the unknown-version guard one header away from being bypassed; a differently-cased key also emitted two wire headers
 - Return an error from `GetAgentAiConversationHistoryWithOptions` when `StepType` is empty, rather than omitting the parameter and deferring to a 422 naming the wire parameter

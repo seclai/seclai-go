@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -129,14 +130,40 @@ func NewClient(opts Options) (*Client, error) {
 	}
 	state.httpClient = hc
 
-	// DefaultHeaders is applied last so an explicit entry wins, which means it
-	// can also carry a Seclai-Version. Validate whichever value actually reaches
-	// the wire, not just the option — otherwise the guard is one header away
-	// from being bypassed.
-	effectiveVersion, versionSource := opts.APIVersion, "Options.APIVersion"
-	for k, v := range opts.DefaultHeaders {
+	defHeaders := make(map[string]string, len(opts.DefaultHeaders)+1)
+	// Set first so an explicit DefaultHeaders entry still wins. Omitted unless
+	// the caller opts in: with no header the account's pinned baseline applies.
+	if opts.APIVersion != "" {
+		defHeaders["Seclai-Version"] = opts.APIVersion
+	}
+	// DefaultHeaders may carry several spellings of one header. Sort the keys so
+	// the survivor does not depend on Go's randomised map order, and drop any
+	// differently-cased duplicate so only one value reaches the wire.
+	headerKeys := make([]string, 0, len(opts.DefaultHeaders))
+	for k := range opts.DefaultHeaders {
+		headerKeys = append(headerKeys, k)
+	}
+	sort.Strings(headerKeys)
+	for _, k := range headerKeys {
+		for existing := range defHeaders {
+			if strings.EqualFold(existing, k) && existing != k {
+				delete(defHeaders, existing)
+			}
+		}
+		defHeaders[k] = opts.DefaultHeaders[k]
+	}
+
+	// Validate what the merge produced, not what the options said. Inspecting the
+	// options would have to predict which spelling survives — and with a map that
+	// is not even deterministic, so the guard could approve one value and the
+	// client send another.
+	effectiveVersion, versionSource := "", "Options.APIVersion"
+	for k, v := range defHeaders {
 		if strings.EqualFold(k, "Seclai-Version") {
-			effectiveVersion, versionSource = v, `Options.DefaultHeaders["Seclai-Version"]`
+			effectiveVersion = v
+			if v != opts.APIVersion {
+				versionSource = fmt.Sprintf("Options.DefaultHeaders[%q]", k)
+			}
 			break
 		}
 	}
@@ -147,22 +174,6 @@ func NewClient(opts Options) (*Client, error) {
 				"decode incorrectly rather than reject. Upgrade the module, or set "+
 				"Options.AllowUnknownAPIVersion to proceed anyway.",
 			effectiveVersion, versionSource, strings.Join(KnownAPIVersions, ", "))}
-	}
-
-	defHeaders := make(map[string]string, len(opts.DefaultHeaders)+1)
-	// Set first so an explicit DefaultHeaders entry still wins. Omitted unless
-	// the caller opts in: with no header the account's pinned baseline applies.
-	if opts.APIVersion != "" {
-		defHeaders["Seclai-Version"] = opts.APIVersion
-	}
-	for k, v := range opts.DefaultHeaders {
-		// Drop a differently-cased duplicate so only one value reaches the wire.
-		for existing := range defHeaders {
-			if strings.EqualFold(existing, k) && existing != k {
-				delete(defHeaders, existing)
-			}
-		}
-		defHeaders[k] = v
 	}
 
 	client := &Client{
