@@ -1983,7 +1983,9 @@ type ListSourceContentsOptions struct {
 	// the upload methods return — to poll a batch of uploads in one request.
 	// Nil applies no filter; a non-nil slice with no non-empty id matches
 	// nothing, so an empty page is returned without a request. Empty ids are
-	// dropped. The API accepts at most 500 ids per request.
+	// dropped. Keep it to about 100: the ids travel in the query string, and a
+	// URL over 8,192 bytes is rejected with a 414. The API itself accepts at
+	// most 500.
 	ContentVersionIDs []string
 }
 
