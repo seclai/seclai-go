@@ -328,6 +328,7 @@ func TestClient_ListSourceContents_EmptyFilterMatchesNothingWithoutARequest(t *t
 	}{
 		{ListSourceContentsOptions{ContentVersionIDs: []string{}}, PaginationResponse{Page: 1, Limit: 20}},
 		{ListSourceContentsOptions{ContentVersionIDs: []string{}, Page: 3, Limit: 50, Status: "failed"}, PaginationResponse{Page: 3, Limit: 50}},
+		{ListSourceContentsOptions{ContentVersionIDs: []string{"", ""}}, PaginationResponse{Page: 1, Limit: 20}},
 	}
 	for _, tc := range cases {
 		c, seen := stubClient(t, "", `{"data":[{"content_version_id":"cv_1"}],`+emptyPagination+`}`)
@@ -345,6 +346,15 @@ func TestClient_ListSourceContents_EmptyFilterMatchesNothingWithoutARequest(t *t
 			t.Fatalf("pagination: got %+v, want %+v", got.Pagination, tc.want)
 		}
 	}
+}
+
+func TestClient_ListSourceContents_DropsBlankIDsFromAMixedFilter(t *testing.T) {
+	c, seen := stubClient(t, "", `{"data":[],`+emptyPagination+`}`)
+	opts := ListSourceContentsOptions{ContentVersionIDs: []string{"", "cv_1", "", "cv_2"}}
+	if _, err := c.ListSourceContents(context.Background(), "src_1", opts); err != nil {
+		t.Fatalf("ListSourceContents: %v", err)
+	}
+	assertRequest(t, seen, http.MethodGet, "/sources/src_1/contents", "content_version_id=cv_1&content_version_id=cv_2", "")
 }
 
 func TestClient_GetSourceContentStatus(t *testing.T) {

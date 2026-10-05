@@ -1981,15 +1981,22 @@ type ListSourceContentsOptions struct {
 	Status string
 	// ContentVersionIDs keeps only these items — the content_version_id values
 	// the upload methods return — to poll a batch of uploads in one request.
-	// Nil applies no filter; a non-nil empty slice matches nothing, so an empty
-	// page is returned without a request.
+	// Nil applies no filter; a non-nil slice with no non-empty id matches
+	// nothing, so an empty page is returned without a request. Empty ids are
+	// dropped. The API accepts at most 500 ids per request.
 	ContentVersionIDs []string
 }
 
 // ListSourceContents lists a source's content items and their indexing status.
 // The response is the {data, pagination} envelope on every API version.
 func (c *Client) ListSourceContents(ctx context.Context, sourceID string, opts ListSourceContentsOptions) (*SourceContentStatusListResponse, error) {
-	if opts.ContentVersionIDs != nil && len(opts.ContentVersionIDs) == 0 {
+	var ids []string
+	for _, id := range opts.ContentVersionIDs {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	if opts.ContentVersionIDs != nil && len(ids) == 0 {
 		// An empty filter encodes as no parameter, which the API reads as unfiltered.
 		page := PaginationResponse{Page: 1, Limit: 20}
 		if opts.Page > 0 {
@@ -2016,8 +2023,8 @@ func (c *Client) ListSourceContents(ctx context.Context, sourceID string, opts L
 	if opts.Status != "" {
 		q["status"] = []string{opts.Status}
 	}
-	if len(opts.ContentVersionIDs) > 0 {
-		q["content_version_id"] = opts.ContentVersionIDs
+	if len(ids) > 0 {
+		q["content_version_id"] = ids
 	}
 	var out SourceContentStatusListResponse
 	if err := c.doValues(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/contents", url.PathEscape(sourceID)), q, nil, nil, &out); err != nil {

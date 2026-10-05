@@ -163,8 +163,8 @@ detect the gap.
 
 **What `2026-07-27` changes.** Undeclared query parameters become a 422 instead
 of being ignored, and list endpoints move to the canonical `{data, pagination}`
-envelope. The affected methods read both shapes, so they keep working either way
-— but the metadata moves:
+envelope. The methods in this table read both shapes, so they keep working
+either way — but the metadata moves:
 
 | Method | Before | From 2026-07-27 |
 | --- | --- | --- |
@@ -182,6 +182,15 @@ will be deprecated and then removed once the canonical envelope is the default.
 The cloud-drive listings — `ListCloudDriveProviders`, `ListCloudDrives`,
 `GetAgentsUsingCloudDrive` and `ListCloudDriveRejections` — follow the same rule
 on the wire and return the items as a slice on either shape.
+
+**Not yet safe with `APIVersion` `2026-07-27` or later.** These methods still
+decode only the default shape, so do not opt in on a client that calls them:
+
+| Methods | What happens on the canonical envelope |
+| --- | --- |
+| `ListKnowledgeBases`, `ListMemoryBanks`, `ListAgentEmailOptOuts`, `ListBlockedEmailSenders`, `SetAutoBlockMode`, `ListOrganizationAlertPreferences`, `ListEmailDomains`, `Typed().GetGenerationTiers`, `Typed().ListExperiments` | The list comes back empty with a nil error |
+| `GetAgentCallers`, `ListInboundEmailRejections`, `ListGovernanceAiConversations`, `ListModels`, `ListSolutionConversations` | A JSON decode error |
+| `ListEvaluationResults`, `ListCompatibleRuns`, `ListEvaluationRuns` | The items are read, but `Total`, `Page` and `Limit` are zero |
 
 **Later versions.** Each is cumulative, and none changes a response shape this
 client decodes:
