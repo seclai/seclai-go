@@ -140,56 +140,29 @@ func (c *Client) doList(ctx context.Context, method, apiPath string, query map[s
 	if err != nil {
 		return err
 	}
-	if err := decodeList(raw, key, out); err != nil {
-		return listError(err, method, reqURL.String(), raw)
+	return decodeListBody(method, reqURL, raw, key, out)
+}
+
+// decodeListBody decodes the 2xx body doBytes returned for reqURL. This is the
+// only place a response becomes an *UnexpectedResponseError: an error from
+// doBytes itself never reaches it.
+func decodeListBody(method string, reqURL *url.URL, body []byte, key string, out any) error {
+	if err := decodeList(body, key, out); err != nil {
+		return listError(err, method, reqURL.String(), body)
 	}
 	return nil
 }
 
-// sentRequest records the request a Client method issued, so that a Typed()
-// form delegating to it can report the URL actually requested without
-// restating the endpoint's path and query.
-type sentRequest struct {
-	method string
-	url    *url.URL
-	body   []byte
-}
-
-type sentRequestKey struct{}
-
-// recordRequest returns a context under which the next request made through
-// the client is recorded in the returned sentRequest.
-func recordRequest(ctx context.Context) (context.Context, *sentRequest) {
-	if ctx == nil {
-		ctx = context.Background()
+// rawJSON is what a json.RawMessage method returns for a doBytes result: the
+// error unchanged, nil for an empty body, and the JSON error for a body that
+// is not JSON.
+func rawJSON(body []byte, err error) (json.RawMessage, error) {
+	if err != nil || len(body) == 0 {
+		return nil, err
 	}
-	sent := &sentRequest{}
-	return context.WithValue(ctx, sentRequestKey{}, sent), sent
-}
-
-func (s *sentRequest) where() string {
-	if s.url == nil {
-		return ""
+	var out json.RawMessage
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, err
 	}
-	return s.url.String()
-}
-
-// decodeList finishes a Typed() list form: raw and err are what the raw method
-// returned. Only a JSON syntax error — a 2xx body that was not JSON — is
-// converted; any other error from the raw method is returned unchanged.
-func (s *sentRequest) decodeList(raw json.RawMessage, err error, key string, out any) error {
-	if err != nil {
-		var syntax *json.SyntaxError
-		if !errors.As(err, &syntax) {
-			return err
-		}
-		return &UnexpectedResponseError{
-			Method: s.method, URL: s.where(), Message: "expected a list, got a body that is not JSON",
-			ResponseText: string(bytes.TrimSpace(s.body)), cause: err,
-		}
-	}
-	if err := decodeList(raw, key, out); err != nil {
-		return listError(err, s.method, s.where(), raw)
-	}
-	return nil
+	return out, nil
 }

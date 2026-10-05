@@ -316,10 +316,6 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 	}
 
 	reqURL := c.buildURLValues(apiPath, query)
-	sent, _ := ctx.Value(sentRequestKey{}).(*sentRequest)
-	if sent != nil {
-		sent.method, sent.url = method, reqURL
-	}
 
 	var reqBody io.Reader
 	if body != nil {
@@ -368,9 +364,6 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 			return nil, nil, &APIValidationError{APIStatusError: statusErr}
 		}
 		return nil, nil, &statusErr
-	}
-	if sent != nil {
-		sent.body = raw
 	}
 	return raw, reqURL, nil
 }
@@ -1748,11 +1741,13 @@ func (c *Client) DeleteMemoryBank(ctx context.Context, memoryBankID string) erro
 
 // GetAgentsUsingMemoryBank lists agents that use a memory bank.
 func (c *Client) GetAgentsUsingMemoryBank(ctx context.Context, memoryBankID string) (json.RawMessage, error) {
-	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/agents", url.PathEscape(memoryBankID)), nil, nil, nil, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	body, _, err := c.agentsUsingMemoryBankBody(ctx, memoryBankID)
+	return rawJSON(body, err)
+}
+
+// agentsUsingMemoryBankBody is the request behind [Client.GetAgentsUsingMemoryBank] and its typed form.
+func (c *Client) agentsUsingMemoryBankBody(ctx context.Context, memoryBankID string) ([]byte, *url.URL, error) {
+	return c.doBytes(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/agents", url.PathEscape(memoryBankID)), nil, nil, nil)
 }
 
 // GetMemoryBankStats retrieves statistics for a memory bank.
@@ -1794,11 +1789,13 @@ func (c *Client) TestCompactionPromptStandalone(ctx context.Context, body Standa
 
 // ListMemoryBankTemplates lists available memory bank templates.
 func (c *Client) ListMemoryBankTemplates(ctx context.Context) (json.RawMessage, error) {
-	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/memory_banks/templates", nil, nil, nil, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	body, _, err := c.memoryBankTemplatesBody(ctx)
+	return rawJSON(body, err)
+}
+
+// memoryBankTemplatesBody is the request behind [Client.ListMemoryBankTemplates] and its typed form.
+func (c *Client) memoryBankTemplatesBody(ctx context.Context) ([]byte, *url.URL, error) {
+	return c.doBytes(ctx, http.MethodGet, "/memory_banks/templates", nil, nil, nil)
 }
 
 // ── Memory Bank AI Assistant ────────────────────────────────────────────────
@@ -2396,11 +2393,13 @@ func (c *Client) UnsubscribeFromAlert(ctx context.Context, alertID string) (json
 // returns the canonical {data, pagination} envelope instead, so the top-level
 // key changes.
 func (c *Client) ListAlertConfigs(ctx context.Context, opts ListOptions) (json.RawMessage, error) {
-	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/alerts/configs", listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	body, _, err := c.alertConfigsBody(ctx, opts)
+	return rawJSON(body, err)
+}
+
+// alertConfigsBody is the request behind [Client.ListAlertConfigs] and its typed form.
+func (c *Client) alertConfigsBody(ctx context.Context, opts ListOptions) ([]byte, *url.URL, error) {
+	return c.doBytes(ctx, http.MethodGet, "/alerts/configs", queryValues(listQuery(opts.Page, opts.Limit)), nil, nil)
 }
 
 // CreateAlertConfig creates a new alert configuration.
@@ -2461,6 +2460,12 @@ func (c *Client) UpdateOrganizationAlertPreference(ctx context.Context, organiza
 // The endpoint declares limit/offset, not page, so opts.Page is translated —
 // previously it was ignored and every page after the first returned page 1.
 func (c *Client) ListModelAlerts(ctx context.Context, opts ListOptions) (json.RawMessage, error) {
+	body, _, err := c.modelAlertsBody(ctx, opts)
+	return rawJSON(body, err)
+}
+
+// modelAlertsBody is the request behind [Client.ListModelAlerts] and its typed form.
+func (c *Client) modelAlertsBody(ctx context.Context, opts ListOptions) ([]byte, *url.URL, error) {
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 50
@@ -2472,11 +2477,7 @@ func (c *Client) ListModelAlerts(ctx context.Context, opts ListOptions) (json.Ra
 	if opts.Limit > 0 {
 		q["limit"] = fmt.Sprintf("%d", opts.Limit)
 	}
-	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/models/alerts", q, nil, nil, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return c.doBytes(ctx, http.MethodGet, "/models/alerts", queryValues(q), nil, nil)
 }
 
 // MarkAllModelAlertsRead marks all model alerts as read.
@@ -2548,11 +2549,13 @@ func (c *Client) GetModel(ctx context.Context, modelID string) (*PromptModelResp
 // GetGenerationTiers lists the media-generation quality tiers and the model
 // and cost each resolves to. Global routing and pricing; read-only.
 func (c *Client) GetGenerationTiers(ctx context.Context) (json.RawMessage, error) {
-	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/models/generation-tiers", nil, nil, nil, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	body, _, err := c.generationTiersBody(ctx)
+	return rawJSON(body, err)
+}
+
+// generationTiersBody is the request behind [Client.GetGenerationTiers] and its typed form.
+func (c *Client) generationTiersBody(ctx context.Context) ([]byte, *url.URL, error) {
+	return c.doBytes(ctx, http.MethodGet, "/models/generation-tiers", nil, nil, nil)
 }
 
 // ListEmbeddingModelsOptions controls query parameters for [Client.ListEmbeddingModels].
@@ -2610,6 +2613,12 @@ type ListExperimentsOptions struct {
 
 // ListExperiments lists model playground experiments.
 func (c *Client) ListExperiments(ctx context.Context, opts ListExperimentsOptions) (json.RawMessage, error) {
+	body, _, err := c.experimentsBody(ctx, opts)
+	return rawJSON(body, err)
+}
+
+// experimentsBody is the request behind [Client.ListExperiments] and its typed form.
+func (c *Client) experimentsBody(ctx context.Context, opts ListExperimentsOptions) ([]byte, *url.URL, error) {
 	q := map[string]string{}
 	if opts.Days > 0 {
 		q["days"] = fmt.Sprintf("%d", opts.Days)
@@ -2626,11 +2635,7 @@ func (c *Client) ListExperiments(ctx context.Context, opts ListExperimentsOption
 	if opts.Offset > 0 {
 		q["offset"] = fmt.Sprintf("%d", opts.Offset)
 	}
-	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/models/playground/experiments", q, nil, nil, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return c.doBytes(ctx, http.MethodGet, "/models/playground/experiments", queryValues(q), nil, nil)
 }
 
 // CreateExperiment creates a model playground experiment.
