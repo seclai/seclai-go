@@ -476,7 +476,9 @@ upload methods return:
 ```go
 failed, _ := client.ListSourceContents(ctx, "source_id", seclai.ListSourceContentsOptions{Status: "failed"})
 for _, item := range failed.Data {
-	fmt.Println(item.ContentVersionId, item.Error)
+	if item.Error != nil {
+		fmt.Println(item.ContentVersionId, *item.Error)
+	}
 }
 
 // Poll a batch of uploads in one request
