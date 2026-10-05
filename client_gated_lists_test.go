@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"regexp"
 	"strings"
@@ -598,13 +601,13 @@ func TestGatedLists_ANonListBodyIsAnErrorNotAnEmptyList(t *testing.T) {
 		for label, body := range bodies {
 			for _, version := range []string{"", APIVersion20260727} {
 				t.Run(row.name+"/"+label+"/version="+version, func(t *testing.T) {
-					c, _ := stubClient(t, version, body)
+					c, seen := stubClient(t, version, body)
 					got, err := row.call(context.Background(), c)
 					var shapeErr *UnexpectedResponseError
 					if !errors.As(err, &shapeErr) {
 						t.Fatalf("got %+v with error %v, want an *UnexpectedResponseError", got, err)
 					}
-					if (shapeErr.ResponseText != body && shapeErr.ResponseText != "") || !strings.Contains(shapeErr.Error(), "seclai: unexpected response") {
+					if shapeErr.ResponseText != strings.TrimSpace(body) || shapeErr.URL != seen.URL || shapeErr.Method != seen.Method || !strings.Contains(shapeErr.Error(), "seclai: unexpected response") {
 						t.Fatalf("unexpected error contents: %#v", shapeErr)
 					}
 				})
@@ -741,5 +744,80 @@ func TestUnexpectedResponseError_UnwrapsTheJSONError(t *testing.T) {
 	shapeErr = nil
 	if !errors.As(err, &shapeErr) || shapeErr.Unwrap() != nil {
 		t.Fatalf("valid JSON of the wrong shape: got %v, want an *UnexpectedResponseError with no cause", err)
+	}
+}
+
+// The URL on the error is the one requested — base, expanded path and query —
+// for the Typed() forms too, which take it from the raw method they delegate to.
+func TestTypedLists_ErrorCarriesTheRequestedURL(t *testing.T) {
+	ctx := context.Background()
+	calls := []struct {
+		name, wantPathAndQuery string
+		call                   func(c *Client) error
+	}{
+		{"Typed().ListAlertConfigs", "/alerts/configs?limit=10&page=3", func(c *Client) error {
+			_, err := c.Typed().ListAlertConfigs(ctx, ListOptions{Page: 3, Limit: 10})
+			return err
+		}},
+		{"Typed().ListModelAlerts", "/models/alerts?limit=10&offset=20", func(c *Client) error {
+			_, err := c.Typed().ListModelAlerts(ctx, ListOptions{Page: 3, Limit: 10})
+			return err
+		}},
+		{"Typed().GetGenerationTiers", "/models/generation-tiers", func(c *Client) error {
+			_, err := c.Typed().GetGenerationTiers(ctx)
+			return err
+		}},
+		{"Typed().ListExperiments", "/models/playground/experiments?days=7&limit=5&offset=10", func(c *Client) error {
+			_, err := c.Typed().ListExperiments(ctx, ListExperimentsOptions{Days: 7, Limit: 5, Offset: 10})
+			return err
+		}},
+		{"Typed().ListMemoryBankTemplates", "/memory_banks/templates", func(c *Client) error {
+			_, err := c.Typed().ListMemoryBankTemplates(ctx)
+			return err
+		}},
+		{"Typed().GetAgentsUsingMemoryBank", "/memory_banks/mb_123/agents", func(c *Client) error {
+			_, err := c.Typed().GetAgentsUsingMemoryBank(ctx, "mb_123")
+			return err
+		}},
+	}
+	for _, tc := range calls {
+		for label, body := range map[string]string{"not a list": `{"detail":"Internal error"}`, "not JSON": `upstream timed out`} {
+			t.Run(tc.name+"/"+label, func(t *testing.T) {
+				c, seen := stubClient(t, "", body)
+				var shapeErr *UnexpectedResponseError
+				if err := tc.call(c); !errors.As(err, &shapeErr) {
+					t.Fatalf("got %v, want an *UnexpectedResponseError", err)
+				}
+				if !strings.HasSuffix(seen.URL, tc.wantPathAndQuery) || !strings.HasPrefix(seen.URL, "http://127.0.0.1") {
+					t.Fatalf("server was asked for %q, expected it to end in %q", seen.URL, tc.wantPathAndQuery)
+				}
+				if shapeErr.URL != seen.URL || shapeErr.Method != http.MethodGet || shapeErr.ResponseText != body {
+					t.Fatalf("error reports %s %q with body %q; the request was GET %q with body %q",
+						shapeErr.Method, shapeErr.URL, shapeErr.ResponseText, seen.URL, body)
+				}
+			})
+		}
+	}
+}
+
+func TestTypedLists_OtherRawErrorsPassThroughUnchanged(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `not json either`)
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, rawErr := c.GetAgentsUsingMemoryBank(context.Background(), "mb_123")
+	_, typedErr := c.Typed().GetAgentsUsingMemoryBank(context.Background(), "mb_123")
+	var rawStatus, typedStatus *APIStatusError
+	if !errors.As(rawErr, &rawStatus) || !errors.As(typedErr, &typedStatus) || *rawStatus != *typedStatus {
+		t.Fatalf("raw returned %v and typed %v; want the same *APIStatusError", rawErr, typedErr)
+	}
+	var shapeErr *UnexpectedResponseError
+	if errors.As(typedErr, &shapeErr) {
+		t.Fatalf("a non-2xx response was converted to %v", shapeErr)
 	}
 }

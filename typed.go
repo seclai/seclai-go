@@ -105,13 +105,11 @@ func (t *TypedClient) UnsubscribeFromAlert(ctx context.Context, alertID string) 
 
 // ListAlertConfigs is the typed form of [Client.ListAlertConfigs].
 func (t *TypedClient) ListAlertConfigs(ctx context.Context, opts ListOptions) (*AlertConfigListResponse, error) {
+	ctx, sent := recordRequest(ctx)
 	raw, err := t.c.ListAlertConfigs(ctx, opts)
-	if err != nil {
-		return nil, rawListError(err, "GET", "/alerts/configs")
-	}
 	var out AlertConfigListResponse
-	if err := decodeList(raw, "configs", &out); err != nil {
-		return nil, listError(err, "GET", "/alerts/configs", raw)
+	if err := sent.decodeList(raw, err, "configs", &out); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
@@ -170,13 +168,11 @@ func (t *TypedClient) UpdateOrganizationAlertPreference(ctx context.Context, org
 
 // ListModelAlerts is the typed form of [Client.ListModelAlerts].
 func (t *TypedClient) ListModelAlerts(ctx context.Context, opts ListOptions) (*ModelAlertListResponse, error) {
+	ctx, sent := recordRequest(ctx)
 	raw, err := t.c.ListModelAlerts(ctx, opts)
-	if err != nil {
-		return nil, rawListError(err, "GET", "/models/alerts")
-	}
 	var out ModelAlertListResponse
-	if err := decodeList(raw, "alerts", &out); err != nil {
-		return nil, listError(err, "GET", "/models/alerts", raw)
+	if err := sent.decodeList(raw, err, "alerts", &out); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
@@ -209,26 +205,22 @@ func (t *TypedClient) GetModelRecommendations(ctx context.Context, modelID strin
 
 // GetGenerationTiers is the typed form of [Client.GetGenerationTiers].
 func (t *TypedClient) GetGenerationTiers(ctx context.Context) (*GenerationTierListResponse, error) {
+	ctx, sent := recordRequest(ctx)
 	raw, err := t.c.GetGenerationTiers(ctx)
-	if err != nil {
-		return nil, rawListError(err, "GET", "/models/generation-tiers")
-	}
 	var out GenerationTierListResponse
-	if err := decodeList(raw, "tiers", &out); err != nil {
-		return nil, listError(err, "GET", "/models/generation-tiers", raw)
+	if err := sent.decodeList(raw, err, "tiers", &out); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
 
 // ListExperiments is the typed form of [Client.ListExperiments].
 func (t *TypedClient) ListExperiments(ctx context.Context, opts ListExperimentsOptions) (*ExperimentListResponse, error) {
+	ctx, sent := recordRequest(ctx)
 	raw, err := t.c.ListExperiments(ctx, opts)
-	if err != nil {
-		return nil, rawListError(err, "GET", "/models/playground/experiments")
-	}
 	var out ExperimentListResponse
-	if err := decodeList(raw, "experiments", &out); err != nil {
-		return nil, listError(err, "GET", "/models/playground/experiments", raw)
+	if err := sent.decodeList(raw, err, "experiments", &out); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
@@ -327,13 +319,11 @@ func (t *TypedClient) AcceptAiMemoryBankSuggestion(ctx context.Context, conversa
 // ListMemoryBankTemplates is the typed form of [Client.ListMemoryBankTemplates].
 // The API declares no schema for a template, so each is a JSON object.
 func (t *TypedClient) ListMemoryBankTemplates(ctx context.Context) ([]map[string]JsonValue, error) {
+	ctx, sent := recordRequest(ctx)
 	raw, err := t.c.ListMemoryBankTemplates(ctx)
-	if err != nil {
-		return nil, rawListError(err, "GET", "/memory_banks/templates")
-	}
 	var out []map[string]JsonValue
-	if err := decodeList(raw, "", &out); err != nil {
-		return nil, listError(err, "GET", "/memory_banks/templates", raw)
+	if err := sent.decodeList(raw, err, "", &out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -342,13 +332,11 @@ func (t *TypedClient) ListMemoryBankTemplates(ctx context.Context) ([]map[string
 // The API declares no schema for an entry; each is an object carrying agent_id
 // and agent_name.
 func (t *TypedClient) GetAgentsUsingMemoryBank(ctx context.Context, memoryBankID string) ([]map[string]JsonValue, error) {
+	ctx, sent := recordRequest(ctx)
 	raw, err := t.c.GetAgentsUsingMemoryBank(ctx, memoryBankID)
-	if err != nil {
-		return nil, rawListError(err, "GET", "/memory_banks/{memory_bank_id}/agents")
-	}
 	var out []map[string]JsonValue
-	if err := decodeList(raw, "", &out); err != nil {
-		return nil, listError(err, "GET", "/memory_banks/{memory_bank_id}/agents", raw)
+	if err := sent.decodeList(raw, err, "", &out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

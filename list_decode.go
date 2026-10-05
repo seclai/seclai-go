@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 )
 
 // errNotAList marks a 2xx body that is neither shape of a list response.
@@ -145,12 +146,50 @@ func (c *Client) doList(ctx context.Context, method, apiPath string, query map[s
 	return nil
 }
 
-// rawListError does the same for a body the raw method could not hand over
-// because it was not JSON at all; any other error passes through.
-func rawListError(err error, method, where string) error {
-	var syntax *json.SyntaxError
-	if !errors.As(err, &syntax) {
-		return err
+// sentRequest records the request a Client method issued, so that a Typed()
+// form delegating to it can report the URL actually requested without
+// restating the endpoint's path and query.
+type sentRequest struct {
+	method string
+	url    *url.URL
+	body   []byte
+}
+
+type sentRequestKey struct{}
+
+// recordRequest returns a context under which the next request made through
+// the client is recorded in the returned sentRequest.
+func recordRequest(ctx context.Context) (context.Context, *sentRequest) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	return &UnexpectedResponseError{Method: method, URL: where, Message: "expected a list, got a body that is not JSON", cause: err}
+	sent := &sentRequest{}
+	return context.WithValue(ctx, sentRequestKey{}, sent), sent
+}
+
+func (s *sentRequest) where() string {
+	if s.url == nil {
+		return ""
+	}
+	return s.url.String()
+}
+
+// decodeList finishes a Typed() list form: raw and err are what the raw method
+// returned. Only a JSON syntax error — a 2xx body that was not JSON — is
+// converted; any other error from the raw method is returned unchanged.
+func (s *sentRequest) decodeList(raw json.RawMessage, err error, key string, out any) error {
+	if err != nil {
+		var syntax *json.SyntaxError
+		if !errors.As(err, &syntax) {
+			return err
+		}
+		return &UnexpectedResponseError{
+			Method: s.method, URL: s.where(), Message: "expected a list, got a body that is not JSON",
+			ResponseText: string(bytes.TrimSpace(s.body)), cause: err,
+		}
+	}
+	if err := decodeList(raw, key, out); err != nil {
+		return listError(err, s.method, s.where(), raw)
+	}
+	return nil
 }

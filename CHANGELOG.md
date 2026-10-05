@@ -12,7 +12,7 @@
 
 ### Added
 
-- Add the `UnexpectedResponseError` type, carrying the method, URL and body of a successful response that could not be read as the list its method returns. `Unwrap` gives the underlying JSON error when the body was malformed or an item had the wrong type
+- Add the `UnexpectedResponseError` type, carrying the method, the URL actually requested (base URL, expanded path and query string, for the `Typed()` forms too) and the body of a successful response that could not be read as the list its method returns. `Unwrap` gives the underlying JSON error when the body was malformed or an item had the wrong type
 - Add `Typed().ListMemoryBankTemplates` and `Typed().GetAgentsUsingMemoryBank`, returning the items as `[]map[string]JsonValue` on both response shapes. The API declares no schema for either, and the raw `Client` methods still hand back the body as sent, whose shape follows the API version ([#15](https://github.com/seclai/seclai-go/issues/15))
 
 ### Fixed

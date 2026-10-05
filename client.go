@@ -316,6 +316,10 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 	}
 
 	reqURL := c.buildURLValues(apiPath, query)
+	sent, _ := ctx.Value(sentRequestKey{}).(*sentRequest)
+	if sent != nil {
+		sent.method, sent.url = method, reqURL
+	}
 
 	var reqBody io.Reader
 	if body != nil {
@@ -364,6 +368,9 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 			return nil, nil, &APIValidationError{APIStatusError: statusErr}
 		}
 		return nil, nil, &statusErr
+	}
+	if sent != nil {
+		sent.body = raw
 	}
 	return raw, reqURL, nil
 }
