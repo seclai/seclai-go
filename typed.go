@@ -3,6 +3,7 @@ package seclai
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 )
 
 // TypedClient exposes typed forms of the [Client] methods that return
@@ -10,9 +11,10 @@ import (
 //
 // Opt-in, reached through [Client.Typed]. The methods on Client itself keep
 // returning json.RawMessage so existing call sites are unaffected; the same
-// endpoints are available here decoded into structs. Each method delegates to
-// its counterpart rather than rebuilding the request, so the two surfaces issue
-// identical requests and cannot drift apart.
+// endpoints are available here decoded into structs. Each method either
+// delegates to its counterpart or, for the list forms, calls the one unexported
+// request function its counterpart calls, so the two surfaces issue identical
+// requests and cannot drift apart.
 //
 //	raw, _ := client.Search(ctx, opts)         // json.RawMessage
 //	typed, _ := client.Typed().Search(ctx, opts) // *SearchResponse
@@ -105,12 +107,12 @@ func (t *TypedClient) UnsubscribeFromAlert(ctx context.Context, alertID string) 
 
 // ListAlertConfigs is the typed form of [Client.ListAlertConfigs].
 func (t *TypedClient) ListAlertConfigs(ctx context.Context, opts ListOptions) (*AlertConfigListResponse, error) {
-	raw, err := t.c.ListAlertConfigs(ctx, opts)
+	body, reqURL, err := t.c.alertConfigsBody(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	var out AlertConfigListResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := decodeListBody(http.MethodGet, reqURL, body, "configs", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -170,12 +172,12 @@ func (t *TypedClient) UpdateOrganizationAlertPreference(ctx context.Context, org
 
 // ListModelAlerts is the typed form of [Client.ListModelAlerts].
 func (t *TypedClient) ListModelAlerts(ctx context.Context, opts ListOptions) (*ModelAlertListResponse, error) {
-	raw, err := t.c.ListModelAlerts(ctx, opts)
+	body, reqURL, err := t.c.modelAlertsBody(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	var out ModelAlertListResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := decodeListBody(http.MethodGet, reqURL, body, "alerts", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -209,12 +211,12 @@ func (t *TypedClient) GetModelRecommendations(ctx context.Context, modelID strin
 
 // GetGenerationTiers is the typed form of [Client.GetGenerationTiers].
 func (t *TypedClient) GetGenerationTiers(ctx context.Context) (*GenerationTierListResponse, error) {
-	raw, err := t.c.GetGenerationTiers(ctx)
+	body, reqURL, err := t.c.generationTiersBody(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var out GenerationTierListResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := decodeListBody(http.MethodGet, reqURL, body, "tiers", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -222,12 +224,12 @@ func (t *TypedClient) GetGenerationTiers(ctx context.Context) (*GenerationTierLi
 
 // ListExperiments is the typed form of [Client.ListExperiments].
 func (t *TypedClient) ListExperiments(ctx context.Context, opts ListExperimentsOptions) (*ExperimentListResponse, error) {
-	raw, err := t.c.ListExperiments(ctx, opts)
+	body, reqURL, err := t.c.experimentsBody(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	var out ExperimentListResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := decodeListBody(http.MethodGet, reqURL, body, "experiments", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -322,4 +324,33 @@ func (t *TypedClient) AcceptAiMemoryBankSuggestion(ctx context.Context, conversa
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ListMemoryBankTemplates is the typed form of [Client.ListMemoryBankTemplates].
+// The API declares no schema for a template, so each is a JSON object.
+func (t *TypedClient) ListMemoryBankTemplates(ctx context.Context) ([]map[string]JsonValue, error) {
+	body, reqURL, err := t.c.memoryBankTemplatesBody(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []map[string]JsonValue
+	if err := decodeListBody(http.MethodGet, reqURL, body, "", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// GetAgentsUsingMemoryBank is the typed form of [Client.GetAgentsUsingMemoryBank].
+// The API declares no schema for an entry; each is an object carrying agent_id
+// and agent_name.
+func (t *TypedClient) GetAgentsUsingMemoryBank(ctx context.Context, memoryBankID string) ([]map[string]JsonValue, error) {
+	body, reqURL, err := t.c.agentsUsingMemoryBankBody(ctx, memoryBankID)
+	if err != nil {
+		return nil, err
+	}
+	var out []map[string]JsonValue
+	if err := decodeListBody(http.MethodGet, reqURL, body, "", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

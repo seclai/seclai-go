@@ -70,3 +70,36 @@ func (e *StreamingError) Error() string {
 	}
 	return fmt.Sprintf("seclai: streaming error: %s", e.Message)
 }
+
+// UnexpectedResponseError is returned when a successful (2xx) response cannot be
+// read as the list its method returns: either it is not a list at all, or it is
+// a list that could not be decoded. Returned rather than an empty result, which
+// would read as "no results". Unwrap gives the JSON error where there is one.
+type UnexpectedResponseError struct {
+	// Method is the HTTP method used (e.g. "GET").
+	Method string
+	// URL is the request URL, or the API path when the full URL is not known.
+	URL string
+	// Message describes what was expected and what arrived.
+	Message string
+	// ResponseText is the raw response body.
+	ResponseText string
+
+	cause error
+}
+
+// Unwrap returns the underlying JSON decode error, or nil when the body was
+// valid JSON of the wrong shape.
+func (e *UnexpectedResponseError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.cause
+}
+
+func (e *UnexpectedResponseError) Error() string {
+	if e == nil {
+		return "seclai: unexpected response"
+	}
+	return fmt.Sprintf("seclai: unexpected response from %s %s: %s", e.Method, e.URL, e.Message)
+}

@@ -187,7 +187,8 @@ type AlertConfigResponse = generated.AlertConfigResponse
 // Not a generated type: the top-level key is version-gated. By default the
 // configurations arrive under Configs alongside Total; once Options.APIVersion
 // is 2026-07-27 or later the endpoint returns the canonical {data, pagination}
-// envelope instead. Items returns whichever arrived.
+// envelope instead. Configs, Total and Items are filled on both shapes; Data
+// and Pagination only on the canonical one.
 type AlertConfigListResponse struct {
 	Configs    []AlertConfigResponse `json:"configs,omitempty"`
 	Data       []AlertConfigResponse `json:"data,omitempty"`
@@ -214,7 +215,8 @@ type ModelAlertResponse = generated.RoutersApiModelLifecycleModelAlertResponse
 // Not a generated type: the top-level key is version-gated. By default the
 // alerts arrive under Alerts alongside Total; once Options.APIVersion is
 // 2026-07-27 or later the endpoint returns the canonical {data, pagination}
-// envelope instead. Items returns whichever arrived.
+// envelope instead. Alerts, Total and Items are filled on both shapes; Data
+// and Pagination only on the canonical one.
 type ModelAlertListResponse struct {
 	Alerts     []ModelAlertResponse `json:"alerts,omitempty"`
 	Data       []ModelAlertResponse `json:"data,omitempty"`
@@ -320,12 +322,12 @@ type EvaluationResultSummaryResponse = generated.EvaluationResultSummaryResponse
 //   - GET /agents/{id}/runs/{runID}/evaluation-results is version-gated: a bare
 //     array by default, and the canonical {data, pagination} envelope once
 //     Options.APIVersion is 2026-07-27 or later — in which case the metadata is
-//     on Pagination and the flat fields stay zero.
+//     on Pagination and is copied to the flat fields.
 type EvaluationResultWithCriteriaListResponse struct {
 	Data []EvaluationResultWithCriteriaResponse `json:"data"`
 	// Pagination carries the canonical metadata; nil on the flat and legacy shapes.
 	Pagination *PaginationResponse `json:"pagination,omitempty"`
-	// Total, Page and Limit are the flat shape; zero when Pagination is set.
+	// Total, Page and Limit are zero only on the bare-array shape, which carries none.
 	Total int `json:"total,omitempty"`
 	Page  int `json:"page,omitempty"`
 	Limit int `json:"limit,omitempty"`
@@ -746,7 +748,7 @@ type EmbeddingStorageCreditsResponse = generated.EmbeddingStorageCreditsResponse
 //
 // Not a generated type: the list key is version-gated. By default the models
 // arrive under Models; once Options.APIVersion is 2026-07-27 or later they
-// arrive under Data with Pagination. Items returns whichever arrived.
+// arrive under Data with Pagination. Models and Items are filled on both shapes.
 type EmbeddingModelListResponse struct {
 	Models     []EmbeddingModelResponse `json:"models,omitempty"`
 	Data       []EmbeddingModelResponse `json:"data,omitempty"`
@@ -777,7 +779,7 @@ type RerankerModelResponse = generated.RerankerModelResponse
 //
 // Not a generated type: the list key is version-gated. By default the models
 // arrive under Models; once Options.APIVersion is 2026-07-27 or later they
-// arrive under Data with Pagination. Items returns whichever arrived.
+// arrive under Data with Pagination. Models and Items are filled on both shapes.
 type RerankerModelListResponse struct {
 	Models     []RerankerModelResponse `json:"models,omitempty"`
 	Data       []RerankerModelResponse `json:"data,omitempty"`

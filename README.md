@@ -162,35 +162,68 @@ request resolved to, and comparing it against `APIVersionLatest` is how you
 detect the gap.
 
 **What `2026-07-27` changes.** Undeclared query parameters become a 422 instead
-of being ignored, and list endpoints move to the canonical `{data, pagination}`
-envelope. The methods in this table read both shapes, so they keep working
-either way — but the metadata moves:
+of being ignored, and every list endpoint moves from its own shape — a bare
+array, or an object with a per-resource key — to the canonical
+`{data, pagination}` envelope. Every list method reads both shapes and returns
+its items where its type declares them, so the same code works before and after
+opting in:
 
-| Method | Before | From 2026-07-27 |
+| Returns | Methods | On either shape |
 | --- | --- | --- |
-| `ListEvaluationCriteriaPage` | bare array | `Data` + `Pagination` |
-| `ListRunEvaluationResults` | bare array | `Data` + `Pagination` |
-| `Typed().ListAlertConfigs` | `Configs` + `Total` | `Data` + `Pagination` |
-| `Typed().ListModelAlerts` | `Alerts` + `Total` | `Data` + `Pagination` |
-| `ListEmbeddingModels` | `Models` | `Data` + `Pagination` |
-| `ListRerankerModels` | `Models` | `Data` + `Pagination` |
+| A slice | `ListEvaluationCriteria`, `Typed().ListMemoryBankTemplates`, `Typed().GetAgentsUsingMemoryBank`, `GetAgentCallers`, `ListInboundEmailRejections`, `ListGovernanceAiConversations`, `ListModels`, `ListSolutionConversations`, `ListCloudDriveProviders`, `ListCloudDrives`, `GetAgentsUsingCloudDrive`, `ListCloudDriveRejections` | The items |
+| A struct with a per-resource list | `ListKnowledgeBases`, `ListMemoryBanks`, `ListAgentEmailOptOuts`, `ListBlockedEmailSenders`, `SetAutoBlockMode`, `ListOrganizationAlertPreferences`, `ListEmailDomains`, `Typed().GetGenerationTiers`, `Typed().ListExperiments` | The list field, with `Total`, `Page` and `Limit` filled where the type has them |
+| A struct with `Data` | `ListEvaluationResults`, `ListAgentEvaluationResults`, `ListCompatibleRuns`, `ListEvaluationRuns`, `ListRunEvaluationResults`, `ListEvaluationCriteriaPage` | `Data`, with `Total`, `Page` and `Limit` filled where the type has them |
+| A struct with `Items()` | `Typed().ListAlertConfigs`, `Typed().ListModelAlerts`, `ListEmbeddingModels`, `ListRerankerModels` | `Items()` and the per-resource field (`Configs`, `Alerts`, `Models`) |
 
-Read the last four through `Items()`, which returns whichever key arrived, and
-prefer `Pagination` over the flat `Total`/`Page`/`Limit` fields. The flat fields
-will be deprecated and then removed once the canonical envelope is the default.
+What differs between the shapes is the metadata. `Pagination` — on the types
+that have the field — is set only after opting in, and is nil before. The flat
+`Total`, `Page` and `Limit` are filled from it, so a loop written against them
+keeps working; on `ListRunEvaluationResults`, whose default shape is a bare
+array, they are zero until you opt in. Fields that travel beside a list
+(`AutoBlockMode`, the email-domain plan flags, the embedder and reranker
+defaults) arrive on both shapes.
 
-The cloud-drive listings — `ListCloudDriveProviders`, `ListCloudDrives`,
-`GetAgentsUsingCloudDrive` and `ListCloudDriveRejections` — follow the same rule
-on the wire and return the items as a slice on either shape.
+The methods that return `json.RawMessage` — `ListAlertConfigs`,
+`ListModelAlerts`, `GetGenerationTiers`, `ListExperiments`,
+`ListMemoryBankTemplates` and `GetAgentsUsingMemoryBank` — hand back the body
+exactly as the API sent it, so its shape follows the version. Each has a
+`Typed()` form that reads both.
 
-**Not yet safe with `APIVersion` `2026-07-27` or later.** These methods still
-decode only the default shape, so do not opt in on a client that calls them:
+A successful response that is not a list at all — an error-shaped object, text,
+`null`, an empty body — is returned as an `*UnexpectedResponseError`, never as
+an empty list. An explicit `"data": null` is an empty list.
 
-| Methods | What happens on the canonical envelope |
-| --- | --- |
-| `ListKnowledgeBases`, `ListMemoryBanks`, `ListAgentEmailOptOuts`, `ListBlockedEmailSenders`, `SetAutoBlockMode`, `ListOrganizationAlertPreferences`, `ListEmailDomains`, `Typed().GetGenerationTiers`, `Typed().ListExperiments` | The list comes back empty with a nil error |
-| `GetAgentCallers`, `ListInboundEmailRejections`, `ListGovernanceAiConversations`, `ListModels`, `ListSolutionConversations` | A JSON decode error |
-| `ListEvaluationResults`, `ListCompatibleRuns`, `ListEvaluationRuns` | The items are read, but `Total`, `Page` and `Limit` are zero |
+**Opting in also turns paging on.** Four endpoints answer differently in
+content, not only in shape, so the same call can return fewer rows:
+
+| Method | By default | From 2026-07-27 |
+| --- | --- | --- |
+| `ListEvaluationCriteria`, `ListEvaluationCriteriaPage` | Every criterion for the agent; `Page` and `Limit` are ignored | One page — 20 unless `Limit` is set |
+| `ListRunEvaluationResults` | Every result for the run; `Page` and `Limit` are ignored | One page — 20 unless `Limit` is set |
+| `ListAlertConfigs`, `Typed().ListAlertConfigs` | Every configuration; `Page` and `Limit` are ignored | One page — 50 unless `Limit` is set |
+| `SetAutoBlockMode` | `Total` is the account's full count of blocked senders | `Total` is the number of rows returned, at most 50 |
+
+For the three listings, read `Pagination.HasNext`, or compare `Total` with what
+you have, and request further pages. That does not help with `SetAutoBlockMode`:
+its type has no `Pagination`, and once opted in its `Total` equals the rows it
+returned. To see every blocked sender, page through `ListBlockedEmailSenders`.
+
+**The version guard.** `NewClient` rejects a `Seclai-Version` this release does
+not know, whether it arrives through `Options.APIVersion` or
+`Options.DefaultHeaders`. Three more routes are covered:
+
+- An empty `Seclai-Version` in `Options.DefaultHeaders` is rejected at
+  construction, with or without `AllowUnknownAPIVersion`. It is not a version,
+  and it used to replace a configured `APIVersion` with an empty header.
+- `Client.Do` applies the guard to its per-request `headers`: an empty or
+  unknown `Seclai-Version` there returns a `*ConfigurationError` and no request
+  is sent. `AllowUnknownAPIVersion` permits an unknown one, never an empty one.
+- `Client.Generated()` is a raw escape hatch. A request editor you pass runs
+  after the client's own and can replace any header; what it sets is your
+  responsibility, and the generated response types model only the default
+  shape of each endpoint. The guard is still applied to the request that
+  results: an empty or unknown `Seclai-Version` fails with a
+  `*ConfigurationError` before it is sent.
 
 **Later versions.** Each is cumulative, and none changes a response shape this
 client decodes:
@@ -215,6 +248,10 @@ for _, hit := range typed.Results {
     fmt.Println(hit.Name)
 }
 ```
+
+Two of the raw endpoints have no response schema in the API, so their typed
+forms — `Typed().ListMemoryBankTemplates` and `Typed().GetAgentsUsingMemoryBank`
+— return `[]map[string]seclai.JsonValue`: the items, on either response shape.
 
 **Prefer `Typed()`.** The raw methods are kept only for source compatibility;
 they will be deprecated and then removed in a future major.
@@ -832,6 +869,7 @@ if err != nil {
 | `*APIStatusError` | Non-2xx HTTP response |
 | `*APIValidationError` | HTTP 422 (embeds `APIStatusError`) |
 | `*StreamingError` | SSE stream ended unexpectedly |
+| `*UnexpectedResponseError` | A 2xx response that is not the list its method reads |
 
 ## Low-level access
 
@@ -842,10 +880,17 @@ var result MyType
 err := client.Do(ctx, "GET", "/custom/endpoint", nil, nil, nil, &result)
 ```
 
-Use `client.Generated()` for the raw OpenAPI-generated client with full request/response types:
+Use `client.Generated()` for the raw OpenAPI-generated client with full request/response types.
+It decodes only the default response shape of each endpoint, and a request editor
+you pass can replace any header — see [API versioning](#api-versioning) for how the
+version guard applies to it and to `Do`:
 
+<!-- sdksync:check -->
 ```go
-resp, err := client.Generated().GetAgentWithResponse(ctx, "agent_id")
+resp, err := client.Generated().GetAgentMetadataApiAgentsAgentIdGetWithResponse(ctx, "agent_id", nil)
+if err == nil && resp.JSON200 != nil {
+	fmt.Println(resp.JSON200.Name)
+}
 ```
 
 ## Development

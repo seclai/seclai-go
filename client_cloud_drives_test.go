@@ -16,6 +16,8 @@ type recordedRequest struct {
 	Query   url.Values
 	Body    string
 	Version string
+	URL     string
+	Header  http.Header
 }
 
 // stubClient returns a client whose every request is answered with response,
@@ -31,6 +33,8 @@ func stubClient(t *testing.T, apiVersion, response string) (*Client, *recordedRe
 			Query:   r.URL.Query(),
 			Body:    string(body),
 			Version: r.Header.Get("Seclai-Version"),
+			URL:     "http://" + r.Host + r.URL.RequestURI(),
+			Header:  r.Header.Clone(),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, response)
