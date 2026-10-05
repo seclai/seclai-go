@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.7.0] - 2026-10-04
+
+### Changed
+
+- Sync the bundled OpenAPI spec, adding 10 paths and 18 schemas, and regenerate the `generated` package from it. The spec now declares a 503 response on every operation, so each generated `*Response` wrapper gains a `JSON503` field
+- Send `"cooldown_minutes": null` from `CreateAlertConfig` when `CreateAlertConfigRequest.CooldownMinutes` is nil, where it was previously omitted. The API now resolves an unset cooldown per alert type — 1440 minutes for credit alerts, 60 otherwise — rather than to a flat 60
+
+### Added
+
+- Add cloud-drive methods: `ListCloudDriveProviders`, `ListCloudDrives`, `GetCloudDrive`, `UpdateCloudDrive`, `DisconnectCloudDrive`, `DeleteCloudDrive`, `GetAgentsUsingCloudDrive`, and `ListCloudDriveRejections` for the files a connection skipped and why. The four listings read both the bare array and the `{data, pagination}` envelope the API returns once `Options.APIVersion` is `2026-07-27` or later, and `UpdateCloudDrive` sends only the fields that are set
+- Add `ListSourceContents` and `GetSourceContentStatus` for the indexing status of a source's content items, with `ListSourceContentsOptions.ContentVersionIDs` to poll a batch of uploads in one request
+- Add `ListEmbeddingModels` and `ListRerankerModels` for the embedder and reranker catalogs with their defaults and pricing. `Items()` on each response returns the models from whichever key the API version used
+- Add the `APIVersion20260803`, `APIVersion20260821`, `APIVersion20260928`, `APIVersion20260930` and `APIVersion20261003` constants, and move `APIVersionLatest` to `2026-10-03`. None of the five changes a response shape this client decodes
+- Add 17 types for those endpoints, including `CloudDriveResponse`, `CloudDriveRejectionResponse`, `SourceContentStatusResponse`, `EmbeddingModelListResponse`, `RerankerModelListResponse`, and the `AgentRunFileResponse` and `EffortOptionsResponse` that existing responses now reference
+- Add `Attachments` to `AgentRunResponse` and `AgentRunStepResponse`, along with `TracePurgedAt` on a run and `Warnings` on a step
+- Add `EffortOptions`, `ChatCapable`, `GenerationCreditsPerVariant` and `Input30mCacheWriteCreditsPer1000Tokens` to `PromptModelResponse`, `EffortOptions` to `ModelRecommendationResponse`, and `Effort` to `PlaygroundCreateRequest` and `ExperimentDetailResponse`
+- Add `StripQuotedReplyChains` to `CreateMemoryBankBody`, `UpdateMemoryBankBody` and `MemoryBankResponse`
+- Add extracted-media fields to `ContentDetailResponse`, media provenance (`MediaName`, `PageNumber`, `SourceMime`, `SourceUrl`) to `ContentEmbeddingResponse`, and `EmbedderWarning` to `ContentFileUploadResponse`
+- Add `GovernanceConversationId` to `AiAssistantFeedbackRequest`
+
 ## [1.6.0] - 2026-07-28
 
 ### Changed
@@ -144,6 +164,7 @@ _Stable release. No functional changes since 0.0.2._
 
 _Initial release._
 
+[1.7.0]: https://github.com/seclai/seclai-go/releases/tag/v1.7.0
 [1.6.0]: https://github.com/seclai/seclai-go/releases/tag/v1.6.0
 [1.5.0]: https://github.com/seclai/seclai-go/releases/tag/v1.5.0
 [1.4.0]: https://github.com/seclai/seclai-go/releases/tag/v1.4.0

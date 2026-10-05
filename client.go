@@ -227,11 +227,16 @@ func (c *Client) applyAuth(ctx context.Context, req *http.Request) error {
 // For JSON responses, out is decoded from JSON when non-nil.
 // For non-2xx responses, an *APIStatusError or *APIValidationError is returned.
 func (c *Client) Do(ctx context.Context, method, apiPath string, query map[string]string, body any, headers map[string]string, out any) error {
+	return c.doValues(ctx, method, apiPath, queryValues(query), body, headers, out)
+}
+
+// doValues is [Client.Do] with a multi-valued query, for repeatable parameters.
+func (c *Client) doValues(ctx context.Context, method, apiPath string, query url.Values, body any, headers map[string]string, out any) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	reqURL := c.buildURL(apiPath, query)
+	reqURL := c.buildURLValues(apiPath, query)
 
 	var reqBody io.Reader
 	if body != nil {
@@ -293,6 +298,30 @@ func (c *Client) Do(ctx context.Context, method, apiPath string, query map[strin
 		return nil
 	}
 	return json.Unmarshal(raw, out)
+}
+
+// isJSONArray reports whether raw is a JSON array rather than an object.
+func isJSONArray(raw json.RawMessage) bool {
+	return bytes.HasPrefix(bytes.TrimLeft(raw, " \t\r\n"), []byte("["))
+}
+
+// decodeItems reads a version-gated list: a bare array by default, and the
+// canonical {data, pagination} envelope from API version 2026-07-27.
+func decodeItems[T any](raw json.RawMessage) ([]T, error) {
+	if isJSONArray(raw) {
+		var items []T
+		if err := json.Unmarshal(raw, &items); err != nil {
+			return nil, err
+		}
+		return items, nil
+	}
+	var page struct {
+		Data []T `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &page); err != nil {
+		return nil, err
+	}
+	return page.Data, nil
 }
 
 // ── Identity ──────────────────────────────────────────────────────────────────
@@ -774,7 +803,7 @@ func (c *Client) ListEvaluationCriteriaPage(ctx context.Context, agentID string,
 		return nil, err
 	}
 	var out EvaluationCriteriaListResponse
-	if bytes.HasPrefix(bytes.TrimLeft(raw, " \t\r\n"), []byte("[")) {
+	if isJSONArray(raw) {
 		if err := json.Unmarshal(raw, &out.Data); err != nil {
 			return nil, err
 		}
@@ -883,7 +912,7 @@ func (c *Client) ListRunEvaluationResults(ctx context.Context, agentID, runID st
 		return nil, err
 	}
 	var out EvaluationResultWithCriteriaListResponse
-	if bytes.HasPrefix(bytes.TrimLeft(raw, " \t\r\n"), []byte("[")) {
+	if isJSONArray(raw) {
 		if err := json.Unmarshal(raw, &out.Data); err != nil {
 			return nil, err
 		}
@@ -1935,6 +1964,78 @@ func (c *Client) CancelSourceEmbeddingMigration(ctx context.Context, sourceID st
 	return &out, nil
 }
 
+// ── Source Contents ─────────────────────────────────────────────────────────
+
+// ListSourceContentsOptions controls query parameters for [Client.ListSourceContents].
+type ListSourceContentsOptions struct {
+	// Page is the 1-indexed page number. Zero omits the parameter.
+	Page int
+	// Limit is the page size (1-100, default 20). Zero omits the parameter.
+	Limit int
+	// Sort is the sort field: "created_at", "title" or "status".
+	Sort string
+	// Order is the sort direction: "asc" or "desc".
+	Order string
+	// Status keeps only one status: "pending", "fetching", "transcribing",
+	// "scanning", "indexing", "completed" or "failed".
+	Status string
+	// ContentVersionIDs keeps only these items — the content_version_id values
+	// the upload methods return — to poll a batch of uploads in one request.
+	// Nil applies no filter; a non-nil empty slice matches nothing, so an empty
+	// page is returned without a request.
+	ContentVersionIDs []string
+}
+
+// ListSourceContents lists a source's content items and their indexing status.
+// The response is the {data, pagination} envelope on every API version.
+func (c *Client) ListSourceContents(ctx context.Context, sourceID string, opts ListSourceContentsOptions) (*SourceContentStatusListResponse, error) {
+	if opts.ContentVersionIDs != nil && len(opts.ContentVersionIDs) == 0 {
+		// An empty filter encodes as no parameter, which the API reads as unfiltered.
+		page := PaginationResponse{Page: 1, Limit: 20}
+		if opts.Page > 0 {
+			page.Page = opts.Page
+		}
+		if opts.Limit > 0 {
+			page.Limit = opts.Limit
+		}
+		return &SourceContentStatusListResponse{Data: []SourceContentStatusResponse{}, Pagination: page}, nil
+	}
+	q := url.Values{}
+	if opts.Page > 0 {
+		q["page"] = []string{fmt.Sprintf("%d", opts.Page)}
+	}
+	if opts.Limit > 0 {
+		q["limit"] = []string{fmt.Sprintf("%d", opts.Limit)}
+	}
+	if opts.Sort != "" {
+		q["sort"] = []string{opts.Sort}
+	}
+	if opts.Order != "" {
+		q["order"] = []string{opts.Order}
+	}
+	if opts.Status != "" {
+		q["status"] = []string{opts.Status}
+	}
+	if len(opts.ContentVersionIDs) > 0 {
+		q["content_version_id"] = opts.ContentVersionIDs
+	}
+	var out SourceContentStatusListResponse
+	if err := c.doValues(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/contents", url.PathEscape(sourceID)), q, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetSourceContentStatus retrieves one content item's indexing status, keyed by
+// the content_version_id an upload returned.
+func (c *Client) GetSourceContentStatus(ctx context.Context, sourceID, contentVersionID string) (*SourceContentStatusResponse, error) {
+	var out SourceContentStatusResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/contents/%s", url.PathEscape(sourceID), url.PathEscape(contentVersionID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ── Content ─────────────────────────────────────────────────────────────────
 
 // GetContentDetail fetches content detail.
@@ -2414,6 +2515,43 @@ func (c *Client) GetGenerationTiers(ctx context.Context) (json.RawMessage, error
 	return out, nil
 }
 
+// ListEmbeddingModelsOptions controls query parameters for [Client.ListEmbeddingModels].
+type ListEmbeddingModelsOptions struct {
+	// SupportsInputMedia keeps only embedders that can index this input
+	// modality: a coarse kind (text, image, video, audio) or a full MIME type.
+	SupportsInputMedia string
+}
+
+// ListEmbeddingModels lists the embedding models a source can index with, and
+// their pricing.
+//
+// Either wire shape is accepted: read the models through
+// [EmbeddingModelListResponse.Items].
+func (c *Client) ListEmbeddingModels(ctx context.Context, opts ListEmbeddingModelsOptions) (*EmbeddingModelListResponse, error) {
+	q := map[string]string{}
+	if opts.SupportsInputMedia != "" {
+		q["supports_input_media"] = opts.SupportsInputMedia
+	}
+	var out EmbeddingModelListResponse
+	if err := c.Do(ctx, http.MethodGet, "/models/embedders", q, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListRerankerModels lists the reranker models a knowledge base can use, and
+// their pricing.
+//
+// Either wire shape is accepted: read the models through
+// [RerankerModelListResponse.Items].
+func (c *Client) ListRerankerModels(ctx context.Context) (*RerankerModelListResponse, error) {
+	var out RerankerModelListResponse
+	if err := c.Do(ctx, http.MethodGet, "/models/rerankers", nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ── Model Playground Experiments ────────────────────────────────────────────
 
 // ListExperimentsOptions controls query parameters for the ListExperiments endpoint.
@@ -2731,11 +2869,122 @@ func (c *Client) AcceptAiMemoryBankSuggestion(ctx context.Context, conversationI
 	return out, nil
 }
 
+// ── Cloud Drives ────────────────────────────────────────────────────────────
+
+// ListCloudDriveProviders lists the cloud-drive providers this deployment has
+// configured. Either wire shape is accepted.
+func (c *Client) ListCloudDriveProviders(ctx context.Context) ([]CloudDriveProviderResponse, error) {
+	var raw json.RawMessage
+	if err := c.Do(ctx, http.MethodGet, "/cloud-drives/providers", nil, nil, nil, &raw); err != nil {
+		return nil, err
+	}
+	return decodeItems[CloudDriveProviderResponse](raw)
+}
+
+// ListCloudDrives lists the account's cloud-drive connections. Either wire
+// shape is accepted.
+func (c *Client) ListCloudDrives(ctx context.Context) ([]CloudDriveResponse, error) {
+	var raw json.RawMessage
+	if err := c.Do(ctx, http.MethodGet, "/cloud-drives", nil, nil, nil, &raw); err != nil {
+		return nil, err
+	}
+	return decodeItems[CloudDriveResponse](raw)
+}
+
+// GetCloudDrive retrieves a cloud-drive connection.
+func (c *Client) GetCloudDrive(ctx context.Context, connectionID string) (*CloudDriveResponse, error) {
+	var out CloudDriveResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s", url.PathEscape(connectionID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateCloudDrive changes a cloud-drive connection's name and/or folder path.
+// A nil field is left unchanged.
+func (c *Client) UpdateCloudDrive(ctx context.Context, connectionID string, body CloudDriveUpdateRequest) (*CloudDriveResponse, error) {
+	// The generated struct has no omitempty, so marshalling it directly would
+	// send an explicit null for each unset field.
+	payload := map[string]any{}
+	if body.Name != nil {
+		payload["name"] = body.Name
+	}
+	if body.FolderPath != nil {
+		payload["folder_path"] = body.FolderPath
+	}
+	var out CloudDriveResponse
+	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/cloud-drives/%s", url.PathEscape(connectionID)), nil, payload, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DisconnectCloudDrive disconnects a cloud-drive connection, keeping the
+// connection itself, and returns it in its disconnected state.
+func (c *Client) DisconnectCloudDrive(ctx context.Context, connectionID string) (*CloudDriveResponse, error) {
+	var out CloudDriveResponse
+	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/cloud-drives/%s/disconnect", url.PathEscape(connectionID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteCloudDrive deletes a cloud-drive connection.
+func (c *Client) DeleteCloudDrive(ctx context.Context, connectionID string) error {
+	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/cloud-drives/%s", url.PathEscape(connectionID)), nil, nil, nil, nil)
+}
+
+// GetAgentsUsingCloudDrive lists the agents that use a cloud-drive connection.
+// Either wire shape is accepted.
+func (c *Client) GetAgentsUsingCloudDrive(ctx context.Context, connectionID string) ([]AgentUsingCloudDriveResponse, error) {
+	var raw json.RawMessage
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/agents", url.PathEscape(connectionID)), nil, nil, nil, &raw); err != nil {
+		return nil, err
+	}
+	return decodeItems[AgentUsingCloudDriveResponse](raw)
+}
+
+// CloudDriveRejectionOptions controls query parameters for [Client.ListCloudDriveRejections].
+type CloudDriveRejectionOptions struct {
+	// Limit is the maximum number of results (1-200, default 50). Zero omits the parameter.
+	Limit int
+}
+
+// ListCloudDriveRejections lists the files a cloud-drive connection skipped,
+// newest first, with the reason for each. A skipped file fires no trigger, so
+// this is where to look when an agent did not run for a file.
+func (c *Client) ListCloudDriveRejections(ctx context.Context, connectionID string, opts CloudDriveRejectionOptions) ([]CloudDriveRejectionResponse, error) {
+	q := map[string]string{}
+	if opts.Limit > 0 {
+		q["limit"] = fmt.Sprintf("%d", opts.Limit)
+	}
+	var raw json.RawMessage
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/rejections", url.PathEscape(connectionID)), q, nil, nil, &raw); err != nil {
+		return nil, err
+	}
+	return decodeItems[CloudDriveRejectionResponse](raw)
+}
+
 // ── Internal helpers ────────────────────────────────────────────────────────
 
 // buildURL constructs a full request URL by joining apiPath to the base URL
 // and appending query parameters.
 func (c *Client) buildURL(apiPath string, query map[string]string) *url.URL {
+	return c.buildURLValues(apiPath, queryValues(query))
+}
+
+// queryValues lifts a single-valued query map into url.Values.
+func queryValues(query map[string]string) url.Values {
+	out := make(url.Values, len(query))
+	for k, v := range query {
+		out[k] = []string{v}
+	}
+	return out
+}
+
+// buildURLValues is buildURL for a query whose keys may repeat. Blank keys and
+// empty values are dropped, and a key replaces the same key on the base URL.
+func (c *Client) buildURLValues(apiPath string, query url.Values) *url.URL {
 	u := *c.baseURL
 	joined := apiPath
 	if !strings.HasPrefix(joined, "/") {
@@ -2748,14 +2997,19 @@ func (c *Client) buildURL(apiPath string, query map[string]string) *url.URL {
 	}
 	u.Path = cleaned
 	q := u.Query()
-	for k, v := range query {
+	for k, values := range query {
 		if strings.TrimSpace(k) == "" {
 			continue
 		}
-		if v == "" {
-			continue
+		kept := make([]string, 0, len(values))
+		for _, v := range values {
+			if v != "" {
+				kept = append(kept, v)
+			}
 		}
-		q.Set(k, v)
+		if len(kept) > 0 {
+			q[k] = kept
+		}
 	}
 	u.RawQuery = q.Encode()
 	return &u
