@@ -748,7 +748,7 @@ func TestUnexpectedResponseError_UnwrapsTheJSONError(t *testing.T) {
 }
 
 // The URL on the error is the one requested — base, expanded path and query —
-// for the Typed() forms too, which take it from the raw method they delegate to.
+// for the Typed() forms too.
 func TestTypedLists_ErrorCarriesTheRequestedURL(t *testing.T) {
 	ctx := context.Background()
 	calls := []struct {
