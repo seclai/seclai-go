@@ -148,8 +148,9 @@ Leave `APIVersion` empty and the header is omitted, so the account's pinned
 baseline applies and responses keep their current shapes. Upgrading this module
 alone never changes the wire contract.
 
-Known versions are package constants (`APIVersion20260701`, `APIVersion20260727`,
-plus `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
+Known versions are package constants (`APIVersion20260701` through
+`APIVersion20261003`, one per version in the table below, plus
+`APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
 this release was **not** built against makes `NewClient` fail: a newer version
 can reshape responses, and this client would decode them incorrectly rather than
 reject them. Upgrade the module to adopt a new version, or set
@@ -162,8 +163,8 @@ detect the gap.
 
 **What `2026-07-27` changes.** Undeclared query parameters become a 422 instead
 of being ignored, and list endpoints move to the canonical `{data, pagination}`
-envelope. The affected methods read both shapes, so they keep working either way
-— but the metadata moves:
+envelope. The methods in this table read both shapes, so they keep working
+either way — but the metadata moves:
 
 | Method | Before | From 2026-07-27 |
 | --- | --- | --- |
@@ -171,10 +172,36 @@ envelope. The affected methods read both shapes, so they keep working either way
 | `ListRunEvaluationResults` | bare array | `Data` + `Pagination` |
 | `Typed().ListAlertConfigs` | `Configs` + `Total` | `Data` + `Pagination` |
 | `Typed().ListModelAlerts` | `Alerts` + `Total` | `Data` + `Pagination` |
+| `ListEmbeddingModels` | `Models` | `Data` + `Pagination` |
+| `ListRerankerModels` | `Models` | `Data` + `Pagination` |
 
-Read the last two through `Items()`, which returns whichever key arrived, and
+Read the last four through `Items()`, which returns whichever key arrived, and
 prefer `Pagination` over the flat `Total`/`Page`/`Limit` fields. The flat fields
 will be deprecated and then removed once the canonical envelope is the default.
+
+The cloud-drive listings — `ListCloudDriveProviders`, `ListCloudDrives`,
+`GetAgentsUsingCloudDrive` and `ListCloudDriveRejections` — follow the same rule
+on the wire and return the items as a slice on either shape.
+
+**Not yet safe with `APIVersion` `2026-07-27` or later.** These methods still
+decode only the default shape, so do not opt in on a client that calls them:
+
+| Methods | What happens on the canonical envelope |
+| --- | --- |
+| `ListKnowledgeBases`, `ListMemoryBanks`, `ListAgentEmailOptOuts`, `ListBlockedEmailSenders`, `SetAutoBlockMode`, `ListOrganizationAlertPreferences`, `ListEmailDomains`, `Typed().GetGenerationTiers`, `Typed().ListExperiments` | The list comes back empty with a nil error |
+| `GetAgentCallers`, `ListInboundEmailRejections`, `ListGovernanceAiConversations`, `ListModels`, `ListSolutionConversations` | A JSON decode error |
+| `ListEvaluationResults`, `ListCompatibleRuns`, `ListEvaluationRuns` | The items are read, but `Total`, `Page` and `Limit` are zero |
+
+**Later versions.** Each is cumulative, and none changes a response shape this
+client decodes:
+
+| Version | Constant | What it changes |
+| --- | --- | --- |
+| `2026-08-03` | `APIVersion20260803` | `CreateMemoryBank` rejects `max_age_days` with a 400, and an omitted `retention_days` resolves per bank type instead of to 30 |
+| `2026-08-21` | `APIVersion20260821` | `CreateSource` rejects an embedding dimension its embedder does not support with a 400 — `ListEmbeddingModels` reports the supported ones |
+| `2026-09-28` | `APIVersion20260928` | Agent-definition writes use the current file-list grammar: an omitted `attachments` keeps the stored list and `[]` means no files |
+| `2026-09-30` | `APIVersion20260930` | A run's and a step's `Output`, and a step's `Input`, are the text rather than a JSON manifest; files are in `Attachments` on every version |
+| `2026-10-03` | `APIVersion20261003` | A new LLM step written without `attachments` takes its parent's files, and a new retrieval step's matched media are its files |
 
 ## Typed responses
 
@@ -442,6 +469,52 @@ _, _ = client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{})
 _ = client.DeleteSource(ctx, "source_id")
 ```
 
+Indexing status of a source's content, keyed by the `content_version_id` the
+upload methods return:
+
+<!-- sdksync:check -->
+```go
+failed, _ := client.ListSourceContents(ctx, "source_id", seclai.ListSourceContentsOptions{Status: "failed"})
+for _, item := range failed.Data {
+	if item.Error != nil {
+		fmt.Println(item.ContentVersionId, *item.Error)
+	}
+}
+
+// Poll a batch of uploads in one request
+batch, _ := client.ListSourceContents(ctx, "source_id", seclai.ListSourceContentsOptions{
+	ContentVersionIDs: []string{"cv_1", "cv_2"},
+})
+fmt.Println(batch.Pagination.Total)
+
+one, _ := client.GetSourceContentStatus(ctx, "source_id", "cv_1")
+fmt.Println(one.ContentStatus)
+```
+
+### Cloud drives
+
+<!-- sdksync:check -->
+```go
+providers, _ := client.ListCloudDriveProviders(ctx)
+drives, _ := client.ListCloudDrives(ctx)
+drive, _ := client.GetCloudDrive(ctx, "connection_id")
+fmt.Println(len(providers), len(drives), drive.Status)
+
+// A nil field is left unchanged
+name := "Contracts"
+_, _ = client.UpdateCloudDrive(ctx, "connection_id", seclai.CloudDriveUpdateRequest{Name: &name})
+
+// Which agents depend on it, and which files it skipped and why
+agents, _ := client.GetAgentsUsingCloudDrive(ctx, "connection_id")
+skipped, _ := client.ListCloudDriveRejections(ctx, "connection_id", seclai.CloudDriveRejectionOptions{Limit: 20})
+for _, rejection := range skipped {
+	fmt.Println(rejection.Reason, len(agents))
+}
+
+_, _ = client.DisconnectCloudDrive(ctx, "connection_id") // keeps the connection
+_ = client.DeleteCloudDrive(ctx, "connection_id")
+```
+
 ### File uploads
 
 Upload a file to a source (max 200 MiB):
@@ -671,6 +744,19 @@ experiments, _ := client.ListExperiments(ctx, seclai.ListExperimentsOptions{})
 detail, _ := client.GetExperiment(ctx, "experiment_id")
 _, _ = client.CancelExperiment(ctx, "experiment_id")
 _ = client.DeleteExperiment(ctx, "experiment_id") // soft-delete, preserves audit history
+```
+
+Embedding and reranker models, with their pricing:
+
+<!-- sdksync:check -->
+```go
+embedders, _ := client.ListEmbeddingModels(ctx, seclai.ListEmbeddingModelsOptions{SupportsInputMedia: "image"})
+for _, model := range embedders.Items() {
+	fmt.Println(model.ModelType, model.Dimensions)
+}
+
+rerankers, _ := client.ListRerankerModels(ctx)
+fmt.Println(rerankers.DefaultModelType, len(rerankers.Items()))
 ```
 
 ### Search

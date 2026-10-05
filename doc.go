@@ -6,13 +6,14 @@
 //   - Agent Evaluations: criteria, results, summaries, compatible runs, draft tests
 //   - Knowledge Bases: CRUD
 //   - Memory Banks: CRUD, compaction, templates, AI assistant
-//   - Sources: CRUD, file uploads, inline text, embedding migrations
+//   - Sources: CRUD, file uploads, inline text, embedding migrations, per-item indexing status
 //   - Source Exports: create, list, download, estimate, cancel
+//   - Cloud Drives: providers, connections, dependent agents, skipped files
 //   - Content: detail, embeddings, inline text replace, file uploads
 //   - Solutions: CRUD, resource linking, conversations, AI assistant
 //   - Governance: AI assistant for policy management
 //   - Alerts: CRUD, configs, organization preferences
-//   - Models: alerts, recommendations
+//   - Models: alerts, recommendations, embedding and reranker catalogs
 //   - Search: global search across resources
 //   - Top-Level AI Assistant: feedback, generation, acceptance/decline
 //

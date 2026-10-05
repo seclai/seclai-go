@@ -79,6 +79,12 @@ const (
 	None            PromptModelAutoUpgradeStrategy = "none"
 )
 
+// Defines values for ServiceUnavailableErrorErrorCode.
+const (
+	DatabaseUnavailable    ServiceUnavailableErrorErrorCode = "database_unavailable"
+	VectorStoreUnavailable ServiceUnavailableErrorErrorCode = "vector_store_unavailable"
+)
+
 // Defines values for SourceIndexMode.
 const (
 	SourceIndexModeBalanced        SourceIndexMode = "balanced"
@@ -203,7 +209,7 @@ type AgentExportResponse struct {
 	// EvaluationCriteria Evaluation criteria for agent steps.
 	EvaluationCriteria *[]map[string]interface{} `json:"evaluation_criteria"`
 
-	// ExportVersion Schema version of the export format (currently "2").
+	// ExportVersion Schema version of the export format (currently "5").
 	ExportVersion string `json:"export_version"`
 
 	// ExportedAt ISO-8601 timestamp of when the export was generated.
@@ -235,19 +241,37 @@ type AgentRunAttemptResponse struct {
 	Status    PendingProcessingCompletedFailedStatus `json:"status"`
 }
 
+// AgentRunFileResponse A file in a run's or a step's output.
+type AgentRunFileResponse struct {
+	// Bytes Size of the file in bytes, when known.
+	Bytes *int `json:"bytes"`
+
+	// DownloadUrl `GET` URL that streams the file; accepts an API key or OAuth token.
+	DownloadUrl string `json:"download_url"`
+
+	// Id File identifier, used to download it.
+	Id openapi_types.UUID `json:"id"`
+
+	// Mime MIME type of the file.
+	Mime string `json:"mime"`
+
+	// Name The file's name in this run, as sent to email recipients and webhooks and matched by `{{attachments[...]}}` selectors.
+	Name *string `json:"name"`
+}
+
 // AgentRunRequest defines model for AgentRunRequest.
 type AgentRunRequest struct {
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
 	Input *string `json:"input"`
 
-	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field. Use ``input_upload_ids`` to attach multiple files.
+	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` — use that field to attach multiple files. May be combined with ``input``: the prompt text leads and the file's extracted text follows under a ``# {filename}`` heading.
 	//
 	// **Attachment visibility:** a step only sees the upload when its template references the input — via ``{{input}}`` / ``{{agent.input}}`` / ``{{step.<id>.input|output}}`` (implicit, all attachments) or the ``{{attachments[…]}}`` family (explicit narrowing — e.g. ``{{attachments[0]}}``, ``{{attachments[*.pdf]}}``).
 	//
 	// **Per-batch validation:** every selector the agent's definition declares must be satisfied or the run is rejected with HTTP 400. Exact-name selectors require that filename to be present; indexed selectors require at least N+1 files; glob patterns require at least one matching filename.
 	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
 
-	// InputUploadIds IDs of multiple previously uploaded files. Each upload's extracted text is concatenated under a heading; each upload's binary is surfaced as a separate ``MediaAttachment`` so multi-modal prompt steps reason over all files at once. Steps narrow visibility via ``{{attachments[…]}}`` selectors (by index, filename, or fnmatch glob). The batch must satisfy every selector the agent declares — exact names, indexed references (length must exceed the highest index), and glob patterns (each pattern needs at least one match). Mismatches return HTTP 400 with the unmet requirements listed.  Mutually exclusive with ``input`` and ``input_upload_id`` — pass exactly one of the three. Max 20 uploads per run.
+	// InputUploadIds IDs of multiple previously uploaded files. Each upload's extracted text is concatenated under a heading; each upload's binary is surfaced as a separate ``MediaAttachment`` so multi-modal prompt steps reason over all files at once. Steps narrow visibility via ``{{attachments[…]}}`` selectors (by index, filename, or fnmatch glob). The batch must satisfy every selector the agent declares — exact names, indexed references (length must exceed the highest index), and glob patterns (each pattern needs at least one match). Mismatches return HTTP 400 with the unmet requirements listed.  Mutually exclusive with ``input_upload_id`` (two spellings of the same batch), but may be combined with ``input`` — the prompt text leads and the per-file sections follow, so "a photo plus a sentence about it" needs no synthetic text upload. Max 20 uploads per run.
 	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
@@ -262,13 +286,16 @@ type AgentRunRequest struct {
 
 // AgentRunResponse defines model for AgentRunResponse.
 type AgentRunResponse struct {
+	// Attachments Files in the run's output, in order. Empty for runs that produced none, for runs made before files were listed here, and once the run's trace is purged.
+	Attachments *[]AgentRunFileResponse `json:"attachments,omitempty"`
+
 	// Attempts List of attempts made for this agent run.
 	Attempts []AgentRunAttemptResponse `json:"attempts"`
 
 	// BlockedPolicies Governance policies that produced at least one BLOCK verdict during this run.  Deduplicated by policy id.
 	BlockedPolicies *[]RoutersApiAgentsGovernancePolicyRefResponse `json:"blocked_policies,omitempty"`
 
-	// Credits Credits consumed by the agent run, if applicable.
+	// Credits Credits consumed by the agent run, if applicable. Can still rise briefly after the run ends, while governance screening finishes.
 	Credits *float32 `json:"credits"`
 
 	// ErrorCount Number of errors encountered during the run.
@@ -292,10 +319,10 @@ type AgentRunResponse struct {
 	// InputScanStatus Result of the prompt injection scan: safe, unsafe, skipped, timed_out, or error.
 	InputScanStatus *string `json:"input_scan_status"`
 
-	// Output Output produced by the agent run.
+	// Output The run's output text; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30` an output that has files is instead the manifest JSON `{schema, text, attachments: [{storage_key, mime, name, label, bytes}]}`; `bytes` is absent on runs made before that version shipped.
 	Output *string `json:"output"`
 
-	// OutputContentType MIME type of `output` — mirrors the terminal step's `output_content_type`.  Consumers interpret `output` differently depending on this value: `application/vnd.seclai.manifest+json` is a multi-asset manifest with shape `{text, attachments: [{storage_key, mime, name, bytes}]}` — fetch each attachment via `GET /v2/agent-runs/{run_id}/attachments/{attachment_id}`, where `attachment_id` is the URL-safe base64 of the attachment's `storage_key` (accepts an API key or OAuth token).  `text/plain` / `text/*` are free-form text.  `application/json` is a JSON document.  Null on runs that produced no terminal output or that pre-date this column.
+	// OutputContentType MIME type of `output` — mirrors the terminal step's `output_content_type`.  `text/plain` / `text/*` are free-form text and `application/json` is a JSON document.  Below `Seclai-Version: 2026-09-30` an output that has files reads `application/vnd.seclai.manifest+json` (see `output`); the same files are in `attachments` on every version, each with a `download_url`.  Null on runs that produced no terminal output or that pre-date this column.
 	OutputContentType *string `json:"output_content_type"`
 
 	// Priority Indicates if the run was treated as a priority execution.
@@ -311,6 +338,9 @@ type AgentRunResponse struct {
 	// Steps Step outputs and per-step timing/credits. Only included when requested.
 	Steps *[]AgentRunStepResponse `json:"steps"`
 
+	// TracePurgedAt When this run's trace content was deleted under the account's agent-trace retention window.  Non-null means `input`, `output` and every step's and tool call's I/O are null **by design** and will never be available again — the run aged out, it did not fail.  Branch on this rather than on a null `output`: a run that genuinely produced nothing looks identical.  Status, timing and credits remain accurate.
+	TracePurgedAt *time.Time `json:"trace_purged_at"`
+
 	// WaitMs Cumulative milliseconds the run was parked on standard-mode wait steps.  Subtracted from active duration in run-detail and duration-stats responses, exactly like hitl_wait_ms.  Priority waits block inline and are not counted here.
 	WaitMs *int `json:"wait_ms"`
 }
@@ -320,7 +350,10 @@ type AgentRunStepResponse struct {
 	// AgentStepId Agent step identifier.
 	AgentStepId string `json:"agent_step_id"`
 
-	// CreditsUsed Credits consumed by the step attempt, if applicable.
+	// Attachments Files in this step's output, in order. Empty for steps that produced none, for steps run before files were listed here, and once the run's trace is purged.
+	Attachments *[]AgentRunFileResponse `json:"attachments,omitempty"`
+
+	// CreditsUsed Credits consumed by this step across every attempt it made. Some charges made outside any step, such as governance screening of the run's input, count toward the run's total but no step's. The timestamps above and the tool calls below describe the latest attempt only.
 	CreditsUsed float32 `json:"credits_used"`
 
 	// DurationSeconds Duration of the step attempt in seconds.
@@ -329,10 +362,10 @@ type AgentRunStepResponse struct {
 	// EndedAt Timestamp when the step attempt ended.
 	EndedAt *string `json:"ended_at"`
 
-	// Input Input provided to the step, if any.
+	// Input Input text provided to the step, if any.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step that produced it output files and is not a `for_each`.
 	Input *string `json:"input"`
 
-	// Output Output produced by the step, if any.
+	// Output Output text produced by the step, if any; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step output files and is not a `for_each`.
 	Output *string `json:"output"`
 
 	// OutputContentType Content type of the step output, if any.
@@ -347,6 +380,9 @@ type AgentRunStepResponse struct {
 
 	// ToolCalls LLM tool calls made during this step (prompt_call steps only), ordered by execution. Empty for steps that invoked no tools.
 	ToolCalls *[]AgentRunToolCallResponse `json:"tool_calls,omitempty"`
+
+	// Warnings Authoring problems the step ran into, whether or not it then failed, such as a file name selector that matched none of its source's files.
+	Warnings *[]string `json:"warnings"`
 }
 
 // AgentRunStreamRequest defines model for AgentRunStreamRequest.
@@ -354,10 +390,10 @@ type AgentRunStreamRequest struct {
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
 	Input *string `json:"input"`
 
-	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with the 'input' field. Use ``input_upload_ids`` to attach multiple files. Subject to the same per-batch attachment-selector validation as the non-streaming endpoint.
+	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` — use that field to attach multiple files. May be combined with ``input``. Subject to the same per-batch attachment-selector validation as the non-streaming endpoint.
 	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
 
-	// InputUploadIds IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including per-batch selector validation (exact names, indexed references, and glob patterns must all be satisfied or the run is rejected with HTTP 400). Max 20.
+	// InputUploadIds IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including per-batch selector validation (exact names, indexed references, and glob patterns must all be satisfied or the run is rejected with HTTP 400) and combining the batch with ``input`` prompt text. Max 20.
 	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
@@ -396,7 +432,7 @@ type AgentRunToolCallResponse struct {
 	// RoundIndex 0-based tool-loop round this call belonged to.
 	RoundIndex *int `json:"round_index,omitempty"`
 
-	// Sequence 0-based ordinal of this call within its step run.
+	// Sequence 0-based ordinal of this call within one attempt of the step, so it repeats across a retried step's attempts. This list holds the latest attempt only.
 	Sequence *int `json:"sequence,omitempty"`
 
 	// StartedAt Timestamp when the tool call started.
@@ -500,6 +536,24 @@ type AgentTraceSearchResponse struct {
 
 	// Total Number of matches returned.
 	Total int `json:"total"`
+}
+
+// AgentUsingCloudDriveResponseModel defines model for AgentUsingCloudDriveResponseModel.
+type AgentUsingCloudDriveResponseModel struct {
+	// AgentId Agent identifier.
+	AgentId string `json:"agent_id"`
+
+	// AgentName Agent name.
+	AgentName string `json:"agent_name"`
+
+	// TriggerTypes File-change trigger types bound to this drive.
+	TriggerTypes []string `json:"trigger_types"`
+
+	// ViaPromptTool Uses a prompt_call cloud-drive tool.
+	ViaPromptTool bool `json:"via_prompt_tool"`
+
+	// ViaStep Uses a list/read/write cloud-drive step.
+	ViaStep bool `json:"via_step"`
 }
 
 // AiAssistantAcceptResponse Response from accepting and executing a plan.
@@ -730,6 +784,135 @@ type ChangeStatusRequest struct {
 	Status string `json:"status"`
 }
 
+// CloudDriveAccessLevelResponseModel defines model for CloudDriveAccessLevelResponseModel.
+type CloudDriveAccessLevelResponseModel struct {
+	// Default Whether connecting without a choice uses it.
+	Default bool `json:"default"`
+
+	// Description What agents can do at this level.
+	Description string `json:"description"`
+
+	// Key Level identifier, e.g. `read_write`/`read_only`.
+	Key string `json:"key"`
+
+	// Label Short human-readable name.
+	Label string `json:"label"`
+}
+
+// CloudDriveProviderResponseModel defines model for CloudDriveProviderResponseModel.
+type CloudDriveProviderResponseModel struct {
+	// AccessLevels Mutually-exclusive permission bundles offered when connecting. Connecting happens in the app, so this is informational here — it explains what a connection's `access_level` can be.
+	AccessLevels []CloudDriveAccessLevelResponseModel `json:"access_levels"`
+
+	// DisplayName Human-readable provider name.
+	DisplayName string `json:"display_name"`
+
+	// Key Provider key used as `provider` on a connection.
+	Key string `json:"key"`
+
+	// Scopes OAuth permissions this provider can request.
+	Scopes []CloudDriveScopeResponseModel `json:"scopes"`
+}
+
+// CloudDriveRejectionResponseModel One file the connection deliberately did not process.
+type CloudDriveRejectionResponseModel struct {
+	// CreatedAt When the file was skipped.
+	CreatedAt string `json:"created_at"`
+
+	// Detail Extra context, e.g. the cap that was hit.
+	Detail *string `json:"detail"`
+
+	// FileId The provider's file id, when the file was known.
+	FileId *string `json:"file_id"`
+
+	// FilePath Path of the skipped file, when known.
+	FilePath *string `json:"file_path"`
+
+	// Id Rejection identifier.
+	Id string `json:"id"`
+
+	// Reason `too_large`, `download_failed`, or `flood`.
+	Reason string `json:"reason"`
+}
+
+// CloudDriveResponseModel A cloud-drive connection, without any secret material.
+type CloudDriveResponseModel struct {
+	// AccessLevel The permission bundle the granted scopes correspond to — `read_write` or `read_only`. Null when the grant matches no level the provider currently offers; treat that as unknown rather than assuming write access.
+	AccessLevel *string `json:"access_level"`
+
+	// Connected True when the connection is usable.
+	Connected bool `json:"connected"`
+
+	// CreatedAt When the connection was created.
+	CreatedAt string `json:"created_at"`
+
+	// DriveId Opaque id of the shared drive the folder resolves to, or null for the user's own drive. Stable across renames — compare on this rather than on the name in `folder_path`.
+	DriveId *string `json:"drive_id"`
+
+	// DriveName Display name the shared drive last resolved to. Presentation only; never match on it.
+	DriveName *string `json:"drive_name"`
+
+	// DriveNameStale True when `drive_name` could not be re-confirmed (the drive was deleted, access was lost, or the provider was unreachable). The last known name is still reported — treat it as possibly out of date rather than current.
+	DriveNameStale bool `json:"drive_name_stale"`
+
+	// ExternalAccountId The provider's own opaque account identifier (never an email).
+	ExternalAccountId *string `json:"external_account_id"`
+
+	// FolderPath Watched folder; empty string means the drive root. A folder on a shared drive is written `/Shared drives/<drive name>/<folder>`.
+	FolderPath string `json:"folder_path"`
+
+	// Id Connection identifier.
+	Id string `json:"id"`
+
+	// LastError Most recent sync or authorization error, if any.
+	LastError *string `json:"last_error"`
+
+	// LastSyncedAt When the connection last synced successfully.
+	LastSyncedAt *string `json:"last_synced_at"`
+
+	// Name Human-readable name.
+	Name *string `json:"name"`
+
+	// OauthScopes Space-separated OAuth scopes granted to this connection.
+	OauthScopes *string `json:"oauth_scopes"`
+
+	// Provider Provider key, e.g. `dropbox` or `google_drive`.
+	Provider string `json:"provider"`
+
+	// RealtimeUpdates True when changes arrive via the provider's push notifications. False means the drive still syncs, but only on the scheduled backstop sweep rather than within seconds of a change.
+	RealtimeUpdates bool `json:"realtime_updates"`
+
+	// Status One of `active`, `pending_auth`, `error`, `disconnected`.
+	Status string `json:"status"`
+
+	// UpdatedAt When the connection was last modified.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// CloudDriveScopeResponseModel defines model for CloudDriveScopeResponseModel.
+type CloudDriveScopeResponseModel struct {
+	// Description What the scope allows.
+	Description string `json:"description"`
+
+	// Key The OAuth scope string sent to the provider.
+	Key string `json:"key"`
+
+	// Label Short human-readable name.
+	Label string `json:"label"`
+
+	// Recommended Whether this scope is requested by default on connect.
+	Recommended bool `json:"recommended"`
+}
+
+// CloudDriveUpdateRequest defines model for CloudDriveUpdateRequest.
+type CloudDriveUpdateRequest struct {
+	// FolderPath New watched folder; empty means the whole drive. A folder on a shared drive is written `/Shared drives/<drive name>/<folder>`. Changing it resets the sync cursor, so files already in the new folder are NOT replayed as triggers — only subsequent changes fire, matching connect-time behaviour. Rejected when the new folder would make an agent that writes there re-trigger itself.
+	FolderPath *string `json:"folder_path"`
+
+	// Name New display name for the connection.
+	Name *string `json:"name"`
+}
+
 // CompactionEvaluationModel Structured LLM-as-judge evaluation result.
 type CompactionEvaluationModel struct {
 	// Reasoning Explanation of the evaluation.
@@ -790,6 +973,10 @@ type ContentEmbeddingResponse struct {
 	BatchDuration float32   `json:"batch_duration"`
 	BatchSize     int       `json:"batch_size"`
 	Id            string    `json:"id"`
+	MediaName     *string   `json:"media_name"`
+	PageNumber    *int      `json:"page_number"`
+	SourceMime    *string   `json:"source_mime"`
+	SourceUrl     *string   `json:"source_url"`
 	Text          string    `json:"text"`
 	TextEnd       int       `json:"text_end"`
 	TextStart     int       `json:"text_start"`
@@ -804,8 +991,8 @@ type CreateAlertConfigRequest struct {
 	// AlertType Alert type
 	AlertType string `json:"alert_type"`
 
-	// CooldownMinutes Cooldown period in minutes
-	CooldownMinutes *int `json:"cooldown_minutes,omitempty"`
+	// CooldownMinutes Cooldown period in minutes. Omit to use the per-alert-type default (1440 for credit alerts, 60 otherwise).
+	CooldownMinutes *int `json:"cooldown_minutes"`
 
 	// DistributionType Distribution type (owner, owner_admins, selected_members)
 	DistributionType *string `json:"distribution_type,omitempty"`
@@ -866,13 +1053,13 @@ type CreateExperimentResponse struct {
 
 // CreateKnowledgeBaseBody Request body for creating a knowledge base.
 type CreateKnowledgeBaseBody struct {
-	// DefaultScoreThreshold Default minimum rerank score threshold.
+	// DefaultScoreThreshold Prefilled into Minimum Rerank Score on a new retrieval step in the editor. Not applied at retrieval time — the step's own value is used.
 	DefaultScoreThreshold *float32 `json:"default_score_threshold"`
 
-	// DefaultTopK Default results after reranking.
+	// DefaultTopK Prefilled into Top K on a new retrieval step in the editor. Not applied at retrieval time.
 	DefaultTopK *int `json:"default_top_k"`
 
-	// DefaultTopN Default number of results.
+	// DefaultTopN Prefilled into Top N on a new retrieval step in the editor. Not applied at retrieval time — the step's own value is used.
 	DefaultTopN *int `json:"default_top_n"`
 
 	// Description Optional description.
@@ -881,7 +1068,7 @@ type CreateKnowledgeBaseBody struct {
 	// Name Knowledge base name.
 	Name string `json:"name"`
 
-	// RerankerModel Reranker model to use (null for no reranking).
+	// RerankerModel Reranker model to use — a `model_type` from `GET /models/rerankers`. Pass "none" to disable reranking (not a value from that list). Omit it for a default chosen from the sources ("none" when every source embeds media natively, whose chunks carry no text for a reranker to score). "" is accepted as a synonym for "none".
 	RerankerModel *string `json:"reranker_model"`
 
 	// SourceIds List of source connection IDs to link.
@@ -908,7 +1095,7 @@ type CreateMemoryBankBody struct {
 	// EmbeddingModel Custom embedding model (custom mode only).
 	EmbeddingModel *string `json:"embedding_model"`
 
-	// MaxAgeDays Max entry age in days before compaction. Checked inline after each write and by the hourly background sweep.
+	// MaxAgeDays DEPRECATED and no longer applied. Age used to trigger compaction, which duplicated retention_days — both removed the same entries at the same age. Age now belongs solely to retention_days, which deletes; compaction triggers on max_size_tokens and max_turns. Rejected with 400 for clients sending Seclai-Version 2026-08-03 or later; accepted and stored but inert for older clients.
 	MaxAgeDays *int `json:"max_age_days"`
 
 	// MaxSizeTokens Max total tokens (per partition) before compaction. Checked inline after each write and by the hourly background sweep.
@@ -923,8 +1110,11 @@ type CreateMemoryBankBody struct {
 	// Name Memory bank name.
 	Name string `json:"name"`
 
-	// RetentionDays Content source retention in days.
+	// RetentionDays Retention in days — when entries are deleted outright, text and embeddings. This is the only age-based control; compaction triggers on max_size_tokens and max_turns. For clients sending Seclai-Version 2026-08-03 or later, omitting the field resolves per bank type: 90 days for a conversation bank, indefinite for a general bank. Older clients keep the previous default of 30 days for a conversation bank — unless a longer max_age_days was sent, which wins, since the window is never lowered beneath the only age the caller expressed — while a general bank keeps entries indefinitely. Send an explicit value (or null for indefinite) to be unambiguous on every version.
 	RetentionDays *int `json:"retention_days"`
+
+	// StripQuotedReplyChains Conversation banks only. When true, a conversation turn written to this bank has the quoted reply chain an email client prepends to a reply dropped from it. Only inbound (user) turns are affected, and only words in a run of at least ~40 matching a recent turn word for word are dropped (line wrapping and punctuation at a word's edge are ignored). A word the sender changed is kept, including a one-character change inside a link, address or amount, unless the change is only to that edge punctuation.
+	StripQuotedReplyChains *bool `json:"strip_quoted_reply_chains,omitempty"`
 
 	// Type Bank type. 'conversation' for chat-turn data with conversation_key + speaker; 'general' for flat entries with optional group_key.
 	Type *string `json:"type,omitempty"`
@@ -953,7 +1143,7 @@ type CreateSourceBody struct {
 	// Dimensions Embedding dimensions override.
 	Dimensions *int `json:"dimensions"`
 
-	// EmbeddingModel Embedding model override.
+	// EmbeddingModel Embedding model override — a `model_type` from `GET /models/embedders`, which also reports each embedder's `supported_input_media`. Defaults to the platform embedder (`default_model_type` on that endpoint) when omitted. Indexing images or video requires an embedder that lists that modality.
 	EmbeddingModel *string `json:"embedding_model"`
 
 	// IndexMode Embedding quality / cost trade-off preset for custom_index sources.
@@ -969,7 +1159,7 @@ type CreateSourceBody struct {
 	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
 	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
 
-	// MediaTypes Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored; unsupported values are dropped. Omit / [] for text-only.
+	// MediaTypes Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored (see `supported_input_media` on GET /models/embedders); unsupported values are dropped. Omit / [] for text-only.
 	MediaTypes *[]string `json:"media_types"`
 
 	// Name Source name.
@@ -1047,6 +1237,18 @@ type DocsSearchResultResponse struct {
 	Title     string  `json:"title"`
 }
 
+// EffortOptionsResponse The reasoning-effort values a model accepts.
+type EffortOptionsResponse struct {
+	// Default The vendor's default level, when known.
+	Default *string `json:"default"`
+
+	// Kind `levels` today: `values` lists them.
+	Kind string `json:"kind"`
+
+	// Values Accepted values, weakest first.
+	Values *[]string `json:"values,omitempty"`
+}
+
 // EmailDomainResponse defines model for EmailDomainResponse.
 type EmailDomainResponse struct {
 	Delegated     *bool                `json:"delegated,omitempty"`
@@ -1087,6 +1289,100 @@ type EmailTriggerConfigResponse struct {
 	EmailRequireSenderAuth   *bool              `json:"email_require_sender_auth,omitempty"`
 	TriggerId                openapi_types.UUID `json:"trigger_id"`
 	TriggerType              string             `json:"trigger_type"`
+}
+
+// EmbeddingModalityRateResponse Per-modality rate for a multi-modal embedder.
+//
+// The default “credits“ field on :class:`EmbeddingModelResponse` is the
+// text rate (credits per ~1k English words).  Embedders that index image or
+// video chunks natively charge those modalities at a different rate and unit
+// — e.g. Cohere Embed v4 prices images per record; Nova 2 Multimodal prices
+// video per second.  Surfacing the modality and unit lets a caller render an
+// honest cost breakdown alongside the text rate.
+type EmbeddingModalityRateResponse struct {
+	// Credits Rate value in the unit below
+	Credits float32 `json:"credits"`
+
+	// Modality Modality kind, e.g. image / video
+	Modality string `json:"modality"`
+
+	// Unit Billing unit for this rate (credit_per_record / credit_per_second / credit_per_1000_tokens).
+	Unit string `json:"unit"`
+}
+
+// EmbeddingModelListResponse Legacy (header-less) response shape for the embedder catalog.
+type EmbeddingModelListResponse struct {
+	// DefaultDimension Dimensions used with the default embedding model
+	DefaultDimension *int `json:"default_dimension"`
+
+	// DefaultModelType Embedding model used when a source does not override it
+	DefaultModelType *string `json:"default_model_type"`
+
+	// FileProcessingCreditsPerMb Credits per MB for file processing at ingest
+	FileProcessingCreditsPerMb float32 `json:"file_processing_credits_per_mb"`
+
+	// Models Available embedding models
+	Models []EmbeddingModelResponse `json:"models"`
+
+	// StorageCredits Monthly storage credits per dimension count
+	StorageCredits []EmbeddingStorageCreditsResponse `json:"storage_credits"`
+}
+
+// EmbeddingModelResponse Information about an embedding model.
+type EmbeddingModelResponse struct {
+	// Credits Estimated credits per 1,000 English words
+	Credits float32 `json:"credits"`
+
+	// Description Model description
+	Description *string `json:"description"`
+
+	// Dimensions Dimensions options
+	Dimensions []int `json:"dimensions"`
+
+	// IsNew Whether the model is newly released
+	IsNew *bool `json:"is_new,omitempty"`
+
+	// MaxInputTokens Max input tokens per request
+	MaxInputTokens *int `json:"max_input_tokens"`
+
+	// ModelId Model identifier
+	ModelId string `json:"model_id"`
+
+	// ModelType Full model type identifier (enum value).  This is the value to send as embedding_model when creating a source.
+	ModelType string `json:"model_type"`
+
+	// MtebRetrievalScore MTEB retrieval score
+	MtebRetrievalScore *float32 `json:"mteb_retrieval_score"`
+
+	// Name Human-readable model name
+	Name *string `json:"name"`
+
+	// PerModalityRates Non-text rates the vendor charges for this embedder (image, video, audio).  Empty for text-only embedders.
+	PerModalityRates *[]EmbeddingModalityRateResponse `json:"per_modality_rates,omitempty"`
+
+	// Provider Model provider identifier
+	Provider *string `json:"provider"`
+
+	// Speed Model processing speed
+	Speed *string `json:"speed"`
+
+	// SupportedInputMedia Modalities the embedder accepts on input (short kinds like text / image / video, or full MIMEs).  null means text-only.  A source only honours a media_types entry its embedder lists here.
+	SupportedInputMedia *[]string `json:"supported_input_media"`
+
+	// SupportedLanguages Supported languages
+	SupportedLanguages *[]string `json:"supported_languages"`
+
+	// Url Model documentation URL
+	Url *string `json:"url"`
+}
+
+// EmbeddingStorageCreditsResponse Monthly storage credits per stored record at a dimension count.
+type EmbeddingStorageCreditsResponse struct {
+	// Credits Credits per record per month
+	Credits int `json:"credits"`
+
+	// Dimensions Number of embedding dimensions
+	Dimensions int `json:"dimensions"`
 }
 
 // EvaluationCriteriaResponse Response schema for evaluation criteria.
@@ -1245,8 +1541,11 @@ type ExecutedActionResponse struct {
 
 // ExperimentDetailResponse defines model for ExperimentDetailResponse.
 type ExperimentDetailResponse struct {
-	CompletedAt                   *string                 `json:"completed_at"`
-	CreatedAt                     string                  `json:"created_at"`
+	CompletedAt *string `json:"completed_at"`
+	CreatedAt   string  `json:"created_at"`
+
+	// Effort The reasoning effort each model was run at, by model ID.
+	Effort                        *map[string]string      `json:"effort,omitempty"`
 	ErrorMessage                  *string                 `json:"error_message"`
 	EvaluationComplexity          string                  `json:"evaluation_complexity"`
 	EvaluationMode                string                  `json:"evaluation_mode"`
@@ -1559,13 +1858,13 @@ type KnowledgeBaseResponseModel struct {
 	// CreatedAt ISO-8601 creation timestamp.
 	CreatedAt string `json:"created_at"`
 
-	// DefaultScoreThreshold Default minimum rerank score.
+	// DefaultScoreThreshold Editor default for a new retrieval step's Minimum Rerank Score.
 	DefaultScoreThreshold *float32 `json:"default_score_threshold"`
 
-	// DefaultTopK Default results after reranking.
+	// DefaultTopK Editor default for a new retrieval step's Top K.
 	DefaultTopK *int `json:"default_top_k"`
 
-	// DefaultTopN Default number of results to return.
+	// DefaultTopN Editor default for a new retrieval step's Top N.
 	DefaultTopN *int `json:"default_top_n"`
 
 	// Description Optional description.
@@ -1643,7 +1942,7 @@ type MemoryBankConfigResponse struct {
 	// Description Suggested description.
 	Description *string `json:"description"`
 
-	// MaxAgeDays Max age in days.
+	// MaxAgeDays Always null. Age-based compaction is retired — the assistant never suggests it. Kept so an SDK generated before the change still validates this response.
 	MaxAgeDays *int `json:"max_age_days"`
 
 	// MaxSizeTokens Max size in tokens.
@@ -1706,7 +2005,7 @@ type MemoryBankResponseModel struct {
 	// Id Unique memory bank identifier.
 	Id string `json:"id"`
 
-	// MaxAgeDays Max entry age in days before compaction. Checked both inline after each write and by the hourly background sweep.
+	// MaxAgeDays DEPRECATED and no longer applied. Age now belongs solely to retention_days, which deletes; compaction triggers on max_size_tokens and max_turns. Always null for clients sending Seclai-Version 2026-08-03 or later; older clients keep reading whatever value was stored.
 	MaxAgeDays *int `json:"max_age_days"`
 
 	// MaxSizeTokens Max total tokens (per partition) before compaction. Checked both inline after each write and by the hourly background sweep.
@@ -1726,6 +2025,9 @@ type MemoryBankResponseModel struct {
 
 	// SourceConnectionId Linked content source ID (null if not yet provisioned).
 	SourceConnectionId *string `json:"source_connection_id"`
+
+	// StripQuotedReplyChains Conversation banks only. When true, a conversation turn written to this bank has the quoted reply chain an email client prepends to a reply dropped from it. Only inbound (user) turns are affected, and only words in a run of at least ~40 matching a recent turn word for word are dropped (line wrapping and punctuation at a word's edge are ignored). A word the sender changed is kept, including a one-character change inside a link, address or amount, unless the change is only to that edge punctuation.
+	StripQuotedReplyChains *bool `json:"strip_quoted_reply_chains,omitempty"`
 
 	// Type Bank type: conversation (chat-turn with speaker) or general (flat entries).
 	Type string `json:"type"`
@@ -1781,6 +2083,9 @@ type PendingProcessingCompletedFailedStatus string
 
 // PlaygroundCreateRequest Create a model playground experiment via the public API.
 type PlaygroundCreateRequest struct {
+	// Effort Reasoning effort per model id, each one of that model's `effort_options` values. Not combinable with `json_template`.
+	Effort *map[string]string `json:"effort"`
+
 	// EvaluationComplexity simple, medium, or complex
 	EvaluationComplexity *PlaygroundCreateRequestEvaluationComplexity `json:"evaluation_complexity,omitempty"`
 
@@ -1868,6 +2173,51 @@ type RemoveEmailDomainResponse struct {
 	Removed     *bool   `json:"removed,omitempty"`
 }
 
+// RerankerModelListResponse Legacy (header-less) response shape for the reranker catalog.
+type RerankerModelListResponse struct {
+	// DefaultModelType Reranker used when a knowledge base does not choose one
+	DefaultModelType string `json:"default_model_type"`
+
+	// Models Available reranker models
+	Models []RerankerModelResponse `json:"models"`
+
+	// SearchProcessingCredits Credits charged for processing a search request
+	SearchProcessingCredits float32 `json:"search_processing_credits"`
+}
+
+// RerankerModelResponse Information about a reranker model.
+type RerankerModelResponse struct {
+	// CreditsPerAction Credits charged per rerank action
+	CreditsPerAction float32 `json:"credits_per_action"`
+
+	// Description Model description
+	Description *string `json:"description"`
+
+	// IsDefault Whether this is the platform default reranker
+	IsDefault bool `json:"is_default"`
+
+	// IsNew Whether the model is newly released
+	IsNew *bool `json:"is_new,omitempty"`
+
+	// MaxInputTokens Max input tokens per request
+	MaxInputTokens *int `json:"max_input_tokens"`
+
+	// ModelType Full model type identifier.  This is the value to send as reranker_model on a knowledge base; send "none" or an empty string to disable reranking.
+	ModelType string `json:"model_type"`
+
+	// Name Human-readable model name
+	Name string `json:"name"`
+
+	// Provider Model provider identifier
+	Provider *string `json:"provider"`
+
+	// SupportedLanguages Supported languages
+	SupportedLanguages *[]string `json:"supported_languages"`
+
+	// Url Model documentation URL
+	Url *string `json:"url"`
+}
+
 // ResumeInboundResponse defines model for ResumeInboundResponse.
 type ResumeInboundResponse struct {
 	Resumed bool `json:"resumed"`
@@ -1877,6 +2227,17 @@ type ResumeInboundResponse struct {
 type SendTestEmailResponse struct {
 	Sent *bool `json:"sent,omitempty"`
 }
+
+// ServiceUnavailableError defines model for ServiceUnavailableError.
+type ServiceUnavailableError struct {
+	Error struct {
+		Code    ServiceUnavailableErrorErrorCode `json:"code"`
+		Message string                           `json:"message"`
+	} `json:"error"`
+}
+
+// ServiceUnavailableErrorErrorCode defines model for ServiceUnavailableError.Error.Code.
+type ServiceUnavailableErrorErrorCode string
 
 // SetAutoBlockModeRequest Set the account's governance auto-block mode (shared REST request).
 type SetAutoBlockModeRequest struct {
@@ -1935,6 +2296,68 @@ type SourceConnectionResponseModel struct {
 
 	// Url Source URL.
 	Url string `json:"url"`
+}
+
+// SourceContentStatusListResponse Response model for a paginated per-item indexing status list.
+type SourceContentStatusListResponse struct {
+	Data []SourceContentStatusResponse `json:"data"`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:"pagination"`
+}
+
+// SourceContentStatusResponse Response model for one content item's indexing status.
+type SourceContentStatusResponse struct {
+	// AwaitingReindex True when the item is linked and reports completed but its content is not yet embedded under the index the source connection currently uses, because it still sits under the index that connection used before an embedding migration switched it. Anything ingested while a migration ran can land in this state. Semantic and content search will not match it until it is re-embedded; a title keyword match can still return it, so the item may appear in results while its body is unsearchable. It clears on its own — a reconciliation pass re-embeds the item under the current index, typically within minutes of the migration finishing, and a daily sweep retries whatever is still outstanding, so a large backlog can take more than one sweep to drain. The re-embedding is not charged to your account: nothing you did caused it, so Seclai absorbs the cost. Never true for an item that is simply still indexing; content_status covers that.
+	AwaitingReindex *bool `json:"awaiting_reindex,omitempty"`
+
+	// ContentStatus Indexing status: pending, fetching, transcribing, scanning, indexing, completed, or failed.
+	ContentStatus string `json:"content_status"`
+
+	// ContentTokenCount Extracted token count.
+	ContentTokenCount *int `json:"content_token_count"`
+
+	// ContentType Content type group: text, audio, video, image, or document.
+	ContentType string `json:"content_type"`
+
+	// ContentUrl Internal URL identifying the item. Uploaded files use a `file-upload://` URL.
+	ContentUrl *string `json:"content_url"`
+
+	// ContentVersionId ID of the content version. This is the `content_version_id` returned by the upload endpoints, so it is what you match an upload against.
+	ContentVersionId string `json:"content_version_id"`
+
+	// ContentWordCount Extracted word count.
+	ContentWordCount *int `json:"content_word_count"`
+
+	// Error Why the item failed, when `content_status` is `failed`.
+	Error *string `json:"error"`
+
+	// ExtractedMediaCapped True when extraction stopped with media still unread, so the item references more media than was indexed and media search will not match anything past the cut. Two causes: a web page that ran out of the budget for fetching remote assets, or a container that could not be read to the end (a truncated or hostile archive). An uploaded document that reads cleanly is never capped, however much media it holds — there is no limit on that.
+	ExtractedMediaCapped *bool `json:"extracted_media_capped,omitempty"`
+
+	// ExtractedMediaCount Number of embedded images / videos extracted from inside this item and indexed as their own chunks. There is no limit on this — a document contributes as many as it holds. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container, or found nothing. Treat null as 'unknown', never as zero.
+	ExtractedMediaCount *int `json:"extracted_media_count"`
+
+	// ExtractedMediaLimit The bound that was reached, when extracted_media_capped is true and the stop was a bound — a number of fetch attempts, or a number of seconds. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.
+	ExtractedMediaLimit *int `json:"extracted_media_limit"`
+
+	// IndexedAt Timestamp when the item finished indexing and became retrievable. `null` until then.
+	IndexedAt *string `json:"indexed_at"`
+
+	// MimeType MIME type the item was ingested as, when known.
+	MimeType *string `json:"mime_type"`
+
+	// PublishedAt Publication timestamp of the item, when known.
+	PublishedAt *string `json:"published_at"`
+
+	// PulledAt Timestamp when the item was uploaded or pulled.
+	PulledAt string `json:"pulled_at"`
+
+	// SourceConnectionContentVersionId ID to pass to `GET /contents/{id}`. `null` until the item has finished indexing — an item that is still processing, or that failed, has no retrievable content and keeps this `null`.
+	SourceConnectionContentVersionId *string `json:"source_connection_content_version_id"`
+
+	// Title Title of the content item.
+	Title *string `json:"title"`
 }
 
 // SourceEmbeddingMigrationResponse Response model for source embedding migration status.
@@ -2125,7 +2548,7 @@ type StartSourceEmbeddingMigrationRequest struct {
 	// TargetDimensions Target embedding dimensions
 	TargetDimensions int `json:"target_dimensions"`
 
-	// TargetEmbeddingModel Target embedding model enum
+	// TargetEmbeddingModel Target embedding model — a `model_type` from `GET /models/embedders`, which also reports the `dimensions` each embedder supports and the modalities it can index.
 	TargetEmbeddingModel string `json:"target_embedding_model"`
 }
 
@@ -2254,13 +2677,13 @@ type UpdateEvaluationCriteriaRequest struct {
 
 // UpdateKnowledgeBaseBody Request body for updating a knowledge base.
 type UpdateKnowledgeBaseBody struct {
-	// DefaultScoreThreshold Default score threshold (-1 to clear).
+	// DefaultScoreThreshold Prefilled into Minimum Rerank Score on a new retrieval step (-1 to clear).
 	DefaultScoreThreshold *float32 `json:"default_score_threshold"`
 
-	// DefaultTopK Default reranked results (0 to clear).
+	// DefaultTopK Prefilled into Top K on a new retrieval step (0 to clear).
 	DefaultTopK *int `json:"default_top_k"`
 
-	// DefaultTopN Default results (0 to clear).
+	// DefaultTopN Prefilled into Top N on a new retrieval step (0 to clear).
 	DefaultTopN *int `json:"default_top_n"`
 
 	// Description New description.
@@ -2269,7 +2692,7 @@ type UpdateKnowledgeBaseBody struct {
 	// Name New name.
 	Name *string `json:"name"`
 
-	// RerankerModel Reranker model (empty string for no reranking).
+	// RerankerModel New reranker model — a `model_type` from `GET /models/rerankers`. Pass "none" to turn reranking off (not a value from that list). Omitting the field (or sending null) leaves the current reranker in place — it does NOT turn it off. "" is accepted as a synonym for "none", but prefer "none": an empty string does not survive every client's serialization.
 	RerankerModel *string `json:"reranker_model"`
 
 	// SourceIds New list of source connection IDs.
@@ -2287,7 +2710,7 @@ type UpdateMemoryBankBody struct {
 	// Description Optional description. Send empty string "" to clear.
 	Description *string `json:"description"`
 
-	// MaxAgeDays Max entry age in days before compaction. Checked inline after each write and by the hourly background sweep. Send 0 to disable.
+	// MaxAgeDays DEPRECATED and no longer applied. Age now belongs solely to retention_days, which deletes; compaction triggers on max_size_tokens and max_turns. Rejected with 400 for clients sending Seclai-Version 2026-08-03 or later, except 0, which clears a value stored earlier. Accepted and stored but inert for older clients.
 	MaxAgeDays *int `json:"max_age_days"`
 
 	// MaxSizeTokens Max total tokens (per partition) before compaction. Checked inline after each write and by the hourly background sweep. Send 0 to disable.
@@ -2301,6 +2724,9 @@ type UpdateMemoryBankBody struct {
 
 	// RetentionDays Content source retention in days. Send 0 to clear (indefinite).
 	RetentionDays *int `json:"retention_days"`
+
+	// StripQuotedReplyChains Conversation banks only. When true, a conversation turn written to this bank has the quoted reply chain an email client prepends to a reply dropped from it. Only inbound (user) turns are affected, and only words in a run of at least ~40 matching a recent turn word for word are dropped (line wrapping and punctuation at a word's edge are ignored). A word the sender changed is kept, including a one-character change inside a link, address or amount, unless the change is only to that edge punctuation.
+	StripQuotedReplyChains *bool `json:"strip_quoted_reply_chains"`
 }
 
 // UpdateSolutionRequest Request model for updating a solution
@@ -2314,7 +2740,7 @@ type UpdateSolutionRequest struct {
 
 // UpdateSourceBody Request body for updating a content source.
 type UpdateSourceBody struct {
-	// MediaTypes Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored; unsupported values are dropped. [] disables media extraction (text-only).
+	// MediaTypes Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored (see `supported_input_media` on GET /models/embedders); unsupported values are dropped. [] disables media extraction (text-only).
 	MediaTypes *[]string `json:"media_types"`
 
 	// Name New name.
@@ -2323,7 +2749,7 @@ type UpdateSourceBody struct {
 	// Polling New polling interval.
 	Polling *string `json:"polling"`
 
-	// RetentionDays New retention period in days (null for unlimited).
+	// RetentionDays New retention period in days — content older than this is deleted permanently. Send null to clear the window: content is then kept indefinitely. Omit the field to leave it unchanged.
 	RetentionDays *int `json:"retention_days"`
 }
 
@@ -2377,12 +2803,23 @@ type VariantCategoryResponse struct {
 
 // VariantOptionResponse Response model for a variant option
 type VariantOptionResponse struct {
-	Default                                      bool     `json:"default"`
-	Description                                  *string  `json:"description"`
-	Input1hCacheWriteCreditsPer1000Tokens        *float32 `json:"input_1h_cache_write_credits_per_1000_tokens"`
-	Input5mCacheWriteCreditsPer1000Tokens        *float32 `json:"input_5m_cache_write_credits_per_1000_tokens"`
-	InputCacheHitCreditsPer1000Tokens            *float32 `json:"input_cache_hit_credits_per_1000_tokens"`
-	InputCreditsPer1000Tokens                    *float32 `json:"input_credits_per_1000_tokens"`
+	Default     bool    `json:"default"`
+	Description *string `json:"description"`
+
+	// Input1hCacheWriteCreditsPer1000Tokens Credits per 1,000 input tokens written to a 1-hour prompt cache.
+	Input1hCacheWriteCreditsPer1000Tokens *float32 `json:"input_1h_cache_write_credits_per_1000_tokens"`
+
+	// Input30mCacheWriteCreditsPer1000Tokens Credits per 1,000 input tokens written to a 30-minute prompt cache.
+	Input30mCacheWriteCreditsPer1000Tokens *float32 `json:"input_30m_cache_write_credits_per_1000_tokens"`
+
+	// Input5mCacheWriteCreditsPer1000Tokens Credits per 1,000 input tokens written to a 5-minute prompt cache.
+	Input5mCacheWriteCreditsPer1000Tokens *float32 `json:"input_5m_cache_write_credits_per_1000_tokens"`
+
+	// InputCacheHitCreditsPer1000Tokens Credits per 1,000 input tokens read from a prompt cache.
+	InputCacheHitCreditsPer1000Tokens *float32 `json:"input_cache_hit_credits_per_1000_tokens"`
+	InputCreditsPer1000Tokens         *float32 `json:"input_credits_per_1000_tokens"`
+
+	// LongContextInputCacheHitCreditsPer1000Tokens Credits per 1,000 input tokens read from a prompt cache, on a call whose input exceeds `long_context_threshold` tokens.
 	LongContextInputCacheHitCreditsPer1000Tokens *float32 `json:"long_context_input_cache_hit_credits_per_1000_tokens"`
 	LongContextInputCreditsPer1000Tokens         *float32 `json:"long_context_input_credits_per_1000_tokens"`
 	LongContextOutputCreditsPer1000Tokens        *float32 `json:"long_context_output_credits_per_1000_tokens"`
@@ -2513,7 +2950,7 @@ type RoutersApiAgentsGovernancePolicyRefResponse struct {
 // A field omitted is left unchanged; passing “null“ (or “""“ for
 // “alias“) clears it.
 type RoutersApiAgentsSetEmailTriggerConfigRequest struct {
-	// Alias Custom alias for the address `<alias>.<accountID>@agent.seclai.com` (alphanumeric plus '+', '.', '-'; 1–32 chars; not starting/ending with '+', '.', '-'; not UUID-shaped). Pass null/empty to clear.
+	// Alias Custom alias, unique per account, answering as `<alias>.<accountID>@agent.seclai.com` and as `<alias>@<domain>` on each verified account email domain (alphanumeric plus '+', '.', '-'; 1–32 chars; not starting/ending with '+', '.', '-'; not UUID-shaped). Pass null/empty to clear.
 	Alias *string `json:"alias"`
 
 	// AllowedSenders Allowlist of full sender addresses and/or bare domains (a bare domain also matches sub-domains). Empty/null accepts any sender.
@@ -2591,6 +3028,9 @@ type RoutersApiAiAssistantAiAssistantFeedbackRequest struct {
 
 	// Feature Feature name (e.g. 'source', 'solution').
 	Feature string `json:"feature"`
+
+	// GovernanceConversationId Governance conversation ID, if applicable.
+	GovernanceConversationId *openapi_types.UUID `json:"governance_conversation_id"`
 
 	// PromptCallId Prompt call ID for credit tracking.
 	PromptCallId *openapi_types.UUID `json:"prompt_call_id"`
@@ -2703,6 +3143,15 @@ type RoutersApiContentsContentDetailResponse struct {
 	// Error Error message, if any.
 	Error *string `json:"error"`
 
+	// ExtractedMediaCapped True when extraction stopped with media still unread, so the item references more media than was indexed and media search will not match anything past the cut. Two causes: a web page that ran out of the budget for fetching remote assets, or a container that could not be read to the end (a truncated or hostile archive). An uploaded document that reads cleanly is never capped, however much media it holds — there is no limit on that.
+	ExtractedMediaCapped *bool `json:"extracted_media_capped,omitempty"`
+
+	// ExtractedMediaCount Number of embedded images / videos extracted from inside this item and indexed as their own chunks. There is no limit on this — a document contributes as many as it holds. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container, or found nothing. Treat null as 'unknown', never as zero.
+	ExtractedMediaCount *int `json:"extracted_media_count"`
+
+	// ExtractedMediaLimit The bound that was reached, when extracted_media_capped is true and the stop was a bound — a number of fetch attempts, or a number of seconds. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.
+	ExtractedMediaLimit *int `json:"extracted_media_limit"`
+
 	// Id Unique identifier for the content version.
 	Id string `json:"id"`
 
@@ -2753,16 +3202,19 @@ type RoutersApiContentsContentEmbeddingsListResponse struct {
 
 // RoutersApiContentsFileUploadResponse Response model for content file replacement upload.
 type RoutersApiContentsFileUploadResponse struct {
-	// ContentVersionId ID of the content version being replaced
+	// ContentVersionId ID of the newly created content version. A replacement creates a new version rather than overwriting the previous one.
 	ContentVersionId *string `json:"content_version_id"`
+
+	// EmbedderWarning Set when the file's type is not embedded directly on this source, so indexing relies on extracted text. Content with none (e.g. a photograph) will be marked FAILED.
+	EmbedderWarning *string `json:"embedder_warning"`
 
 	// Filename Original filename
 	Filename string `json:"filename"`
 
-	// SourceConnectionContentVersionId ID of the source connection content version
+	// SourceConnectionContentVersionId ID of the source connection content version. Unchanged by a replacement, so it stays a stable handle for the content.
 	SourceConnectionContentVersionId *string `json:"source_connection_content_version_id"`
 
-	// Status Processing status
+	// Status Always `uploaded`. Unlike the create endpoints, a replacement is never rejected as a duplicate of another item.
 	Status string `json:"status"`
 }
 
@@ -2876,25 +3328,28 @@ type RoutersApiModelLifecycleModelAlertResponse struct {
 
 // RoutersApiModelLifecycleModelRecommendationResponse defines model for routers__api__model_lifecycle__ModelRecommendationResponse.
 type RoutersApiModelLifecycleModelRecommendationResponse struct {
-	DeprecatedAt             *string  `json:"deprecated_at"`
-	Description              string   `json:"description"`
-	Family                   *string  `json:"family"`
-	FamilyGeneration         *float32 `json:"family_generation"`
-	Id                       string   `json:"id"`
-	MaxContextTokens         int      `json:"max_context_tokens"`
-	MaxOutputTokens          int      `json:"max_output_tokens"`
-	ModelId                  string   `json:"model_id"`
-	Name                     string   `json:"name"`
-	Provider                 string   `json:"provider"`
-	Reason                   string   `json:"reason"`
-	RecommendationType       string   `json:"recommendation_type"`
-	ReleasedAt               *string  `json:"released_at"`
-	SunsetAt                 *string  `json:"sunset_at"`
-	SupportsOpenaiArguments  bool     `json:"supports_openai_arguments"`
-	SupportsStreaming        bool     `json:"supports_streaming"`
-	SupportsStructuredOutput bool     `json:"supports_structured_output"`
-	SupportsThinking         bool     `json:"supports_thinking"`
-	SupportsToolUse          bool     `json:"supports_tool_use"`
+	DeprecatedAt *string `json:"deprecated_at"`
+	Description  string  `json:"description"`
+
+	// EffortOptions The reasoning-effort values a model accepts.
+	EffortOptions            *EffortOptionsResponse `json:"effort_options,omitempty"`
+	Family                   *string                `json:"family"`
+	FamilyGeneration         *float32               `json:"family_generation"`
+	Id                       string                 `json:"id"`
+	MaxContextTokens         int                    `json:"max_context_tokens"`
+	MaxOutputTokens          int                    `json:"max_output_tokens"`
+	ModelId                  string                 `json:"model_id"`
+	Name                     string                 `json:"name"`
+	Provider                 string                 `json:"provider"`
+	Reason                   string                 `json:"reason"`
+	RecommendationType       string                 `json:"recommendation_type"`
+	ReleasedAt               *string                `json:"released_at"`
+	SunsetAt                 *string                `json:"sunset_at"`
+	SupportsOpenaiArguments  bool                   `json:"supports_openai_arguments"`
+	SupportsStreaming        bool                   `json:"supports_streaming"`
+	SupportsStructuredOutput bool                   `json:"supports_structured_output"`
+	SupportsThinking         bool                   `json:"supports_thinking"`
+	SupportsToolUse          bool                   `json:"supports_tool_use"`
 }
 
 // RoutersApiModelLifecycleModelRecommendationsResponse defines model for routers__api__model_lifecycle__ModelRecommendationsResponse.
@@ -3138,7 +3593,7 @@ type RoutersApiSourceExportsExportResponse struct {
 
 // RoutersApiSourcesFileUploadResponse Response model for file upload
 type RoutersApiSourcesFileUploadResponse struct {
-	// ContentVersionId ID of the created content version
+	// ContentVersionId ID of the created content version, and what the source content status endpoints take. Set when `status` is `uploaded`; `null` when `status` is `duplicate`, because no new version was created.
 	ContentVersionId *string `json:"content_version_id"`
 
 	// EmbedderWarning Set when the file is non-text but the source's embedder is text-only — indexing will rely on OCR / transcription and may produce a FAILED row if no text can be extracted.
@@ -3147,10 +3602,10 @@ type RoutersApiSourcesFileUploadResponse struct {
 	// Filename Original filename
 	Filename string `json:"filename"`
 
-	// SourceConnectionContentVersionId ID of the duplicate source connection content version
+	// SourceConnectionContentVersionId ID of the existing, already-indexed item this file duplicates, and what `GET /contents/{id}` takes. Set only when `status` is `duplicate`; `null` on a new upload, which has no such id until it finishes indexing.
 	SourceConnectionContentVersionId *string `json:"source_connection_content_version_id"`
 
-	// Status Processing status
+	// Status `uploaded` for a new item, or `duplicate` when this exact file is already on the source.
 	Status string `json:"status"`
 }
 
@@ -3164,17 +3619,25 @@ type RoutersApiSourcesSourceListResponse struct {
 
 // SchemasModelResponsesPromptModelResponse Response model for prompt model data
 type SchemasModelResponsesPromptModelResponse struct {
-	Default          bool       `json:"default"`
-	DeprecatedAt     *time.Time `json:"deprecated_at"`
-	Description      string     `json:"description"`
-	Enabled          bool       `json:"enabled"`
-	Family           *string    `json:"family"`
-	FamilyGeneration *float32   `json:"family_generation"`
+	// ChatCapable Whether this model can serve a chat request (`prompt_call`, `extract_data`). True for every plain text LLM, and for a dual-capability model that generates media AND holds a conversation; false for a dedicated generator (Imagen, Veo, a TTS voice), which bills per produced unit and has no chat interface. Authoritative: consumers must read this rather than inferring it from `generation_params` or `supported_output_media`, because the answer also depends on which inference interface serves the model — something no response field exposes.
+	ChatCapable  *bool      `json:"chat_capable,omitempty"`
+	Default      bool       `json:"default"`
+	DeprecatedAt *time.Time `json:"deprecated_at"`
+	Description  string     `json:"description"`
 
-	// GenerationCreditsPerUnit Per-unit credit cost for a dedicated media-generation model, in the unit named by ``generation_params.pricing_unit`` (per image / per second / per character / per output token). Multiply by the produced unit count (images, seconds, characters) for the run cost. None for token-billed (non-generation) models.
+	// EffortOptions The reasoning-effort values a model accepts.
+	EffortOptions    *EffortOptionsResponse `json:"effort_options,omitempty"`
+	Enabled          bool                   `json:"enabled"`
+	Family           *string                `json:"family"`
+	FamilyGeneration *float32               `json:"family_generation"`
+
+	// GenerationCreditsPerUnit Per-unit credit cost for a dedicated media-generation model, in the unit named by ``generation_params.pricing_unit`` (per image / per second / per character / per output token). Multiply by the produced unit count (images, seconds, characters) for the run cost. None for models with no generation descriptor. This rate applies when the model is used in a generate_image/audio/video step; a model that also serves the chat path is billed per token there instead, using the input/output token rates on this same record. When `generation_params.price_varies_by` is set the model has one rate per value of that option and this is the **highest** of them — read `generation_credits_per_variant` for the real spread rather than presenting this as the price.
 	GenerationCreditsPerUnit *float32 `json:"generation_credits_per_unit"`
 
-	// GenerationParams Media-generation descriptor (modality, pricing_unit, and modality-specific constraints). NULL for text LLMs; present for image/audio/video generation models. See schemas.generation_params.
+	// GenerationCreditsPerVariant Per-unit credit cost keyed by the value of the option named in `generation_params.price_varies_by` (e.g. `{'720p': 1330, '1080p': 1995}`). None for a model with a single rate, where `generation_credits_per_unit` already describes it exactly.
+	GenerationCreditsPerVariant *map[string]float32 `json:"generation_credits_per_variant"`
+
+	// GenerationParams Media-generation descriptor (modality, pricing_unit, and modality-specific constraints). NULL for text LLMs; present for image/audio/video generation models. See schemas.generation_params. A present descriptor does NOT imply the model is generation-only: some models serve both paths (they generate media AND hold a chat conversation). Read `chat_capable` to tell whether a model with a descriptor can also be used as a chat model — do not branch on this field being non-null alone, and do not re-derive the answer from `supported_output_media`.
 	GenerationParams *map[string]interface{} `json:"generation_params"`
 
 	// GenerationUnitLabel Human suffix for the per-unit generation rate (e.g. ``/image``, ``/second``, ``/1k chars``, ``/1k tokens``) — single-sourced from the pricing unit so clients render cost without re-deriving the mapping. None for non-generation models. Char/token rates are shown per 1,000 (the ``/1k …`` suffix), so scale ``generation_credits_per_unit`` accordingly for those units.
@@ -3182,19 +3645,28 @@ type SchemasModelResponsesPromptModelResponse struct {
 	Id                  string  `json:"id"`
 
 	// ImageGenerationToolCreditsPerImage Per-image credit cost of using the built-in image_generation tool (it runs gpt-image-1). Set only for models that actually support the tool (tool-use capable); None otherwise.
-	ImageGenerationToolCreditsPerImage    *float32 `json:"image_generation_tool_credits_per_image"`
+	ImageGenerationToolCreditsPerImage *float32 `json:"image_generation_tool_credits_per_image"`
+
+	// Input1hCacheWriteCreditsPer1000Tokens Credits per 1,000 input tokens written to a 1-hour prompt cache.
 	Input1hCacheWriteCreditsPer1000Tokens *float32 `json:"input_1h_cache_write_credits_per_1000_tokens"`
+
+	// Input30mCacheWriteCreditsPer1000Tokens Credits per 1,000 input tokens written to a 30-minute prompt cache.
+	Input30mCacheWriteCreditsPer1000Tokens *float32 `json:"input_30m_cache_write_credits_per_1000_tokens"`
+
+	// Input5mCacheWriteCreditsPer1000Tokens Credits per 1,000 input tokens written to a 5-minute prompt cache.
 	Input5mCacheWriteCreditsPer1000Tokens *float32 `json:"input_5m_cache_write_credits_per_1000_tokens"`
-	InputCacheHitCreditsPer1000Tokens     *float32 `json:"input_cache_hit_credits_per_1000_tokens"`
-	InputCreditsPer1000Tokens             *float32 `json:"input_credits_per_1000_tokens"`
-	IsNew                                 *bool    `json:"is_new,omitempty"`
-	LastUsed                              *bool    `json:"last_used,omitempty"`
-	MaxContextTokens                      int      `json:"max_context_tokens"`
-	MaxConversationLength                 int      `json:"max_conversation_length"`
-	MaxOutputTokens                       int      `json:"max_output_tokens"`
-	ModelId                               string   `json:"model_id"`
-	Name                                  string   `json:"name"`
-	OutputCreditsPer1000Tokens            *float32 `json:"output_credits_per_1000_tokens"`
+
+	// InputCacheHitCreditsPer1000Tokens Credits per 1,000 input tokens read from a prompt cache.
+	InputCacheHitCreditsPer1000Tokens *float32 `json:"input_cache_hit_credits_per_1000_tokens"`
+	InputCreditsPer1000Tokens         *float32 `json:"input_credits_per_1000_tokens"`
+	IsNew                             *bool    `json:"is_new,omitempty"`
+	LastUsed                          *bool    `json:"last_used,omitempty"`
+	MaxContextTokens                  int      `json:"max_context_tokens"`
+	MaxConversationLength             int      `json:"max_conversation_length"`
+	MaxOutputTokens                   int      `json:"max_output_tokens"`
+	ModelId                           string   `json:"model_id"`
+	Name                              string   `json:"name"`
+	OutputCreditsPer1000Tokens        *float32 `json:"output_credits_per_1000_tokens"`
 
 	// PayloadSchema Model-specific JSON schema for advanced prompt_call json_template payloads.
 	PayloadSchema *map[string]interface{} `json:"payload_schema"`
@@ -4040,6 +4512,80 @@ type UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams struct {
 	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
+// ListCloudDrivesApiApiCloudDrivesGetParams defines parameters for ListCloudDrivesApiApiCloudDrivesGet.
+type ListCloudDrivesApiApiCloudDrivesGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// ListCloudDriveProvidersApiApiCloudDrivesProvidersGetParams defines parameters for ListCloudDriveProvidersApiApiCloudDrivesProvidersGet.
+type ListCloudDriveProvidersApiApiCloudDrivesProvidersGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteParams defines parameters for DeleteCloudDriveApiApiCloudDrivesConnectionIdDelete.
+type DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// GetCloudDriveApiApiCloudDrivesConnectionIdGetParams defines parameters for GetCloudDriveApiApiCloudDrivesConnectionIdGet.
+type GetCloudDriveApiApiCloudDrivesConnectionIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams defines parameters for UpdateCloudDriveApiApiCloudDrivesConnectionIdPatch.
+type UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetParams defines parameters for GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGet.
+type GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostParams defines parameters for DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPost.
+type DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetParams defines parameters for ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGet.
+type ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
 // DeleteContentApiContentsSourceConnectionContentVersionDeleteParams defines parameters for DeleteContentApiContentsSourceConnectionContentVersionDelete.
 type DeleteContentApiContentsSourceConnectionContentVersionDeleteParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -4524,6 +5070,18 @@ type MarkReadApiModelsAlertsAlertIdReadPatchParams struct {
 	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
+// ListEmbeddingModelsApiModelsEmbeddersGetParams defines parameters for ListEmbeddingModelsApiModelsEmbeddersGet.
+type ListEmbeddingModelsApiModelsEmbeddersGetParams struct {
+	// SupportsInputMedia Filter to embedders that can index this input modality — a coarse kind (text, image, video, audio) or a full MIME.
+	SupportsInputMedia *string `form:"supports_input_media,omitempty" json:"supports_input_media,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
 // GetGenerationTiersApiModelsGenerationTiersGetParams defines parameters for GetGenerationTiersApiModelsGenerationTiersGet.
 type GetGenerationTiersApiModelsGenerationTiersGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -4586,6 +5144,15 @@ type GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetParams struct {
 
 // CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams defines parameters for CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost.
 type CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// ListRerankerModelsApiModelsRerankersGetParams defines parameters for ListRerankerModelsApiModelsRerankersGet.
+type ListRerankerModelsApiModelsRerankersGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 
@@ -4899,6 +5466,42 @@ type UpdateSourceApiSourcesSourceConnectionIdPutParams struct {
 	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
+// ListSourceContentsApiSourcesSourceConnectionIdContentsGetParams defines parameters for ListSourceContentsApiSourcesSourceConnectionIdContentsGet.
+type ListSourceContentsApiSourcesSourceConnectionIdContentsGetParams struct {
+	// Page Page number
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Sort Sort field (created_at/title/status)
+	Sort *string `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Order Sort order
+	Order *string `form:"order,omitempty" json:"order,omitempty"`
+
+	// Status Filter to one status: pending, fetching, transcribing, scanning, indexing, completed, or failed. Use `failed` to list only the items that could not be indexed.
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+
+	// ContentVersionId Filter to specific content versions, repeatable. Pass the `content_version_id` values returned by the upload endpoints to poll exactly the items you uploaded in a single request. The ids travel in the query string, so keep a request to about 100: a URL longer than 8,192 bytes is rejected before it reaches the API. The API itself accepts at most 500 — beyond either limit, split the poll or page through the unfiltered listing.
+	ContentVersionId *[]openapi_types.UUID `form:"content_version_id,omitempty" json:"content_version_id,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams defines parameters for GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet.
+type GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
 // GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams defines parameters for GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet.
 type GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -5116,6 +5719,9 @@ type AddAlertCommentApiAlertsAlertIdCommentsPostJSONRequestBody = RoutersApiAler
 
 // ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody defines body for ChangeAlertStatusApiAlertsAlertIdStatusPost for application/json ContentType.
 type ChangeAlertStatusApiAlertsAlertIdStatusPostJSONRequestBody = ChangeStatusRequest
+
+// UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchJSONRequestBody defines body for UpdateCloudDriveApiApiCloudDrivesConnectionIdPatch for application/json ContentType.
+type UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchJSONRequestBody = CloudDriveUpdateRequest
 
 // ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody defines body for ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut for application/json ContentType.
 type ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody = InlineTextReplaceRequest
@@ -5631,6 +6237,32 @@ type ClientInterface interface {
 	// UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost request
 	UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context.Context, alertId string, params *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListCloudDrivesApiApiCloudDrivesGet request
+	ListCloudDrivesApiApiCloudDrivesGet(ctx context.Context, params *ListCloudDrivesApiApiCloudDrivesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListCloudDriveProvidersApiApiCloudDrivesProvidersGet request
+	ListCloudDriveProvidersApiApiCloudDrivesProvidersGet(ctx context.Context, params *ListCloudDriveProvidersApiApiCloudDrivesProvidersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteCloudDriveApiApiCloudDrivesConnectionIdDelete request
+	DeleteCloudDriveApiApiCloudDrivesConnectionIdDelete(ctx context.Context, connectionId openapi_types.UUID, params *DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetCloudDriveApiApiCloudDrivesConnectionIdGet request
+	GetCloudDriveApiApiCloudDrivesConnectionIdGet(ctx context.Context, connectionId openapi_types.UUID, params *GetCloudDriveApiApiCloudDrivesConnectionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithBody request with any body
+	UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithBody(ctx context.Context, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateCloudDriveApiApiCloudDrivesConnectionIdPatch(ctx context.Context, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, body UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGet request
+	GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGet(ctx context.Context, connectionId openapi_types.UUID, params *GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPost request
+	DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPost(ctx context.Context, connectionId openapi_types.UUID, params *DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGet request
+	ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGet(ctx context.Context, connectionId openapi_types.UUID, params *ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteContentApiContentsSourceConnectionContentVersionDelete request
 	DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5785,6 +6417,9 @@ type ClientInterface interface {
 	// MarkReadApiModelsAlertsAlertIdReadPatch request
 	MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListEmbeddingModelsApiModelsEmbeddersGet request
+	ListEmbeddingModelsApiModelsEmbeddersGet(ctx context.Context, params *ListEmbeddingModelsApiModelsEmbeddersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetGenerationTiersApiModelsGenerationTiersGet request
 	GetGenerationTiersApiModelsGenerationTiersGet(ctx context.Context, params *GetGenerationTiersApiModelsGenerationTiersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5804,6 +6439,9 @@ type ClientInterface interface {
 
 	// CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost request
 	CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost(ctx context.Context, experimentId openapi_types.UUID, params *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRerankerModelsApiModelsRerankersGet request
+	ListRerankerModelsApiModelsRerankersGet(ctx context.Context, params *ListRerankerModelsApiModelsRerankersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetModelApiModelsModelIdDetailsGet request
 	GetModelApiModelsModelIdDetailsGet(ctx context.Context, modelId string, params *GetModelApiModelsModelIdDetailsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5922,6 +6560,12 @@ type ClientInterface interface {
 	UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSourceContentsApiSourcesSourceConnectionIdContentsGet request
+	ListSourceContentsApiSourcesSourceConnectionIdContentsGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceContentsApiSourcesSourceConnectionIdContentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet request
+	GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, contentVersionId openapi_types.UUID, params *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet request
 	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7186,6 +7830,114 @@ func (c *Client) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePost(ctx context
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListCloudDrivesApiApiCloudDrivesGet(ctx context.Context, params *ListCloudDrivesApiApiCloudDrivesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListCloudDrivesApiApiCloudDrivesGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListCloudDriveProvidersApiApiCloudDrivesProvidersGet(ctx context.Context, params *ListCloudDriveProvidersApiApiCloudDrivesProvidersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListCloudDriveProvidersApiApiCloudDrivesProvidersGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteCloudDriveApiApiCloudDrivesConnectionIdDelete(ctx context.Context, connectionId openapi_types.UUID, params *DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteRequest(c.Server, connectionId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetCloudDriveApiApiCloudDrivesConnectionIdGet(ctx context.Context, connectionId openapi_types.UUID, params *GetCloudDriveApiApiCloudDrivesConnectionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCloudDriveApiApiCloudDrivesConnectionIdGetRequest(c.Server, connectionId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithBody(ctx context.Context, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchRequestWithBody(c.Server, connectionId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateCloudDriveApiApiCloudDrivesConnectionIdPatch(ctx context.Context, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, body UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchRequest(c.Server, connectionId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGet(ctx context.Context, connectionId openapi_types.UUID, params *GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetRequest(c.Server, connectionId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPost(ctx context.Context, connectionId openapi_types.UUID, params *DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostRequest(c.Server, connectionId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGet(ctx context.Context, connectionId openapi_types.UUID, params *ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetRequest(c.Server, connectionId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx context.Context, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(c.Server, sourceConnectionContentVersion, params)
 	if err != nil {
@@ -7846,6 +8598,18 @@ func (c *Client) MarkReadApiModelsAlertsAlertIdReadPatch(ctx context.Context, al
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListEmbeddingModelsApiModelsEmbeddersGet(ctx context.Context, params *ListEmbeddingModelsApiModelsEmbeddersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEmbeddingModelsApiModelsEmbeddersGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetGenerationTiersApiModelsGenerationTiersGet(ctx context.Context, params *GetGenerationTiersApiModelsGenerationTiersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetGenerationTiersApiModelsGenerationTiersGetRequest(c.Server, params)
 	if err != nil {
@@ -7920,6 +8684,18 @@ func (c *Client) GetExperimentApiModelsPlaygroundExperimentsExperimentIdGet(ctx 
 
 func (c *Client) CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPost(ctx context.Context, experimentId openapi_types.UUID, params *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostRequest(c.Server, experimentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRerankerModelsApiModelsRerankersGet(ctx context.Context, params *ListRerankerModelsApiModelsRerankersGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRerankerModelsApiModelsRerankersGetRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -8460,6 +9236,30 @@ func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPutWithBody(ctx context
 
 func (c *Client) UpdateSourceApiSourcesSourceConnectionIdPut(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateSourceApiSourcesSourceConnectionIdPutRequest(c.Server, sourceConnectionId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListSourceContentsApiSourcesSourceConnectionIdContentsGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceContentsApiSourcesSourceConnectionIdContentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSourceContentsApiSourcesSourceConnectionIdContentsGetRequest(c.Server, sourceConnectionId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, contentVersionId openapi_types.UUID, params *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetRequest(c.Server, sourceConnectionId, contentVersionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -14391,6 +15191,507 @@ func NewUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostRequest(server string
 	return req, nil
 }
 
+// NewListCloudDrivesApiApiCloudDrivesGetRequest generates requests for ListCloudDrivesApiApiCloudDrivesGet
+func NewListCloudDrivesApiApiCloudDrivesGetRequest(server string, params *ListCloudDrivesApiApiCloudDrivesGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cloud-drives")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListCloudDriveProvidersApiApiCloudDrivesProvidersGetRequest generates requests for ListCloudDriveProvidersApiApiCloudDrivesProvidersGet
+func NewListCloudDriveProvidersApiApiCloudDrivesProvidersGetRequest(server string, params *ListCloudDriveProvidersApiApiCloudDrivesProvidersGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cloud-drives/providers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteRequest generates requests for DeleteCloudDriveApiApiCloudDrivesConnectionIdDelete
+func NewDeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteRequest(server string, connectionId openapi_types.UUID, params *DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "connection_id", runtime.ParamLocationPath, connectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cloud-drives/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetCloudDriveApiApiCloudDrivesConnectionIdGetRequest generates requests for GetCloudDriveApiApiCloudDrivesConnectionIdGet
+func NewGetCloudDriveApiApiCloudDrivesConnectionIdGetRequest(server string, connectionId openapi_types.UUID, params *GetCloudDriveApiApiCloudDrivesConnectionIdGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "connection_id", runtime.ParamLocationPath, connectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cloud-drives/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchRequest calls the generic UpdateCloudDriveApiApiCloudDrivesConnectionIdPatch builder with application/json body
+func NewUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchRequest(server string, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, body UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchRequestWithBody(server, connectionId, params, "application/json", bodyReader)
+}
+
+// NewUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchRequestWithBody generates requests for UpdateCloudDriveApiApiCloudDrivesConnectionIdPatch with any type of body
+func NewUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchRequestWithBody(server string, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "connection_id", runtime.ParamLocationPath, connectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cloud-drives/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PATCH", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetRequest generates requests for GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGet
+func NewGetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetRequest(server string, connectionId openapi_types.UUID, params *GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "connection_id", runtime.ParamLocationPath, connectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cloud-drives/%s/agents", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostRequest generates requests for DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPost
+func NewDisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostRequest(server string, connectionId openapi_types.UUID, params *DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "connection_id", runtime.ParamLocationPath, connectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cloud-drives/%s/disconnect", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetRequest generates requests for ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGet
+func NewListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetRequest(server string, connectionId openapi_types.UUID, params *ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "connection_id", runtime.ParamLocationPath, connectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/cloud-drives/%s/rejections", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest generates requests for DeleteContentApiContentsSourceConnectionContentVersionDelete
 func NewDeleteContentApiContentsSourceConnectionContentVersionDeleteRequest(server string, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams) (*http.Request, error) {
 	var err error
@@ -17633,6 +18934,81 @@ func NewMarkReadApiModelsAlertsAlertIdReadPatchRequest(server string, alertId op
 	return req, nil
 }
 
+// NewListEmbeddingModelsApiModelsEmbeddersGetRequest generates requests for ListEmbeddingModelsApiModelsEmbeddersGet
+func NewListEmbeddingModelsApiModelsEmbeddersGetRequest(server string, params *ListEmbeddingModelsApiModelsEmbeddersGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/embedders")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.SupportsInputMedia != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "supports_input_media", runtime.ParamLocationQuery, *params.SupportsInputMedia); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetGenerationTiersApiModelsGenerationTiersGetRequest generates requests for GetGenerationTiersApiModelsGenerationTiersGet
 func NewGetGenerationTiersApiModelsGenerationTiersGetRequest(server string, params *GetGenerationTiersApiModelsGenerationTiersGetParams) (*http.Request, error) {
 	var err error
@@ -18038,6 +19414,59 @@ func NewCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancel
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListRerankerModelsApiModelsRerankersGetRequest generates requests for ListRerankerModelsApiModelsRerankersGet
+func NewListRerankerModelsApiModelsRerankersGetRequest(server string, params *ListRerankerModelsApiModelsRerankersGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/models/rerankers")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -20266,6 +21695,235 @@ func NewUpdateSourceApiSourcesSourceConnectionIdPutRequestWithBody(server string
 	return req, nil
 }
 
+// NewListSourceContentsApiSourcesSourceConnectionIdContentsGetRequest generates requests for ListSourceContentsApiSourcesSourceConnectionIdContentsGet
+func NewListSourceContentsApiSourcesSourceConnectionIdContentsGetRequest(server string, sourceConnectionId openapi_types.UUID, params *ListSourceContentsApiSourcesSourceConnectionIdContentsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/contents", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "sort", runtime.ParamLocationQuery, *params.Sort); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Order != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "order", runtime.ParamLocationQuery, *params.Order); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.ContentVersionId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "content_version_id", runtime.ParamLocationQuery, *params.ContentVersionId); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetRequest generates requests for GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet
+func NewGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetRequest(server string, sourceConnectionId openapi_types.UUID, contentVersionId openapi_types.UUID, params *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "content_version_id", runtime.ParamLocationPath, contentVersionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/contents/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest generates requests for GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet
 func NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest(server string, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams) (*http.Request, error) {
 	var err error
@@ -21558,6 +23216,32 @@ type ClientWithResponsesInterface interface {
 	// UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse request
 	UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostWithResponse(ctx context.Context, alertId string, params *UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostParams, reqEditors ...RequestEditorFn) (*UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse, error)
 
+	// ListCloudDrivesApiApiCloudDrivesGetWithResponse request
+	ListCloudDrivesApiApiCloudDrivesGetWithResponse(ctx context.Context, params *ListCloudDrivesApiApiCloudDrivesGetParams, reqEditors ...RequestEditorFn) (*ListCloudDrivesApiApiCloudDrivesGetResponse, error)
+
+	// ListCloudDriveProvidersApiApiCloudDrivesProvidersGetWithResponse request
+	ListCloudDriveProvidersApiApiCloudDrivesProvidersGetWithResponse(ctx context.Context, params *ListCloudDriveProvidersApiApiCloudDrivesProvidersGetParams, reqEditors ...RequestEditorFn) (*ListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse, error)
+
+	// DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteWithResponse request
+	DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse, error)
+
+	// GetCloudDriveApiApiCloudDrivesConnectionIdGetWithResponse request
+	GetCloudDriveApiApiCloudDrivesConnectionIdGetWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *GetCloudDriveApiApiCloudDrivesConnectionIdGetParams, reqEditors ...RequestEditorFn) (*GetCloudDriveApiApiCloudDrivesConnectionIdGetResponse, error)
+
+	// UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithBodyWithResponse request with any body
+	UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithBodyWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse, error)
+
+	UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, body UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse, error)
+
+	// GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetWithResponse request
+	GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetParams, reqEditors ...RequestEditorFn) (*GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse, error)
+
+	// DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostWithResponse request
+	DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostParams, reqEditors ...RequestEditorFn) (*DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse, error)
+
+	// ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetWithResponse request
+	ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse, error)
+
 	// DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request
 	DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error)
 
@@ -21712,6 +23396,9 @@ type ClientWithResponsesInterface interface {
 	// MarkReadApiModelsAlertsAlertIdReadPatchWithResponse request
 	MarkReadApiModelsAlertsAlertIdReadPatchWithResponse(ctx context.Context, alertId openapi_types.UUID, params *MarkReadApiModelsAlertsAlertIdReadPatchParams, reqEditors ...RequestEditorFn) (*MarkReadApiModelsAlertsAlertIdReadPatchResponse, error)
 
+	// ListEmbeddingModelsApiModelsEmbeddersGetWithResponse request
+	ListEmbeddingModelsApiModelsEmbeddersGetWithResponse(ctx context.Context, params *ListEmbeddingModelsApiModelsEmbeddersGetParams, reqEditors ...RequestEditorFn) (*ListEmbeddingModelsApiModelsEmbeddersGetResponse, error)
+
 	// GetGenerationTiersApiModelsGenerationTiersGetWithResponse request
 	GetGenerationTiersApiModelsGenerationTiersGetWithResponse(ctx context.Context, params *GetGenerationTiersApiModelsGenerationTiersGetParams, reqEditors ...RequestEditorFn) (*GetGenerationTiersApiModelsGenerationTiersGetResponse, error)
 
@@ -21731,6 +23418,9 @@ type ClientWithResponsesInterface interface {
 
 	// CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostWithResponse request
 	CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostWithResponse(ctx context.Context, experimentId openapi_types.UUID, params *CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostParams, reqEditors ...RequestEditorFn) (*CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse, error)
+
+	// ListRerankerModelsApiModelsRerankersGetWithResponse request
+	ListRerankerModelsApiModelsRerankersGetWithResponse(ctx context.Context, params *ListRerankerModelsApiModelsRerankersGetParams, reqEditors ...RequestEditorFn) (*ListRerankerModelsApiModelsRerankersGetResponse, error)
 
 	// GetModelApiModelsModelIdDetailsGetWithResponse request
 	GetModelApiModelsModelIdDetailsGetWithResponse(ctx context.Context, modelId string, params *GetModelApiModelsModelIdDetailsGetParams, reqEditors ...RequestEditorFn) (*GetModelApiModelsModelIdDetailsGetResponse, error)
@@ -21850,6 +23540,12 @@ type ClientWithResponsesInterface interface {
 
 	UpdateSourceApiSourcesSourceConnectionIdPutWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *UpdateSourceApiSourcesSourceConnectionIdPutParams, body UpdateSourceApiSourcesSourceConnectionIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateSourceApiSourcesSourceConnectionIdPutResponse, error)
 
+	// ListSourceContentsApiSourcesSourceConnectionIdContentsGetWithResponse request
+	ListSourceContentsApiSourcesSourceConnectionIdContentsGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceContentsApiSourcesSourceConnectionIdContentsGetParams, reqEditors ...RequestEditorFn) (*ListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse, error)
+
+	// GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetWithResponse request
+	GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentVersionId openapi_types.UUID, params *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams, reqEditors ...RequestEditorFn) (*GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse, error)
+
 	// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse request
 	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error)
 
@@ -21906,6 +23602,7 @@ type ListAgentsApiAgentsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAgentsAgentListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -21929,6 +23626,7 @@ type CreateAgentApiAgentsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *AgentSummaryResponse
 	JSON422      *AgentDefinitionImportErrorResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -21952,6 +23650,7 @@ type ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentEmailOptOutListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -21974,6 +23673,7 @@ type RemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteResponse s
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -21997,6 +23697,7 @@ type ListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *BlockedEmailSenderListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22020,6 +23721,7 @@ type BlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *BlockedEmailSenderResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22043,6 +23745,7 @@ type SetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *BlockedEmailSenderListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22065,6 +23768,7 @@ type UnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteResponse st
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22087,6 +23791,7 @@ type DeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteResponse
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22110,6 +23815,7 @@ type GetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse struc
 	HTTPResponse *http.Response
 	JSON200      *EvaluationCriteriaResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22133,6 +23839,7 @@ type UpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResponse 
 	HTTPResponse *http.Response
 	JSON200      *EvaluationCriteriaResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22156,6 +23863,7 @@ type ListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsGetRes
 	HTTPResponse *http.Response
 	JSON200      *CompatibleRunListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22179,6 +23887,7 @@ type ListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetRespons
 	HTTPResponse *http.Response
 	JSON200      *EvaluationResultListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22202,6 +23911,7 @@ type CreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPostRespo
 	HTTPResponse *http.Response
 	JSON201      *EvaluationResultResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22225,6 +23935,7 @@ type GetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetResponse
 	HTTPResponse *http.Response
 	JSON200      *EvaluationResultSummaryResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22248,6 +23959,7 @@ type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetR
 	HTTPResponse *http.Response
 	JSON200      *SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22271,6 +23983,7 @@ type ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse str
 	HTTPResponse *http.Response
 	JSON200      *[]InboundEmailRejectionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22293,6 +24006,7 @@ type GetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *InboundEmailStatusResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22315,6 +24029,7 @@ type CancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostResponse
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *CancelQueuedRunsResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22337,6 +24052,7 @@ type ResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ResumeInboundResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22360,6 +24076,7 @@ type PreviewImportAgentApiAgentsPreviewImportPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAgentsAgentImportPreviewResponse
 	JSON422      *AgentDefinitionImportErrorResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22383,6 +24100,7 @@ type SearchAgentRunsApiAgentsRunsSearchPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentTraceSearchResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22406,6 +24124,7 @@ type DeleteAgentRunApiAgentsRunsRunIdDeleteResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentRunResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22429,6 +24148,7 @@ type GetAgentRunApiAgentsRunsRunIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentRunResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22451,6 +24171,7 @@ type DeleteAgentApiAgentsAgentIdDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22474,6 +24195,7 @@ type GetAgentMetadataApiAgentsAgentIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentSummaryResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22497,6 +24219,7 @@ type UpdateAgentApiAgentsAgentIdPutResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentSummaryResponse
 	JSON422      *AgentDefinitionImportErrorResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22520,6 +24243,7 @@ type GetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetResponse
 	HTTPResponse *http.Response
 	JSON200      *AiConversationHistoryResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22543,6 +24267,7 @@ type GenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse stru
 	HTTPResponse *http.Response
 	JSON200      *GenerateAgentStepsResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22566,6 +24291,7 @@ type GenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse struct 
 	HTTPResponse *http.Response
 	JSON200      *GenerateStepConfigResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22589,6 +24315,7 @@ type MarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse stru
 	HTTPResponse *http.Response
 	JSON200      *OkResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22612,6 +24339,7 @@ type ApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGetRespo
 	HTTPResponse *http.Response
 	JSON200      *AgentAttachmentRefsApiResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22635,6 +24363,7 @@ type GetAgentCallersApiApiAgentsAgentIdCallersGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *[]AgentCallerApiResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22658,6 +24387,7 @@ type GetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentDefinitionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22681,6 +24411,7 @@ type UpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentDefinitionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22704,6 +24435,7 @@ type DisableAgentApiApiAgentsAgentIdDisablePostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentSummaryResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22727,6 +24459,7 @@ type EnableAgentApiApiAgentsAgentIdEnablePostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentSummaryResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22750,6 +24483,7 @@ type ListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse struct 
 	HTTPResponse *http.Response
 	JSON200      *[]EvaluationCriteriaResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22773,6 +24507,7 @@ type CreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse stru
 	HTTPResponse *http.Response
 	JSON201      *EvaluationCriteriaResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22796,6 +24531,7 @@ type TestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResponse 
 	HTTPResponse *http.Response
 	JSON200      *TestDraftEvaluationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22819,6 +24555,7 @@ type ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse stru
 	HTTPResponse *http.Response
 	JSON200      *EvaluationResultWithCriteriaListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22842,6 +24579,7 @@ type ListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *EvaluationRunSummaryListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22865,6 +24603,7 @@ type ExportAgentApiAgentsAgentIdExportGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AgentExportResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22888,6 +24627,7 @@ type ApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetResponse
 	HTTPResponse *http.Response
 	JSON200      *UploadAgentInputApiResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22911,6 +24651,7 @@ type ListAgentRunsApiAgentsAgentIdRunsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAgentsAgentRunListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22935,6 +24676,7 @@ type RunAgentApiAgentsAgentIdRunsPostResponse struct {
 	JSON200      *AgentRunResponse
 	JSON402      *InsufficientCreditsResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22959,6 +24701,7 @@ type RunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse struct {
 	JSON200      *interface{}
 	JSON402      *InsufficientCreditsResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -22982,6 +24725,7 @@ type ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRespon
 	HTTPResponse *http.Response
 	JSON200      *[]EvaluationResultWithCriteriaResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23005,6 +24749,7 @@ type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResp
 	HTTPResponse *http.Response
 	JSON200      *EmailTriggerConfigResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23028,6 +24773,7 @@ type ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse struct {
 	HTTPResponse *http.Response
 	JSON202      *UploadAgentInputApiResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23051,6 +24797,7 @@ type ApiAiFeedbackApiAiAssistantFeedbackPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantFeedbackResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23074,6 +24821,7 @@ type ApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23097,6 +24845,7 @@ type ApiAiMemoryBankApiAiAssistantMemoryBankPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *MemoryBankAiAssistantResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23120,6 +24869,7 @@ type ApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetResponse s
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiMemoryBanksMemoryBankLastConversationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23143,6 +24893,7 @@ type ApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchResponse st
 	HTTPResponse *http.Response
 	JSON200      *OkResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23166,6 +24917,7 @@ type ApiAiSolutionApiAiAssistantSolutionPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23189,6 +24941,7 @@ type ApiAiSourceApiAiAssistantSourcePostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23212,6 +24965,7 @@ type ApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantAcceptResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23234,6 +24988,7 @@ type ApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23257,6 +25012,7 @@ type ListAlertsApiAlertsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAlertsAlertListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23280,6 +25036,7 @@ type ListAlertConfigsApiAlertsConfigsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AlertConfigListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23303,6 +25060,7 @@ type CreateAlertConfigApiAlertsConfigsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *AlertConfigResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23325,6 +25083,7 @@ type DeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23348,6 +25107,7 @@ type GetAlertConfigApiAlertsConfigsConfigIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AlertConfigResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23371,6 +25131,7 @@ type UpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *AlertConfigResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23394,6 +25155,7 @@ type ListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResponse 
 	HTTPResponse *http.Response
 	JSON200      *OrganizationAlertPreferenceListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23417,6 +25179,7 @@ type UpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizationIdA
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAlertsOrganizationAlertPreferenceResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23440,6 +25203,7 @@ type GetAlertDetailApiAlertsAlertIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23463,6 +25227,7 @@ type AddAlertCommentApiAlertsAlertIdCommentsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23486,6 +25251,7 @@ type ChangeAlertStatusApiAlertsAlertIdStatusPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23509,6 +25275,7 @@ type SubscribeToAlertApiAlertsAlertIdSubscribePostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23532,6 +25299,7 @@ type UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiAlertsAlertDetailResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23550,10 +25318,201 @@ func (r UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse) StatusCode(
 	return 0
 }
 
+type ListCloudDrivesApiApiCloudDrivesGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]CloudDriveResponseModel
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListCloudDrivesApiApiCloudDrivesGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListCloudDrivesApiApiCloudDrivesGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]CloudDriveProviderResponseModel
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OkResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetCloudDriveApiApiCloudDrivesConnectionIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CloudDriveResponseModel
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCloudDriveApiApiCloudDrivesConnectionIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCloudDriveApiApiCloudDrivesConnectionIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CloudDriveResponseModel
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]AgentUsingCloudDriveResponseModel
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *CloudDriveResponseModel
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]CloudDriveRejectionResponseModel
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23577,6 +25536,7 @@ type GetContentDetailApiContentsSourceConnectionContentVersionGetResponse struct
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiContentsContentDetailResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23600,6 +25560,7 @@ type ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRes
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiContentsFileUploadResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23623,6 +25584,7 @@ type ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiContentsContentEmbeddingsListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23646,6 +25608,7 @@ type UploadFileToContentApiContentsSourceConnectionContentVersionUploadPostRespo
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiContentsFileUploadResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23669,6 +25632,7 @@ type DocsSearchApiDocsSearchGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiDocsSearchDocsSearchResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23691,6 +25655,7 @@ type ListEmailDomainsApiApiEmailDomainsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *EmailDomainsListResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23714,6 +25679,7 @@ type AddEmailDomainApiApiEmailDomainsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *EmailDomainResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23735,6 +25701,7 @@ func (r AddEmailDomainApiApiEmailDomainsPostResponse) StatusCode() int {
 type UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23758,6 +25725,7 @@ type RemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RemoveEmailDomainResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23781,6 +25749,7 @@ type GetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *DmarcSummaryResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23804,6 +25773,7 @@ type SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *EmailDomainResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23827,6 +25797,7 @@ type SendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *SendTestEmailResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23850,6 +25821,7 @@ type VerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *EmailDomainResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23873,6 +25845,7 @@ type GovernanceAiGenerateApiGovernanceAiAssistantPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *GovernanceAiAssistantResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23896,6 +25869,7 @@ type ListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetRespon
 	HTTPResponse *http.Response
 	JSON200      *[]RoutersApiGovernanceGovernanceConversationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23919,6 +25893,7 @@ type GovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResponse 
 	HTTPResponse *http.Response
 	JSON200      *GovernanceAiAcceptResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23941,6 +25916,7 @@ type GovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRespons
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23964,6 +25940,7 @@ type ListKnowledgeBasesApiKnowledgeBasesGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *KnowledgeBaseListResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -23987,6 +25964,7 @@ type CreateKnowledgeBaseApiKnowledgeBasesPostResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *KnowledgeBaseResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24009,6 +25987,7 @@ type DeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24032,6 +26011,7 @@ type GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *KnowledgeBaseResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24055,6 +26035,7 @@ type UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *KnowledgeBaseResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24077,6 +26058,7 @@ type GetMeApiMeGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *MeResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24100,6 +26082,7 @@ type ListMemoryBanksApiMemoryBanksGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *MemoryBankListResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24123,6 +26106,7 @@ type CreateMemoryBankApiMemoryBanksPostResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *MemoryBankResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24146,6 +26130,7 @@ type MemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *MemoryBankAiAssistantResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24169,6 +26154,7 @@ type MemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationGetRes
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiMemoryBanksMemoryBankLastConversationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24192,6 +26178,7 @@ type MemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse stru
 	HTTPResponse *http.Response
 	JSON200      *OkResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24214,6 +26201,7 @@ type ListTemplatesApiMemoryBanksTemplatesGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *interface{}
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24237,6 +26225,7 @@ type TestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse stru
 	HTTPResponse *http.Response
 	JSON200      *CompactionTestResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24259,6 +26248,7 @@ type DeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24282,6 +26272,7 @@ type GetMemoryBankApiMemoryBanksMemoryBankIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *MemoryBankResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24305,6 +26296,7 @@ type UpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *MemoryBankResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24328,6 +26320,7 @@ type GetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *interface{}
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24351,6 +26344,7 @@ type CompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse struct {
 	HTTPResponse *http.Response
 	JSON202      *CompactionScheduledResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24373,6 +26367,7 @@ type DeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse struct
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24396,6 +26391,7 @@ type GetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *map[string]interface{}
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24419,6 +26415,7 @@ type TestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostResponse st
 	HTTPResponse *http.Response
 	JSON200      *CompactionTestResponseModel
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24442,6 +26439,7 @@ type ListModelsApiModelsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *[]SchemasModelResponsesProviderGroupResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24465,6 +26463,7 @@ type ListAlertsApiModelsAlertsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiModelLifecycleModelAlertListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24486,6 +26485,7 @@ func (r ListAlertsApiModelsAlertsGetResponse) StatusCode() int {
 type MarkAllReadApiModelsAlertsMarkAllReadPostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24508,6 +26508,7 @@ type GetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *UnreadCountResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24530,6 +26531,7 @@ type MarkReadApiModelsAlertsAlertIdReadPatchResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24548,10 +26550,35 @@ func (r MarkReadApiModelsAlertsAlertIdReadPatchResponse) StatusCode() int {
 	return 0
 }
 
+type ListEmbeddingModelsApiModelsEmbeddersGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EmbeddingModelListResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListEmbeddingModelsApiModelsEmbeddersGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListEmbeddingModelsApiModelsEmbeddersGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetGenerationTiersApiModelsGenerationTiersGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *GenerationTierListResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24575,6 +26602,7 @@ type ListExperimentsApiModelsPlaygroundExperimentsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *ExperimentListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24598,6 +26626,7 @@ type CreateExperimentApiModelsPlaygroundExperimentsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *CreateExperimentResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24620,6 +26649,7 @@ type DeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDeleteRes
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24643,6 +26673,7 @@ type GetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *ExperimentDetailResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24666,6 +26697,7 @@ type CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPos
 	HTTPResponse *http.Response
 	JSON200      *CancelExperimentResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24684,11 +26716,35 @@ func (r CancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancel
 	return 0
 }
 
+type ListRerankerModelsApiModelsRerankersGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RerankerModelListResponse
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRerankerModelsApiModelsRerankersGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRerankerModelsApiModelsRerankersGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetModelApiModelsModelIdDetailsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *SchemasModelResponsesPromptModelResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24712,6 +26768,7 @@ type GetRecommendationsApiModelsModelIdRecommendationsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiModelLifecycleModelRecommendationsResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24735,6 +26792,7 @@ type SearchApiSearchGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSearchSearchResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24758,6 +26816,7 @@ type ListSolutionsApiSolutionsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24781,6 +26840,7 @@ type CreateSolutionApiSolutionsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24803,6 +26863,7 @@ type DeleteSolutionApiSolutionsSolutionIdDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24826,6 +26887,7 @@ type GetSolutionApiSolutionsSolutionIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24849,6 +26911,7 @@ type UpdateSolutionApiSolutionsSolutionIdPatchResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24872,6 +26935,7 @@ type UnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24895,6 +26959,7 @@ type LinkAgentsApiSolutionsSolutionIdAgentsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24918,6 +26983,7 @@ type AiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostResponse st
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24941,6 +27007,7 @@ type AiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBasePostR
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24964,6 +27031,7 @@ type AiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse struct
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantGenerateResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -24987,6 +27055,7 @@ type AiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAcceptPostR
 	HTTPResponse *http.Response
 	JSON200      *AiAssistantAcceptResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25009,6 +27078,7 @@ type AiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDeclinePos
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25032,6 +27102,7 @@ type ListConversationsApiSolutionsSolutionIdConversationsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *[]RoutersApiSolutionsSolutionConversationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25055,6 +27126,7 @@ type AddConversationTurnApiSolutionsSolutionIdConversationsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *RoutersApiSolutionsSolutionConversationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25077,6 +27149,7 @@ type MarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdPatchR
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25100,6 +27173,7 @@ type UnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse stru
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25123,6 +27197,7 @@ type LinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25146,6 +27221,7 @@ type UnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRespons
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25169,6 +27245,7 @@ type LinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostResponse st
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSolutionsSolutionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25192,6 +27269,7 @@ type ListSourcesApiSourcesGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSourcesSourceListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25215,6 +27293,7 @@ type CreateSourceApiSourcesPostResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *SourceResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25237,6 +27316,7 @@ type DeleteSourceApiSourcesSourceConnectionIdDeleteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25260,6 +27340,7 @@ type GetSourceApiSourcesSourceConnectionIdGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *SourceResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25283,6 +27364,7 @@ type UploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSourcesFileUploadResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25306,6 +27388,7 @@ type UpdateSourceApiSourcesSourceConnectionIdPutResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *SourceResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25324,11 +27407,60 @@ func (r UpdateSourceApiSourcesSourceConnectionIdPutResponse) StatusCode() int {
 	return 0
 }
 
+type ListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SourceContentStatusListResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SourceContentStatusResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *SourceEmbeddingMigrationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25352,6 +27484,7 @@ type StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigration
 	HTTPResponse *http.Response
 	JSON200      *SourceEmbeddingMigrationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25375,6 +27508,7 @@ type CancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigratio
 	HTTPResponse *http.Response
 	JSON200      *SourceEmbeddingMigrationResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25398,6 +27532,7 @@ type ListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *ExportListResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25421,6 +27556,7 @@ type CreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse struct {
 	HTTPResponse *http.Response
 	JSON202      *RoutersApiSourceExportsExportResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25444,6 +27580,7 @@ type EstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostResponse
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSourceExportsEstimateExportResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25466,6 +27603,7 @@ type DeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteResponse
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25489,6 +27627,7 @@ type GetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse struc
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSourceExportsExportResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25512,6 +27651,7 @@ type CancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPostResp
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSourceExportsExportResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25535,6 +27675,7 @@ type DownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloadGetR
 	HTTPResponse *http.Response
 	JSON200      *interface{}
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25558,6 +27699,7 @@ type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *RoutersApiSourcesFileUploadResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25581,6 +27723,7 @@ type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRespons
 	HTTPResponse                        *http.Response
 	ApplicationvndSeclaiManifestJSON200 *openapi_types.File
 	JSON422                             *HTTPValidationError
+	JSON503                             *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25603,6 +27746,7 @@ type GetApiVersionApiVersionGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ApiVersionResponse
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -25626,6 +27770,7 @@ type UpdateApiVersionApiVersionPutResponse struct {
 	HTTPResponse *http.Response
 	JSON200      *ApiVersionResponse
 	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 // Status returns HTTPResponse.Status
@@ -26524,6 +28669,86 @@ func (c *ClientWithResponses) UnsubscribeFromAlertApiAlertsAlertIdUnsubscribePos
 	return ParseUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse(rsp)
 }
 
+// ListCloudDrivesApiApiCloudDrivesGetWithResponse request returning *ListCloudDrivesApiApiCloudDrivesGetResponse
+func (c *ClientWithResponses) ListCloudDrivesApiApiCloudDrivesGetWithResponse(ctx context.Context, params *ListCloudDrivesApiApiCloudDrivesGetParams, reqEditors ...RequestEditorFn) (*ListCloudDrivesApiApiCloudDrivesGetResponse, error) {
+	rsp, err := c.ListCloudDrivesApiApiCloudDrivesGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListCloudDrivesApiApiCloudDrivesGetResponse(rsp)
+}
+
+// ListCloudDriveProvidersApiApiCloudDrivesProvidersGetWithResponse request returning *ListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse
+func (c *ClientWithResponses) ListCloudDriveProvidersApiApiCloudDrivesProvidersGetWithResponse(ctx context.Context, params *ListCloudDriveProvidersApiApiCloudDrivesProvidersGetParams, reqEditors ...RequestEditorFn) (*ListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse, error) {
+	rsp, err := c.ListCloudDriveProvidersApiApiCloudDrivesProvidersGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse(rsp)
+}
+
+// DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteWithResponse request returning *DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse
+func (c *ClientWithResponses) DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteParams, reqEditors ...RequestEditorFn) (*DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse, error) {
+	rsp, err := c.DeleteCloudDriveApiApiCloudDrivesConnectionIdDelete(ctx, connectionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse(rsp)
+}
+
+// GetCloudDriveApiApiCloudDrivesConnectionIdGetWithResponse request returning *GetCloudDriveApiApiCloudDrivesConnectionIdGetResponse
+func (c *ClientWithResponses) GetCloudDriveApiApiCloudDrivesConnectionIdGetWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *GetCloudDriveApiApiCloudDrivesConnectionIdGetParams, reqEditors ...RequestEditorFn) (*GetCloudDriveApiApiCloudDrivesConnectionIdGetResponse, error) {
+	rsp, err := c.GetCloudDriveApiApiCloudDrivesConnectionIdGet(ctx, connectionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCloudDriveApiApiCloudDrivesConnectionIdGetResponse(rsp)
+}
+
+// UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithBodyWithResponse request with arbitrary body returning *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse
+func (c *ClientWithResponses) UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithBodyWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse, error) {
+	rsp, err := c.UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithBody(ctx, connectionId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchParams, body UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse, error) {
+	rsp, err := c.UpdateCloudDriveApiApiCloudDrivesConnectionIdPatch(ctx, connectionId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse(rsp)
+}
+
+// GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetWithResponse request returning *GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse
+func (c *ClientWithResponses) GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetParams, reqEditors ...RequestEditorFn) (*GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse, error) {
+	rsp, err := c.GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGet(ctx, connectionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse(rsp)
+}
+
+// DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostWithResponse request returning *DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse
+func (c *ClientWithResponses) DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostParams, reqEditors ...RequestEditorFn) (*DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse, error) {
+	rsp, err := c.DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPost(ctx, connectionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse(rsp)
+}
+
+// ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetWithResponse request returning *ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse
+func (c *ClientWithResponses) ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetWithResponse(ctx context.Context, connectionId openapi_types.UUID, params *ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse, error) {
+	rsp, err := c.ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGet(ctx, connectionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse(rsp)
+}
+
 // DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse request returning *DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse
 func (c *ClientWithResponses) DeleteContentApiContentsSourceConnectionContentVersionDeleteWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *DeleteContentApiContentsSourceConnectionContentVersionDeleteParams, reqEditors ...RequestEditorFn) (*DeleteContentApiContentsSourceConnectionContentVersionDeleteResponse, error) {
 	rsp, err := c.DeleteContentApiContentsSourceConnectionContentVersionDelete(ctx, sourceConnectionContentVersion, params, reqEditors...)
@@ -27008,6 +29233,15 @@ func (c *ClientWithResponses) MarkReadApiModelsAlertsAlertIdReadPatchWithRespons
 	return ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse(rsp)
 }
 
+// ListEmbeddingModelsApiModelsEmbeddersGetWithResponse request returning *ListEmbeddingModelsApiModelsEmbeddersGetResponse
+func (c *ClientWithResponses) ListEmbeddingModelsApiModelsEmbeddersGetWithResponse(ctx context.Context, params *ListEmbeddingModelsApiModelsEmbeddersGetParams, reqEditors ...RequestEditorFn) (*ListEmbeddingModelsApiModelsEmbeddersGetResponse, error) {
+	rsp, err := c.ListEmbeddingModelsApiModelsEmbeddersGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListEmbeddingModelsApiModelsEmbeddersGetResponse(rsp)
+}
+
 // GetGenerationTiersApiModelsGenerationTiersGetWithResponse request returning *GetGenerationTiersApiModelsGenerationTiersGetResponse
 func (c *ClientWithResponses) GetGenerationTiersApiModelsGenerationTiersGetWithResponse(ctx context.Context, params *GetGenerationTiersApiModelsGenerationTiersGetParams, reqEditors ...RequestEditorFn) (*GetGenerationTiersApiModelsGenerationTiersGetResponse, error) {
 	rsp, err := c.GetGenerationTiersApiModelsGenerationTiersGet(ctx, params, reqEditors...)
@@ -27068,6 +29302,15 @@ func (c *ClientWithResponses) CancelExperimentEndpointApiModelsPlaygroundExperim
 		return nil, err
 	}
 	return ParseCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCancelPostResponse(rsp)
+}
+
+// ListRerankerModelsApiModelsRerankersGetWithResponse request returning *ListRerankerModelsApiModelsRerankersGetResponse
+func (c *ClientWithResponses) ListRerankerModelsApiModelsRerankersGetWithResponse(ctx context.Context, params *ListRerankerModelsApiModelsRerankersGetParams, reqEditors ...RequestEditorFn) (*ListRerankerModelsApiModelsRerankersGetResponse, error) {
+	rsp, err := c.ListRerankerModelsApiModelsRerankersGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRerankerModelsApiModelsRerankersGetResponse(rsp)
 }
 
 // GetModelApiModelsModelIdDetailsGetWithResponse request returning *GetModelApiModelsModelIdDetailsGetResponse
@@ -27458,6 +29701,24 @@ func (c *ClientWithResponses) UpdateSourceApiSourcesSourceConnectionIdPutWithRes
 	return ParseUpdateSourceApiSourcesSourceConnectionIdPutResponse(rsp)
 }
 
+// ListSourceContentsApiSourcesSourceConnectionIdContentsGetWithResponse request returning *ListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse
+func (c *ClientWithResponses) ListSourceContentsApiSourcesSourceConnectionIdContentsGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListSourceContentsApiSourcesSourceConnectionIdContentsGetParams, reqEditors ...RequestEditorFn) (*ListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse, error) {
+	rsp, err := c.ListSourceContentsApiSourcesSourceConnectionIdContentsGet(ctx, sourceConnectionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse(rsp)
+}
+
+// GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetWithResponse request returning *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse
+func (c *ClientWithResponses) GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentVersionId openapi_types.UUID, params *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams, reqEditors ...RequestEditorFn) (*GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse, error) {
+	rsp, err := c.GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet(ctx, sourceConnectionId, contentVersionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse(rsp)
+}
+
 // GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse request returning *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse
 func (c *ClientWithResponses) GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error) {
 	rsp, err := c.GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx, sourceConnectionId, params, reqEditors...)
@@ -27644,6 +29905,13 @@ func ParseListAgentsApiAgentsGetResponse(rsp *http.Response) (*ListAgentsApiAgen
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -27676,6 +29944,13 @@ func ParseCreateAgentApiAgentsPostResponse(rsp *http.Response) (*CreateAgentApiA
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -27710,6 +29985,13 @@ func ParseListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGetResponse(rsp *htt
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -27735,6 +30017,13 @@ func ParseRemoveAgentEmailOptoutApiApiAgentsAgentEmailOptoutsOptoutIdDeleteRespo
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -27769,6 +30058,13 @@ func ParseListBlockedEmailSendersApiApiAgentsBlockedEmailSendersGetResponse(rsp 
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -27801,6 +30097,13 @@ func ParseBlockEmailSenderApiApiAgentsBlockedEmailSendersPostResponse(rsp *http.
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -27835,6 +30138,13 @@ func ParseSetAutoBlockModeApiApiAgentsBlockedEmailSendersModePutResponse(rsp *ht
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -27861,6 +30171,13 @@ func ParseUnblockEmailSenderApiApiAgentsBlockedEmailSendersBlockedIdDeleteRespon
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -27886,6 +30203,13 @@ func ParseDeleteEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdDeleteRes
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -27920,6 +30244,13 @@ func ParseGetEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdGetResponse(
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -27952,6 +30283,13 @@ func ParseUpdateEvaluationCriteriaApiAgentsEvaluationCriteriaCriteriaIdPatchResp
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -27986,6 +30324,13 @@ func ParseListCompatibleRunsApiAgentsEvaluationCriteriaCriteriaIdCompatibleRunsG
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28018,6 +30363,13 @@ func ParseListEvaluationResultsApiAgentsEvaluationCriteriaCriteriaIdResultsGetRe
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28052,6 +30404,13 @@ func ParseCreateEvaluationResultApiAgentsEvaluationCriteriaCriteriaIdResultsPost
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28084,6 +30443,13 @@ func ParseGetEvaluationSummaryApiAgentsEvaluationCriteriaCriteriaIdSummaryGetRes
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28118,6 +30484,13 @@ func ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummar
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28151,6 +30524,13 @@ func ParseListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetRespons
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28176,6 +30556,13 @@ func ParseGetInboundEmailStatusApiApiAgentsInboundEmailStatusGetResponse(rsp *ht
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28203,6 +30590,13 @@ func ParseCancelQueuedEmailRunsApiApiAgentsInboundEmailStatusCancelQueuedPostRes
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28228,6 +30622,13 @@ func ParseResumeInboundEmailApiApiAgentsInboundEmailStatusResumePostResponse(rsp
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28262,6 +30663,13 @@ func ParsePreviewImportAgentApiAgentsPreviewImportPostResponse(rsp *http.Respons
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28294,6 +30702,13 @@ func ParseSearchAgentRunsApiAgentsRunsSearchPostResponse(rsp *http.Response) (*S
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28328,6 +30743,13 @@ func ParseDeleteAgentRunApiAgentsRunsRunIdDeleteResponse(rsp *http.Response) (*D
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28361,6 +30783,13 @@ func ParseGetAgentRunApiAgentsRunsRunIdGetResponse(rsp *http.Response) (*GetAgen
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28386,6 +30815,13 @@ func ParseDeleteAgentApiAgentsAgentIdDeleteResponse(rsp *http.Response) (*Delete
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28420,6 +30856,13 @@ func ParseGetAgentMetadataApiAgentsAgentIdGetResponse(rsp *http.Response) (*GetA
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28452,6 +30895,13 @@ func ParseUpdateAgentApiAgentsAgentIdPutResponse(rsp *http.Response) (*UpdateAge
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28486,6 +30936,13 @@ func ParseGetAiConversationHistoryApiAgentsAgentIdAiAssistantConversationsGetRes
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28518,6 +30975,13 @@ func ParseGenerateAgentStepsApiAgentsAgentIdAiAssistantGenerateStepsPostResponse
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28552,6 +31016,13 @@ func ParseGenerateStepConfigApiAgentsAgentIdAiAssistantStepConfigPostResponse(rs
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28584,6 +31055,13 @@ func ParseMarkAiSuggestionApiAgentsAgentIdAiAssistantConversationIdPatchResponse
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28618,6 +31096,13 @@ func ParseApiGetAgentAttachmentReferencesApiAgentsAgentIdAttachmentReferencesGet
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28650,6 +31135,13 @@ func ParseGetAgentCallersApiApiAgentsAgentIdCallersGetResponse(rsp *http.Respons
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28684,6 +31176,13 @@ func ParseGetAgentDefinitionApiAgentsAgentIdDefinitionGetResponse(rsp *http.Resp
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28716,6 +31215,13 @@ func ParseUpdateAgentDefinitionApiAgentsAgentIdDefinitionPutResponse(rsp *http.R
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28750,6 +31256,13 @@ func ParseDisableAgentApiApiAgentsAgentIdDisablePostResponse(rsp *http.Response)
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28782,6 +31295,13 @@ func ParseEnableAgentApiApiAgentsAgentIdEnablePostResponse(rsp *http.Response) (
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28816,6 +31336,13 @@ func ParseListEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaGetResponse(rs
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28848,6 +31375,13 @@ func ParseCreateEvaluationCriteriaApiAgentsAgentIdEvaluationCriteriaPostResponse
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28882,6 +31416,13 @@ func ParseTestDraftEvaluationApiAgentsAgentIdEvaluationCriteriaTestDraftPostResp
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28914,6 +31455,13 @@ func ParseListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -28948,6 +31496,13 @@ func ParseListEvaluationRunsApiAgentsAgentIdEvaluationRunsGetResponse(rsp *http.
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -28980,6 +31535,13 @@ func ParseExportAgentApiAgentsAgentIdExportGetResponse(rsp *http.Response) (*Exp
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29014,6 +31576,13 @@ func ParseApiGetAgentInputUploadStatusApiAgentsAgentIdInputUploadsUploadIdGetRes
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29046,6 +31615,13 @@ func ParseListAgentRunsApiAgentsAgentIdRunsGetResponse(rsp *http.Response) (*Lis
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29087,6 +31663,13 @@ func ParseRunAgentApiAgentsAgentIdRunsPostResponse(rsp *http.Response) (*RunAgen
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29127,6 +31710,13 @@ func ParseRunStreamingAgentApiAgentsAgentIdRunsStreamPostResponse(rsp *http.Resp
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	case rsp.StatusCode == 200:
 		// Content-type (text/event-stream) unsupported
 
@@ -29163,6 +31753,13 @@ func ParseListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetR
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29195,6 +31792,13 @@ func ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPu
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29229,6 +31833,13 @@ func ParseApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse(rsp *http.R
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29261,6 +31872,13 @@ func ParseApiAiFeedbackApiAiAssistantFeedbackPostResponse(rsp *http.Response) (*
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29295,6 +31913,13 @@ func ParseApiAiKnowledgeBaseApiAiAssistantKnowledgeBasePostResponse(rsp *http.Re
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29327,6 +31952,13 @@ func ParseApiAiMemoryBankApiAiAssistantMemoryBankPostResponse(rsp *http.Response
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29361,6 +31993,13 @@ func ParseApiAiMemoryBankHistoryApiAiAssistantMemoryBankLastConversationGetRespo
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29393,6 +32032,13 @@ func ParseApiAiMemoryBankAcceptApiAiAssistantMemoryBankConversationIdPatchRespon
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29427,6 +32073,13 @@ func ParseApiAiSolutionApiAiAssistantSolutionPostResponse(rsp *http.Response) (*
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29459,6 +32112,13 @@ func ParseApiAiSourceApiAiAssistantSourcePostResponse(rsp *http.Response) (*ApiA
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29493,6 +32153,13 @@ func ParseApiAiAcceptApiAiAssistantConversationIdAcceptPostResponse(rsp *http.Re
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29518,6 +32185,13 @@ func ParseApiAiDeclineApiAiAssistantConversationIdDeclinePostResponse(rsp *http.
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29552,6 +32226,13 @@ func ParseListAlertsApiAlertsGetResponse(rsp *http.Response) (*ListAlertsApiAler
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29584,6 +32265,13 @@ func ParseListAlertConfigsApiAlertsConfigsGetResponse(rsp *http.Response) (*List
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29618,6 +32306,13 @@ func ParseCreateAlertConfigApiAlertsConfigsPostResponse(rsp *http.Response) (*Cr
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29643,6 +32338,13 @@ func ParseDeleteAlertConfigApiAlertsConfigsConfigIdDeleteResponse(rsp *http.Resp
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29677,6 +32379,13 @@ func ParseGetAlertConfigApiAlertsConfigsConfigIdGetResponse(rsp *http.Response) 
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29709,6 +32418,13 @@ func ParseUpdateAlertConfigApiAlertsConfigsConfigIdPatchResponse(rsp *http.Respo
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29743,6 +32459,13 @@ func ParseListOrganizationPreferencesApiAlertsOrganizationPreferencesListGetResp
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29775,6 +32498,13 @@ func ParseUpdateOrganizationPreferenceApiAlertsOrganizationPreferencesOrganizati
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29809,6 +32539,13 @@ func ParseGetAlertDetailApiAlertsAlertIdGetResponse(rsp *http.Response) (*GetAle
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29841,6 +32578,13 @@ func ParseAddAlertCommentApiAlertsAlertIdCommentsPostResponse(rsp *http.Response
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29875,6 +32619,13 @@ func ParseChangeAlertStatusApiAlertsAlertIdStatusPostResponse(rsp *http.Response
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29907,6 +32658,13 @@ func ParseSubscribeToAlertApiAlertsAlertIdSubscribePostResponse(rsp *http.Respon
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29941,6 +32699,319 @@ func ParseUnsubscribeFromAlertApiAlertsAlertIdUnsubscribePostResponse(rsp *http.
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListCloudDrivesApiApiCloudDrivesGetResponse parses an HTTP response from a ListCloudDrivesApiApiCloudDrivesGetWithResponse call
+func ParseListCloudDrivesApiApiCloudDrivesGetResponse(rsp *http.Response) (*ListCloudDrivesApiApiCloudDrivesGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListCloudDrivesApiApiCloudDrivesGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []CloudDriveResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse parses an HTTP response from a ListCloudDriveProvidersApiApiCloudDrivesProvidersGetWithResponse call
+func ParseListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse(rsp *http.Response) (*ListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListCloudDriveProvidersApiApiCloudDrivesProvidersGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []CloudDriveProviderResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse parses an HTTP response from a DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteWithResponse call
+func ParseDeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse(rsp *http.Response) (*DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteCloudDriveApiApiCloudDrivesConnectionIdDeleteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OkResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetCloudDriveApiApiCloudDrivesConnectionIdGetResponse parses an HTTP response from a GetCloudDriveApiApiCloudDrivesConnectionIdGetWithResponse call
+func ParseGetCloudDriveApiApiCloudDrivesConnectionIdGetResponse(rsp *http.Response) (*GetCloudDriveApiApiCloudDrivesConnectionIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCloudDriveApiApiCloudDrivesConnectionIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CloudDriveResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse parses an HTTP response from a UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchWithResponse call
+func ParseUpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse(rsp *http.Response) (*UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateCloudDriveApiApiCloudDrivesConnectionIdPatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CloudDriveResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse parses an HTTP response from a GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetWithResponse call
+func ParseGetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse(rsp *http.Response) (*GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentsUsingCloudDriveApiApiCloudDrivesConnectionIdAgentsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []AgentUsingCloudDriveResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse parses an HTTP response from a DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostWithResponse call
+func ParseDisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse(rsp *http.Response) (*DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DisconnectCloudDriveApiApiCloudDrivesConnectionIdDisconnectPostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CloudDriveResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse parses an HTTP response from a ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetWithResponse call
+func ParseListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse(rsp *http.Response) (*ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListCloudDriveRejectionsApiApiCloudDrivesConnectionIdRejectionsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []CloudDriveRejectionResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29966,6 +33037,13 @@ func ParseDeleteContentApiContentsSourceConnectionContentVersionDeleteResponse(r
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30000,6 +33078,13 @@ func ParseGetContentDetailApiContentsSourceConnectionContentVersionGetResponse(r
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30032,6 +33117,13 @@ func ParseReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionP
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30066,6 +33158,13 @@ func ParseListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddin
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30098,6 +33197,13 @@ func ParseUploadFileToContentApiContentsSourceConnectionContentVersionUploadPost
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30132,6 +33238,13 @@ func ParseDocsSearchApiDocsSearchGetResponse(rsp *http.Response) (*DocsSearchApi
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30157,6 +33270,13 @@ func ParseListEmailDomainsApiApiEmailDomainsGetResponse(rsp *http.Response) (*Li
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30191,6 +33311,13 @@ func ParseAddEmailDomainApiApiEmailDomainsPostResponse(rsp *http.Response) (*Add
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30207,6 +33334,16 @@ func ParseUseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse(rsp *http
 	response := &UseSharedDomainApiApiEmailDomainsUseSharedDomainPostResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30239,6 +33376,13 @@ func ParseRemoveEmailDomainApiApiEmailDomainsDomainIdDeleteResponse(rsp *http.Re
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30273,6 +33417,13 @@ func ParseGetDmarcSummaryApiApiEmailDomainsDomainIdDmarcGetResponse(rsp *http.Re
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30305,6 +33456,13 @@ func ParseSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse(rsp
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30339,6 +33497,13 @@ func ParseSendTestEmailApiApiEmailDomainsDomainIdTestEmailPostResponse(rsp *http
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30371,6 +33536,13 @@ func ParseVerifyEmailDomainApiApiEmailDomainsDomainIdVerifyPostResponse(rsp *htt
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30405,6 +33577,13 @@ func ParseGovernanceAiGenerateApiGovernanceAiAssistantPostResponse(rsp *http.Res
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30437,6 +33616,13 @@ func ParseListGovernanceAiConversationsApiGovernanceAiAssistantConversationsGetR
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30471,6 +33657,13 @@ func ParseGovernanceAiAcceptApiGovernanceAiAssistantConversationIdAcceptPostResp
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30496,6 +33689,13 @@ func ParseGovernanceAiDeclineApiGovernanceAiAssistantConversationIdDeclinePostRe
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30530,6 +33730,13 @@ func ParseListKnowledgeBasesApiKnowledgeBasesGetResponse(rsp *http.Response) (*L
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30563,6 +33770,13 @@ func ParseCreateKnowledgeBaseApiKnowledgeBasesPostResponse(rsp *http.Response) (
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30588,6 +33802,13 @@ func ParseDeleteKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdDeleteResponse(rsp 
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30622,6 +33843,13 @@ func ParseGetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetResponse(rsp *http.
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30655,6 +33883,13 @@ func ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp *ht
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30680,6 +33915,13 @@ func ParseGetMeApiMeGetResponse(rsp *http.Response) (*GetMeApiMeGetResponse, err
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30714,6 +33956,13 @@ func ParseListMemoryBanksApiMemoryBanksGetResponse(rsp *http.Response) (*ListMem
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30746,6 +33995,13 @@ func ParseCreateMemoryBankApiMemoryBanksPostResponse(rsp *http.Response) (*Creat
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30780,6 +34036,13 @@ func ParseMemoryBankAiGenerateApiMemoryBanksAiAssistantPostResponse(rsp *http.Re
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30812,6 +34075,13 @@ func ParseMemoryBankAiLastConversationApiMemoryBanksAiAssistantLastConversationG
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30846,6 +34116,13 @@ func ParseMemoryBankAiAcceptApiMemoryBanksAiAssistantConversationIdPatchResponse
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30871,6 +34148,13 @@ func ParseListTemplatesApiMemoryBanksTemplatesGetResponse(rsp *http.Response) (*
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30905,6 +34189,13 @@ func ParseTestCompactionPromptStandaloneApiMemoryBanksTestCompactionPostResponse
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30930,6 +34221,13 @@ func ParseDeleteMemoryBankApiMemoryBanksMemoryBankIdDeleteResponse(rsp *http.Res
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30964,6 +34262,13 @@ func ParseGetMemoryBankApiMemoryBanksMemoryBankIdGetResponse(rsp *http.Response)
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30996,6 +34301,13 @@ func ParseUpdateMemoryBankApiMemoryBanksMemoryBankIdPutResponse(rsp *http.Respon
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31030,6 +34342,13 @@ func ParseGetAgentsUsingBankApiMemoryBanksMemoryBankIdAgentsGetResponse(rsp *htt
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31063,6 +34382,13 @@ func ParseCompactMemoryBankApiMemoryBanksMemoryBankIdCompactPostResponse(rsp *ht
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31088,6 +34414,13 @@ func ParseDeleteMemoryBankSourceApiMemoryBanksMemoryBankIdSourceDeleteResponse(r
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31122,6 +34455,13 @@ func ParseGetMemoryBankEntryStatsApiMemoryBanksMemoryBankIdStatsGetResponse(rsp 
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31154,6 +34494,13 @@ func ParseTestCompactionPromptApiMemoryBanksMemoryBankIdTestCompactionPostRespon
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31188,6 +34535,13 @@ func ParseListModelsApiModelsGetResponse(rsp *http.Response) (*ListModelsApiMode
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31221,6 +34575,13 @@ func ParseListAlertsApiModelsAlertsGetResponse(rsp *http.Response) (*ListAlertsA
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31237,6 +34598,16 @@ func ParseMarkAllReadApiModelsAlertsMarkAllReadPostResponse(rsp *http.Response) 
 	response := &MarkAllReadApiModelsAlertsMarkAllReadPostResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31262,6 +34633,13 @@ func ParseGetAlertUnreadCountApiModelsAlertsUnreadCountGetResponse(rsp *http.Res
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31289,6 +34667,53 @@ func ParseMarkReadApiModelsAlertsAlertIdReadPatchResponse(rsp *http.Response) (*
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListEmbeddingModelsApiModelsEmbeddersGetResponse parses an HTTP response from a ListEmbeddingModelsApiModelsEmbeddersGetWithResponse call
+func ParseListEmbeddingModelsApiModelsEmbeddersGetResponse(rsp *http.Response) (*ListEmbeddingModelsApiModelsEmbeddersGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListEmbeddingModelsApiModelsEmbeddersGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmbeddingModelListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31314,6 +34739,13 @@ func ParseGetGenerationTiersApiModelsGenerationTiersGetResponse(rsp *http.Respon
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31348,6 +34780,13 @@ func ParseListExperimentsApiModelsPlaygroundExperimentsGetResponse(rsp *http.Res
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31381,6 +34820,13 @@ func ParseCreateExperimentApiModelsPlaygroundExperimentsPostResponse(rsp *http.R
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31406,6 +34852,13 @@ func ParseDeleteExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdDele
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31440,6 +34893,13 @@ func ParseGetExperimentApiModelsPlaygroundExperimentsExperimentIdGetResponse(rsp
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31472,6 +34932,46 @@ func ParseCancelExperimentEndpointApiModelsPlaygroundExperimentsExperimentIdCanc
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRerankerModelsApiModelsRerankersGetResponse parses an HTTP response from a ListRerankerModelsApiModelsRerankersGetWithResponse call
+func ParseListRerankerModelsApiModelsRerankersGetResponse(rsp *http.Response) (*ListRerankerModelsApiModelsRerankersGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRerankerModelsApiModelsRerankersGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RerankerModelListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31506,6 +35006,13 @@ func ParseGetModelApiModelsModelIdDetailsGetResponse(rsp *http.Response) (*GetMo
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31538,6 +35045,13 @@ func ParseGetRecommendationsApiModelsModelIdRecommendationsGetResponse(rsp *http
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31572,6 +35086,13 @@ func ParseSearchApiSearchGetResponse(rsp *http.Response) (*SearchApiSearchGetRes
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31604,6 +35125,13 @@ func ParseListSolutionsApiSolutionsGetResponse(rsp *http.Response) (*ListSolutio
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31638,6 +35166,13 @@ func ParseCreateSolutionApiSolutionsPostResponse(rsp *http.Response) (*CreateSol
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31663,6 +35198,13 @@ func ParseDeleteSolutionApiSolutionsSolutionIdDeleteResponse(rsp *http.Response)
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31697,6 +35239,13 @@ func ParseGetSolutionApiSolutionsSolutionIdGetResponse(rsp *http.Response) (*Get
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31729,6 +35278,13 @@ func ParseUpdateSolutionApiSolutionsSolutionIdPatchResponse(rsp *http.Response) 
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31763,6 +35319,13 @@ func ParseUnlinkAgentsApiSolutionsSolutionIdAgentsDeleteResponse(rsp *http.Respo
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31795,6 +35358,13 @@ func ParseLinkAgentsApiSolutionsSolutionIdAgentsPostResponse(rsp *http.Response)
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31829,6 +35399,13 @@ func ParseAiAssistantGenerateApiSolutionsSolutionIdAiAssistantGeneratePostRespon
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31861,6 +35438,13 @@ func ParseAiAssistantKnowledgeBaseApiSolutionsSolutionIdAiAssistantKnowledgeBase
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31895,6 +35479,13 @@ func ParseAiAssistantSourceApiSolutionsSolutionIdAiAssistantSourcePostResponse(r
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31928,6 +35519,13 @@ func ParseAiAssistantAcceptApiSolutionsSolutionIdAiAssistantConversationIdAccept
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -31953,6 +35551,13 @@ func ParseAiAssistantDeclineApiSolutionsSolutionIdAiAssistantConversationIdDecli
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -31987,6 +35592,13 @@ func ParseListConversationsApiSolutionsSolutionIdConversationsGetResponse(rsp *h
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32020,6 +35632,13 @@ func ParseAddConversationTurnApiSolutionsSolutionIdConversationsPostResponse(rsp
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32045,6 +35664,13 @@ func ParseMarkConversationTurnApiSolutionsSolutionIdConversationsConversationIdP
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32079,6 +35705,13 @@ func ParseUnlinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesDeleteResponse
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32111,6 +35744,13 @@ func ParseLinkKnowledgeBasesApiSolutionsSolutionIdKnowledgeBasesPostResponse(rsp
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32145,6 +35785,13 @@ func ParseUnlinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsDeleteRe
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32177,6 +35824,13 @@ func ParseLinkSourceConnectionsApiSolutionsSolutionIdSourceConnectionsPostRespon
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32211,6 +35865,13 @@ func ParseListSourcesApiSourcesGetResponse(rsp *http.Response) (*ListSourcesApiS
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32244,6 +35905,13 @@ func ParseCreateSourceApiSourcesPostResponse(rsp *http.Response) (*CreateSourceA
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32269,6 +35937,13 @@ func ParseDeleteSourceApiSourcesSourceConnectionIdDeleteResponse(rsp *http.Respo
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32303,6 +35978,13 @@ func ParseGetSourceApiSourcesSourceConnectionIdGetResponse(rsp *http.Response) (
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32335,6 +36017,13 @@ func ParseUploadInlineTextToSourceApiSourcesSourceConnectionIdPostResponse(rsp *
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32369,6 +36058,93 @@ func ParseUpdateSourceApiSourcesSourceConnectionIdPutResponse(rsp *http.Response
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse parses an HTTP response from a ListSourceContentsApiSourcesSourceConnectionIdContentsGetWithResponse call
+func ParseListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse(rsp *http.Response) (*ListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSourceContentsApiSourcesSourceConnectionIdContentsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SourceContentStatusListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse parses an HTTP response from a GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetWithResponse call
+func ParseGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse(rsp *http.Response) (*GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SourceContentStatusResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32401,6 +36177,13 @@ func ParseGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrat
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32435,6 +36218,13 @@ func ParseStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigr
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32467,6 +36257,13 @@ func ParseCancelSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMig
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32501,6 +36298,13 @@ func ParseListSourceExportsApiSourcesSourceConnectionIdExportsGetResponse(rsp *h
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32533,6 +36337,13 @@ func ParseCreateSourceExportApiSourcesSourceConnectionIdExportsPostResponse(rsp 
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32567,6 +36378,13 @@ func ParseEstimateSourceExportApiSourcesSourceConnectionIdExportsEstimatePostRes
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32592,6 +36410,13 @@ func ParseDeleteSourceExportApiSourcesSourceConnectionIdExportsExportIdDeleteRes
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32626,6 +36451,13 @@ func ParseGetSourceExportApiSourcesSourceConnectionIdExportsExportIdGetResponse(
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32658,6 +36490,13 @@ func ParseCancelSourceExportApiSourcesSourceConnectionIdExportsExportIdCancelPos
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32692,6 +36531,13 @@ func ParseDownloadSourceExportApiSourcesSourceConnectionIdExportsExportIdDownloa
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -32724,6 +36570,13 @@ func ParseUploadFileToSourceApiSourcesSourceConnectionIdUploadPostResponse(rsp *
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32758,6 +36611,13 @@ func ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRe
 		}
 		response.JSON422 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	case rsp.StatusCode == 200:
 		// Content-type (video/*) unsupported
 
@@ -32786,6 +36646,13 @@ func ParseGetApiVersionApiVersionGetResponse(rsp *http.Response) (*GetApiVersion
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -32819,6 +36686,13 @@ func ParseUpdateApiVersionApiVersionPutResponse(rsp *http.Response) (*UpdateApiV
 			return nil, err
 		}
 		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

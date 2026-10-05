@@ -696,3 +696,111 @@ type DmarcSummaryResponse = generated.DmarcSummaryResponse
 // DmarcFailingSourceResponse is a top DMARC-failing source IP within a
 // [DmarcSummaryResponse].
 type DmarcFailingSourceResponse = generated.DmarcFailingSourceResponse
+
+// ── Cloud Drives ────────────────────────────────────────────────────────────
+
+// CloudDriveResponse is a cloud-drive connection.
+type CloudDriveResponse = generated.CloudDriveResponseModel
+
+// CloudDriveUpdateRequest is the request body for updating a cloud-drive
+// connection. A nil field is left unchanged.
+type CloudDriveUpdateRequest = generated.CloudDriveUpdateRequest
+
+// CloudDriveProviderResponse is a cloud-drive provider this deployment has configured.
+type CloudDriveProviderResponse = generated.CloudDriveProviderResponseModel
+
+// CloudDriveAccessLevelResponse is an access level a cloud-drive provider offers.
+type CloudDriveAccessLevelResponse = generated.CloudDriveAccessLevelResponseModel
+
+// CloudDriveScopeResponse is an OAuth scope a cloud-drive provider requests.
+type CloudDriveScopeResponse = generated.CloudDriveScopeResponseModel
+
+// CloudDriveRejectionResponse is a file a cloud-drive connection skipped, and why.
+type CloudDriveRejectionResponse = generated.CloudDriveRejectionResponseModel
+
+// AgentUsingCloudDriveResponse is an agent that uses a cloud-drive connection.
+type AgentUsingCloudDriveResponse = generated.AgentUsingCloudDriveResponseModel
+
+// ── Source Contents ─────────────────────────────────────────────────────────
+
+// SourceContentStatusResponse is one content item's indexing status.
+type SourceContentStatusResponse = generated.SourceContentStatusResponse
+
+// SourceContentStatusListResponse is a page of content items and their
+// indexing status. Always the canonical {data, pagination} envelope.
+type SourceContentStatusListResponse = generated.SourceContentStatusListResponse
+
+// ── Embedding and Reranker Models ───────────────────────────────────────────
+
+// EmbeddingModelResponse describes an embedding model.
+type EmbeddingModelResponse = generated.EmbeddingModelResponse
+
+// EmbeddingModalityRateResponse is a non-text rate an embedder charges.
+type EmbeddingModalityRateResponse = generated.EmbeddingModalityRateResponse
+
+// EmbeddingStorageCreditsResponse is the monthly storage cost per record at a
+// dimension count.
+type EmbeddingStorageCreditsResponse = generated.EmbeddingStorageCreditsResponse
+
+// EmbeddingModelListResponse is the embedder catalog with its defaults and pricing.
+//
+// Not a generated type: the list key is version-gated. By default the models
+// arrive under Models; once Options.APIVersion is 2026-07-27 or later they
+// arrive under Data with Pagination. Items returns whichever arrived.
+type EmbeddingModelListResponse struct {
+	Models     []EmbeddingModelResponse `json:"models,omitempty"`
+	Data       []EmbeddingModelResponse `json:"data,omitempty"`
+	Pagination *PaginationResponse      `json:"pagination,omitempty"`
+	// DefaultModelType is the embedding model used when a source does not override it.
+	DefaultModelType *string `json:"default_model_type"`
+	// DefaultDimension is the dimension count used with the default embedding model.
+	DefaultDimension *int `json:"default_dimension"`
+	// FileProcessingCreditsPerMb is the credits per MB for file processing at ingest.
+	FileProcessingCreditsPerMb float32 `json:"file_processing_credits_per_mb"`
+	// StorageCredits is the monthly storage credits per dimension count.
+	StorageCredits []EmbeddingStorageCreditsResponse `json:"storage_credits"`
+}
+
+// Items returns the models from whichever key the response used.
+func (r EmbeddingModelListResponse) Items() []EmbeddingModelResponse {
+	// Presence, not length — see AlertConfigListResponse.Items.
+	if r.Data != nil {
+		return r.Data
+	}
+	return r.Models
+}
+
+// RerankerModelResponse describes a reranker model.
+type RerankerModelResponse = generated.RerankerModelResponse
+
+// RerankerModelListResponse is the reranker catalog with its default and pricing.
+//
+// Not a generated type: the list key is version-gated. By default the models
+// arrive under Models; once Options.APIVersion is 2026-07-27 or later they
+// arrive under Data with Pagination. Items returns whichever arrived.
+type RerankerModelListResponse struct {
+	Models     []RerankerModelResponse `json:"models,omitempty"`
+	Data       []RerankerModelResponse `json:"data,omitempty"`
+	Pagination *PaginationResponse     `json:"pagination,omitempty"`
+	// DefaultModelType is the reranker used when a knowledge base does not choose one.
+	DefaultModelType string `json:"default_model_type"`
+	// SearchProcessingCredits is the credits charged for processing a search request.
+	SearchProcessingCredits float32 `json:"search_processing_credits"`
+}
+
+// Items returns the models from whichever key the response used.
+func (r RerankerModelListResponse) Items() []RerankerModelResponse {
+	// Presence, not length — see AlertConfigListResponse.Items.
+	if r.Data != nil {
+		return r.Data
+	}
+	return r.Models
+}
+
+// ── Run files and model effort ──────────────────────────────────────────────
+
+// AgentRunFileResponse is a file attached to an agent run or to one of its steps.
+type AgentRunFileResponse = generated.AgentRunFileResponse
+
+// EffortOptionsResponse is the set of reasoning-effort values a model accepts.
+type EffortOptionsResponse = generated.EffortOptionsResponse
