@@ -107,11 +107,11 @@ func (t *TypedClient) UnsubscribeFromAlert(ctx context.Context, alertID string) 
 func (t *TypedClient) ListAlertConfigs(ctx context.Context, opts ListOptions) (*AlertConfigListResponse, error) {
 	raw, err := t.c.ListAlertConfigs(ctx, opts)
 	if err != nil {
-		return nil, err
+		return nil, rawListError(err, "GET", "/alerts/configs")
 	}
 	var out AlertConfigListResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
+	if err := decodeList(raw, "configs", &out); err != nil {
+		return nil, listError(err, "GET", "/alerts/configs", raw)
 	}
 	return &out, nil
 }
@@ -172,11 +172,11 @@ func (t *TypedClient) UpdateOrganizationAlertPreference(ctx context.Context, org
 func (t *TypedClient) ListModelAlerts(ctx context.Context, opts ListOptions) (*ModelAlertListResponse, error) {
 	raw, err := t.c.ListModelAlerts(ctx, opts)
 	if err != nil {
-		return nil, err
+		return nil, rawListError(err, "GET", "/models/alerts")
 	}
 	var out ModelAlertListResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
+	if err := decodeList(raw, "alerts", &out); err != nil {
+		return nil, listError(err, "GET", "/models/alerts", raw)
 	}
 	return &out, nil
 }
@@ -211,11 +211,11 @@ func (t *TypedClient) GetModelRecommendations(ctx context.Context, modelID strin
 func (t *TypedClient) GetGenerationTiers(ctx context.Context) (*GenerationTierListResponse, error) {
 	raw, err := t.c.GetGenerationTiers(ctx)
 	if err != nil {
-		return nil, err
+		return nil, rawListError(err, "GET", "/models/generation-tiers")
 	}
 	var out GenerationTierListResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
+	if err := decodeList(raw, "tiers", &out); err != nil {
+		return nil, listError(err, "GET", "/models/generation-tiers", raw)
 	}
 	return &out, nil
 }
@@ -224,11 +224,11 @@ func (t *TypedClient) GetGenerationTiers(ctx context.Context) (*GenerationTierLi
 func (t *TypedClient) ListExperiments(ctx context.Context, opts ListExperimentsOptions) (*ExperimentListResponse, error) {
 	raw, err := t.c.ListExperiments(ctx, opts)
 	if err != nil {
-		return nil, err
+		return nil, rawListError(err, "GET", "/models/playground/experiments")
 	}
 	var out ExperimentListResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
+	if err := decodeList(raw, "experiments", &out); err != nil {
+		return nil, listError(err, "GET", "/models/playground/experiments", raw)
 	}
 	return &out, nil
 }
@@ -322,4 +322,33 @@ func (t *TypedClient) AcceptAiMemoryBankSuggestion(ctx context.Context, conversa
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ListMemoryBankTemplates is the typed form of [Client.ListMemoryBankTemplates].
+// The API declares no schema for a template, so each is a JSON object.
+func (t *TypedClient) ListMemoryBankTemplates(ctx context.Context) ([]map[string]JsonValue, error) {
+	raw, err := t.c.ListMemoryBankTemplates(ctx)
+	if err != nil {
+		return nil, rawListError(err, "GET", "/memory_banks/templates")
+	}
+	var out []map[string]JsonValue
+	if err := decodeList(raw, "", &out); err != nil {
+		return nil, listError(err, "GET", "/memory_banks/templates", raw)
+	}
+	return out, nil
+}
+
+// GetAgentsUsingMemoryBank is the typed form of [Client.GetAgentsUsingMemoryBank].
+// The API declares no schema for an entry; each is an object carrying agent_id
+// and agent_name.
+func (t *TypedClient) GetAgentsUsingMemoryBank(ctx context.Context, memoryBankID string) ([]map[string]JsonValue, error) {
+	raw, err := t.c.GetAgentsUsingMemoryBank(ctx, memoryBankID)
+	if err != nil {
+		return nil, rawListError(err, "GET", "/memory_banks/{memory_bank_id}/agents")
+	}
+	var out []map[string]JsonValue
+	if err := decodeList(raw, "", &out); err != nil {
+		return nil, listError(err, "GET", "/memory_banks/{memory_bank_id}/agents", raw)
+	}
+	return out, nil
 }

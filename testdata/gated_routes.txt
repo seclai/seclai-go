@@ -1,0 +1,33 @@
+# Version-gated list routes, generated from the backend's router sources.
+# Do not edit by hand. Regenerate from the repository root with:
+#   go run ./cmd/gatedroutes -routers ../seclai/backend/api/src/api/routers/api > testdata/gated_routes.txt
+GET /agents/agent-email-optouts
+GET /agents/blocked-email-senders
+GET /agents/evaluation-criteria/{criteria_id}/compatible-runs
+GET /agents/evaluation-criteria/{criteria_id}/results
+GET /agents/inbound-email-rejections
+GET /agents/{agent_id}/callers
+GET /agents/{agent_id}/evaluation-criteria
+GET /agents/{agent_id}/evaluation-results
+GET /agents/{agent_id}/evaluation-runs
+GET /agents/{agent_id}/runs/{run_id}/evaluation-results
+GET /alerts/configs
+GET /alerts/organization-preferences/list
+GET /cloud-drives
+GET /cloud-drives/providers
+GET /cloud-drives/{connection_id}/agents
+GET /cloud-drives/{connection_id}/rejections
+GET /email-domains
+GET /governance/ai-assistant/conversations
+GET /knowledge_bases
+GET /memory_banks
+GET /memory_banks/templates
+GET /memory_banks/{memory_bank_id}/agents
+GET /models
+GET /models/alerts
+GET /models/embedders
+GET /models/generation-tiers
+GET /models/playground/experiments
+GET /models/rerankers
+GET /solutions/{solution_id}/conversations
+PUT /agents/blocked-email-senders/mode

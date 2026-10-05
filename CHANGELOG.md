@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.7.1] - 2026-10-05
+
+### Changed
+
+- Return an `*UnexpectedResponseError` from the list methods of version-gated endpoints when a successful response is not a list — an error-shaped object, text, a number, a string, `null`, an empty body, or a list key holding something other than an array — or is a list that cannot be decoded. Such a body used to produce an empty result, a nil slice, or a raw `json` error, depending on the method and the body; an empty result reads as "no results". The JSON error, where there is one, is still reachable through `errors.As`. An explicit `"data": null` is still an empty list, unless the per-resource key beside it holds the list ([#15](https://github.com/seclai/seclai-go/issues/15))
+- Treat an empty or `null` body on a 200 or 204 from those methods as an error. The methods returning a slice answered it with a nil slice and a nil error ([#15](https://github.com/seclai/seclai-go/issues/15))
+- Accept a bare array from the list methods whose default shape is an object with a per-resource key, such as `ListKnowledgeBases`, placing the items under that key ([#15](https://github.com/seclai/seclai-go/issues/15))
+- Hand the generated client behind `Client.Generated()` an unexported wrapper as its HTTP doer, so that the version guard runs after every request editor. Code that type-asserts that field to `*http.Client` no longer gets one. The requests on the wire, the transport, the timeout, redirects and cancellation are unchanged ([#16](https://github.com/seclai/seclai-go/issues/16))
+- Fill the per-resource field and the flat `Total` beside `Data` and `Pagination` once `Options.APIVersion` is `2026-07-27` or later: `Configs` and `Total` on `Typed().ListAlertConfigs`, `Alerts` and `Total` on `Typed().ListModelAlerts`, `Models` on `ListEmbeddingModels` and `ListRerankerModels`, and `Total`, `Page` and `Limit` on `ListRunEvaluationResults` and `ListAgentEvaluationResults`. They were empty or zero on that shape, leaving `Items()` and `Pagination` as the only way to read it ([#15](https://github.com/seclai/seclai-go/issues/15))
+
+### Added
+
+- Add the `UnexpectedResponseError` type, carrying the method, URL and body of a successful response that could not be read as the list its method returns. `Unwrap` gives the underlying JSON error when the body was malformed or an item had the wrong type
+- Add `Typed().ListMemoryBankTemplates` and `Typed().GetAgentsUsingMemoryBank`, returning the items as `[]map[string]JsonValue` on both response shapes. The API declares no schema for either, and the raw `Client` methods still hand back the body as sent, whose shape follows the API version ([#15](https://github.com/seclai/seclai-go/issues/15))
+
+### Fixed
+
+- Return the items from every list method once `Options.APIVersion` is `2026-07-27` or later, when the API answers list endpoints with `{data, pagination}`. `ListKnowledgeBases`, `ListMemoryBanks`, `ListAgentEmailOptOuts`, `ListBlockedEmailSenders`, `SetAutoBlockMode`, `ListOrganizationAlertPreferences`, `ListEmailDomains`, `Typed().GetGenerationTiers` and `Typed().ListExperiments` returned an empty list with a nil error; `GetAgentCallers`, `ListInboundEmailRejections`, `ListGovernanceAiConversations`, `ListModels` and `ListSolutionConversations` failed with `json: cannot unmarshal object` ([#15](https://github.com/seclai/seclai-go/issues/15))
+- Fill `Total`, `Page` and `Limit` from `pagination` on `ListEvaluationResults`, `ListCompatibleRuns` and `ListEvaluationRuns` once `Options.APIVersion` is `2026-07-27` or later, and the `Total`, `Page` and `Limit` of the keyed listings above where their types have them. They were zero, so a loop on `Total` stopped after the first page ([#15](https://github.com/seclai/seclai-go/issues/15))
+- Reject a `Seclai-Version` passed in the per-request `headers` of `Client.Do` when it is unknown to this release, in any letter case, with a `*ConfigurationError` and without sending the request. This is a new rejection: the header was sent unchecked, bypassing the guard on `Options.APIVersion`, and a caller who relied on that must now set `Options.AllowUnknownAPIVersion`. Of two spellings of the header in one call, the same one is now sent every time and it is the one validated ([#16](https://github.com/seclai/seclai-go/issues/16))
+- Reject an empty `Seclai-Version` in `Options.DefaultHeaders` at construction, and in the per-request `headers` of `Client.Do`, with or without `Options.AllowUnknownAPIVersion`. It passed the guard and replaced the configured `APIVersion` with an empty header, silently dropping the opt-in ([#16](https://github.com/seclai/seclai-go/issues/16))
+- Apply the version guard to requests issued through `Client.Generated()`. A request editor could set an unknown or empty `Seclai-Version` that was sent as-is; such a request now fails with a `*ConfigurationError` before it is sent, which is likewise a new rejection. `Generated()` is otherwise documented as a raw escape hatch whose request editors are the caller's responsibility ([#16](https://github.com/seclai/seclai-go/issues/16))
+- Correct the README's API-versioning section, which listed 17 methods as unsafe after opting in and described only the shape change: opting in also turns paging on for `ListEvaluationCriteria`, `ListRunEvaluationResults` and `ListAlertConfigs`, which return every item by default, and makes `SetAutoBlockMode` report the number of rows returned as its `Total`
+
 ## [1.7.0] - 2026-10-04
 
 ### Changed
@@ -164,6 +188,7 @@ _Stable release. No functional changes since 0.0.2._
 
 _Initial release._
 
+[1.7.1]: https://github.com/seclai/seclai-go/releases/tag/v1.7.1
 [1.7.0]: https://github.com/seclai/seclai-go/releases/tag/v1.7.0
 [1.6.0]: https://github.com/seclai/seclai-go/releases/tag/v1.6.0
 [1.5.0]: https://github.com/seclai/seclai-go/releases/tag/v1.5.0

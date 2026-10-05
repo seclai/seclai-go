@@ -88,6 +88,7 @@
 //   - [APIStatusError]: non-2xx HTTP responses
 //   - [APIValidationError]: HTTP 422 validation errors (embeds APIStatusError)
 //   - [StreamingError]: SSE stream failures (includes RunID when available)
+//   - [UnexpectedResponseError]: a 2xx response that is not the list its method reads
 //
 // # Low-Level Access
 //

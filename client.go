@@ -62,7 +62,9 @@ type Options struct {
 	// APIKeyHeader is the HTTP header name used for the API key. Defaults to "x-api-key".
 	APIKeyHeader string
 
-	// DefaultHeaders are HTTP headers applied to every request.
+	// DefaultHeaders are HTTP headers applied to every request. A Seclai-Version
+	// here passes the same guard as APIVersion, and an empty one is rejected by
+	// [NewClient] rather than replacing APIVersion with no version.
 	DefaultHeaders map[string]string
 
 	// AllowUnknownAPIVersion permits an APIVersion this release was not built
@@ -100,7 +102,50 @@ type Client struct {
 	defaultHeaders map[string]string
 	httpClient     *http.Client
 
+	allowUnknownAPIVersion bool
+
 	generated *generated.ClientWithResponses
+}
+
+// checkAPIVersion is the guard every Seclai-Version passes before it is sent.
+// An empty value is refused even when unknown versions are allowed: it is not
+// a version, and sending it silently drops the opt-in.
+func checkAPIVersion(version, source string, allowUnknown bool) error {
+	if strings.TrimSpace(version) == "" {
+		return &ConfigurationError{Message: fmt.Sprintf(
+			"empty Seclai-Version (via %s): an empty header would replace the "+
+				"configured API version with none. Omit the header instead.", source)}
+	}
+	if !allowUnknown && !isKnownAPIVersion(version) {
+		return &ConfigurationError{Message: fmt.Sprintf(
+			"unknown API version %q (via %s): this release was built against %s. A "+
+				"newer API version can change response shapes, which this client would "+
+				"decode incorrectly rather than reject. Upgrade the module, or set "+
+				"Options.AllowUnknownAPIVersion to proceed anyway.",
+			version, source, strings.Join(KnownAPIVersions, ", "))}
+	}
+	return nil
+}
+
+// guardedDoer applies the version guard to requests issued through
+// [Client.Generated], after every request editor has run.
+type guardedDoer struct {
+	inner        *http.Client
+	allowUnknown bool
+}
+
+func (d guardedDoer) Do(req *http.Request) (*http.Response, error) {
+	for k, values := range req.Header {
+		if !strings.EqualFold(k, "Seclai-Version") {
+			continue
+		}
+		for _, v := range values {
+			if err := checkAPIVersion(v, "a Generated() request header", d.allowUnknown); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return d.inner.Do(req)
 }
 
 // NewClient constructs a new Client.
@@ -157,34 +202,29 @@ func NewClient(opts Options) (*Client, error) {
 	// options would have to predict which spelling survives — and with a map that
 	// is not even deterministic, so the guard could approve one value and the
 	// client send another.
-	effectiveVersion, versionSource := "", "Options.APIVersion"
 	for k, v := range defHeaders {
-		if strings.EqualFold(k, "Seclai-Version") {
-			effectiveVersion = v
-			if v != opts.APIVersion {
-				versionSource = fmt.Sprintf("Options.DefaultHeaders[%q]", k)
-			}
-			break
+		if !strings.EqualFold(k, "Seclai-Version") {
+			continue
 		}
-	}
-	if effectiveVersion != "" && !opts.AllowUnknownAPIVersion && !isKnownAPIVersion(effectiveVersion) {
-		return nil, &ConfigurationError{Message: fmt.Sprintf(
-			"unknown API version %q (via %s): this release was built against %s. A "+
-				"newer API version can change response shapes, which this client would "+
-				"decode incorrectly rather than reject. Upgrade the module, or set "+
-				"Options.AllowUnknownAPIVersion to proceed anyway.",
-			effectiveVersion, versionSource, strings.Join(KnownAPIVersions, ", "))}
+		versionSource := "Options.APIVersion"
+		if _, fromDefaults := opts.DefaultHeaders[k]; fromDefaults {
+			versionSource = fmt.Sprintf("Options.DefaultHeaders[%q]", k)
+		}
+		if err := checkAPIVersion(v, versionSource, opts.AllowUnknownAPIVersion); err != nil {
+			return nil, err
+		}
 	}
 
 	client := &Client{
-		auth:           state,
-		baseURL:        parsed,
-		defaultHeaders: defHeaders,
-		httpClient:     hc,
+		auth:                   state,
+		baseURL:                parsed,
+		defaultHeaders:         defHeaders,
+		httpClient:             hc,
+		allowUnknownAPIVersion: opts.AllowUnknownAPIVersion,
 	}
 
 	gen, err := generated.NewClientWithResponses(parsed.String(),
-		generated.WithHTTPClient(hc),
+		generated.WithHTTPClient(guardedDoer{inner: hc, allowUnknown: opts.AllowUnknownAPIVersion}),
 		generated.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 			for k, v := range defHeaders {
 				req.Header.Set(k, v)
@@ -202,7 +242,13 @@ func NewClient(opts Options) (*Client, error) {
 
 // Generated returns the underlying OpenAPI-generated client.
 //
-// It is fully typed and exposes all endpoints directly.
+// It is fully typed and exposes all endpoints directly. It is a raw escape
+// hatch: a request editor passed to one of its calls runs after this client's
+// own and can replace any header, which is the caller's responsibility. The
+// one check that still applies is the version guard — a request whose final
+// Seclai-Version is empty, or unknown without Options.AllowUnknownAPIVersion,
+// fails with a *ConfigurationError before it is sent. Responses are decoded
+// by the generated types, which model only the default shape of each endpoint.
 func (c *Client) Generated() *generated.ClientWithResponses {
 	if c == nil {
 		return nil
@@ -226,14 +272,47 @@ func (c *Client) applyAuth(ctx context.Context, req *http.Request) error {
 //
 // For JSON responses, out is decoded from JSON when non-nil.
 // For non-2xx responses, an *APIStatusError or *APIValidationError is returned.
+//
+// A Seclai-Version in headers passes the same guard as [Options.APIVersion]:
+// an empty value, or one this release does not know without
+// Options.AllowUnknownAPIVersion, returns a *ConfigurationError and no request
+// is sent.
 func (c *Client) Do(ctx context.Context, method, apiPath string, query map[string]string, body any, headers map[string]string, out any) error {
 	return c.doValues(ctx, method, apiPath, queryValues(query), body, headers, out)
 }
 
 // doValues is [Client.Do] with a multi-valued query, for repeatable parameters.
 func (c *Client) doValues(ctx context.Context, method, apiPath string, query url.Values, body any, headers map[string]string, out any) error {
+	raw, _, err := c.doBytes(ctx, method, apiPath, query, body, headers)
+	if err != nil || out == nil || len(raw) == 0 {
+		return err
+	}
+	return json.Unmarshal(raw, out)
+}
+
+// doBytes issues a request and returns the body of a 2xx response undecoded.
+func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.Values, body any, headers map[string]string) ([]byte, *url.URL, error) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+
+	// Sorted so that, of two spellings of one header, the same one always wins
+	// and the guard validates the value that is sent.
+	headerKeys := make([]string, 0, len(headers))
+	for k := range headers {
+		if strings.TrimSpace(k) != "" {
+			headerKeys = append(headerKeys, k)
+		}
+	}
+	sort.Strings(headerKeys)
+	for i := len(headerKeys) - 1; i >= 0; i-- {
+		if strings.EqualFold(headerKeys[i], "Seclai-Version") {
+			source := fmt.Sprintf("Do headers[%q]", headerKeys[i])
+			if err := checkAPIVersion(headers[headerKeys[i]], source, c.allowUnknownAPIVersion); err != nil {
+				return nil, nil, err
+			}
+			break
+		}
 	}
 
 	reqURL := c.buildURLValues(apiPath, query)
@@ -242,36 +321,33 @@ func (c *Client) doValues(ctx context.Context, method, apiPath string, query url
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		reqBody = bytes.NewReader(b)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, reqURL.String(), reqBody)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	for k, v := range c.defaultHeaders {
 		req.Header.Set(k, v)
 	}
 	if err := c.applyAuth(ctx, req); err != nil {
-		return err
+		return nil, nil, err
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
-	for k, v := range headers {
-		if strings.TrimSpace(k) == "" {
-			continue
-		}
-		req.Header.Set(k, v)
+	for _, k := range headerKeys {
+		req.Header.Set(k, headers[k])
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 
@@ -283,45 +359,13 @@ func (c *Client) doValues(ctx context.Context, method, apiPath string, query url
 		if resp.StatusCode == 422 {
 			var ve HTTPValidationError
 			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-				return &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
+				return nil, nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
 			}
-			return &APIValidationError{APIStatusError: statusErr}
+			return nil, nil, &APIValidationError{APIStatusError: statusErr}
 		}
-		return &statusErr
+		return nil, nil, &statusErr
 	}
-
-	if out == nil {
-		return nil
-	}
-
-	if len(raw) == 0 {
-		return nil
-	}
-	return json.Unmarshal(raw, out)
-}
-
-// isJSONArray reports whether raw is a JSON array rather than an object.
-func isJSONArray(raw json.RawMessage) bool {
-	return bytes.HasPrefix(bytes.TrimLeft(raw, " \t\r\n"), []byte("["))
-}
-
-// decodeItems reads a version-gated list: a bare array by default, and the
-// canonical {data, pagination} envelope from API version 2026-07-27.
-func decodeItems[T any](raw json.RawMessage) ([]T, error) {
-	if isJSONArray(raw) {
-		var items []T
-		if err := json.Unmarshal(raw, &items); err != nil {
-			return nil, err
-		}
-		return items, nil
-	}
-	var page struct {
-		Data []T `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &page); err != nil {
-		return nil, err
-	}
-	return page.Data, nil
+	return raw, reqURL, nil
 }
 
 // ── Identity ──────────────────────────────────────────────────────────────────
@@ -477,7 +521,7 @@ func (c *Client) EnableAgent(ctx context.Context, agentID string) (*AgentSummary
 // step. They must be disabled before this agent can be paused.
 func (c *Client) GetAgentCallers(ctx context.Context, agentID string) ([]AgentCallerApiResponse, error) {
 	var out []AgentCallerApiResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/callers", url.PathEscape(agentID)), nil, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/callers", url.PathEscape(agentID)), nil, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -798,18 +842,8 @@ func (c *Client) ListEvaluationCriteria(ctx context.Context, agentID string, opt
 // is 2026-07-27 or later, so a client that decodes only one breaks the day the
 // other arrives. Pagination is nil on the bare-array shape.
 func (c *Client) ListEvaluationCriteriaPage(ctx context.Context, agentID string, opts ListOptions) (*EvaluationCriteriaListResponse, error) {
-	var raw json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-criteria", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, nil, &raw); err != nil {
-		return nil, err
-	}
 	var out EvaluationCriteriaListResponse
-	if isJSONArray(raw) {
-		if err := json.Unmarshal(raw, &out.Data); err != nil {
-			return nil, err
-		}
-		return &out, nil
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-criteria", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -859,7 +893,7 @@ func (c *Client) GetEvaluationCriteriaSummary(ctx context.Context, criteriaID st
 // ListEvaluationResults lists evaluation results for criteria.
 func (c *Client) ListEvaluationResults(ctx context.Context, criteriaID string, opts ListOptions) (*EvaluationResultListResponse, error) {
 	var out EvaluationResultListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/results", url.PathEscape(criteriaID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/results", url.PathEscape(criteriaID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -877,7 +911,7 @@ func (c *Client) CreateEvaluationResult(ctx context.Context, criteriaID string, 
 // ListCompatibleRuns lists runs compatible with evaluation criteria.
 func (c *Client) ListCompatibleRuns(ctx context.Context, criteriaID string, opts ListOptions) (*CompatibleRunListResponse, error) {
 	var out CompatibleRunListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/compatible-runs", url.PathEscape(criteriaID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/compatible-runs", url.PathEscape(criteriaID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -895,7 +929,7 @@ func (c *Client) TestDraftEvaluation(ctx context.Context, agentID string, body T
 // ListAgentEvaluationResults lists all evaluation results for an agent.
 func (c *Client) ListAgentEvaluationResults(ctx context.Context, agentID string, opts ListOptions) (*EvaluationResultWithCriteriaListResponse, error) {
 	var out EvaluationResultWithCriteriaListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-results", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-results", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -907,18 +941,8 @@ func (c *Client) ListAgentEvaluationResults(ctx context.Context, agentID string,
 // and an envelope once the caller opts in with Options.APIVersion of 2026-07-27
 // or later, so Total, Page and Limit are zero in the former case.
 func (c *Client) ListRunEvaluationResults(ctx context.Context, agentID, runID string, opts ListOptions) (*EvaluationResultWithCriteriaListResponse, error) {
-	var raw json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s/evaluation-results", url.PathEscape(agentID), url.PathEscape(runID)), listQuery(opts.Page, opts.Limit), nil, nil, &raw); err != nil {
-		return nil, err
-	}
 	var out EvaluationResultWithCriteriaListResponse
-	if isJSONArray(raw) {
-		if err := json.Unmarshal(raw, &out.Data); err != nil {
-			return nil, err
-		}
-		return &out, nil
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s/evaluation-results", url.PathEscape(agentID), url.PathEscape(runID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -927,7 +951,7 @@ func (c *Client) ListRunEvaluationResults(ctx context.Context, agentID, runID st
 // ListEvaluationRuns lists evaluation run summaries for an agent.
 func (c *Client) ListEvaluationRuns(ctx context.Context, agentID string, opts ListOptions) (*EvaluationRunSummaryListResponse, error) {
 	var out EvaluationRunSummaryListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-runs", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-runs", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1527,7 +1551,7 @@ func (c *Client) ListAgentEmailOptOuts(ctx context.Context, opts AgentEmailOptOu
 		q["offset"] = fmt.Sprintf("%d", opts.Offset)
 	}
 	var out AgentEmailOptOutListResponse
-	if err := c.Do(ctx, http.MethodGet, "/agents/agent-email-optouts", q, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/agents/agent-email-optouts", q, nil, "items", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1549,7 +1573,7 @@ func (c *Client) ListBlockedEmailSenders(ctx context.Context, opts BlockedEmailS
 		q["offset"] = fmt.Sprintf("%d", opts.Offset)
 	}
 	var out BlockedEmailSenderListResponse
-	if err := c.Do(ctx, http.MethodGet, "/agents/blocked-email-senders", q, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/agents/blocked-email-senders", q, nil, "items", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1576,7 +1600,7 @@ func (c *Client) UnblockEmailSender(ctx context.Context, blockedID string) error
 // input_and_output. Requires an account owner or admin.
 func (c *Client) SetAutoBlockMode(ctx context.Context, body SetAutoBlockModeRequest) (*BlockedEmailSenderListResponse, error) {
 	var out BlockedEmailSenderListResponse
-	if err := c.Do(ctx, http.MethodPut, "/agents/blocked-email-senders/mode", nil, body, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodPut, "/agents/blocked-email-senders/mode", nil, body, "items", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1593,7 +1617,7 @@ func (c *Client) ListInboundEmailRejections(ctx context.Context, opts InboundEma
 		q["limit"] = fmt.Sprintf("%d", opts.Limit)
 	}
 	var out []InboundEmailRejectionResponse
-	if err := c.Do(ctx, http.MethodGet, "/agents/inbound-email-rejections", q, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/agents/inbound-email-rejections", q, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -1634,7 +1658,7 @@ func (c *Client) ResumeInboundEmail(ctx context.Context) (*ResumeInboundResponse
 // ListKnowledgeBases lists knowledge bases.
 func (c *Client) ListKnowledgeBases(ctx context.Context, opts SortableListOptions) (*KnowledgeBaseListResponse, error) {
 	var out KnowledgeBaseListResponse
-	if err := c.Do(ctx, http.MethodGet, "/knowledge_bases", sortableListQuery(opts), nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/knowledge_bases", sortableListQuery(opts), nil, "knowledge_bases", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1677,7 +1701,7 @@ func (c *Client) DeleteKnowledgeBase(ctx context.Context, knowledgeBaseID string
 // ListMemoryBanks lists memory banks.
 func (c *Client) ListMemoryBanks(ctx context.Context, opts SortableListOptions) (*MemoryBankListResponse, error) {
 	var out MemoryBankListResponse
-	if err := c.Do(ctx, http.MethodGet, "/memory_banks", sortableListQuery(opts), nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/memory_banks", sortableListQuery(opts), nil, "memory_banks", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2188,7 +2212,7 @@ func (c *Client) UnlinkSourceConnectionsFromSolution(ctx context.Context, soluti
 // ListSolutionConversations lists conversations for a solution.
 func (c *Client) ListSolutionConversations(ctx context.Context, solutionID string) ([]SolutionConversationResponse, error) {
 	var out []SolutionConversationResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/solutions/%s/conversations", url.PathEscape(solutionID)), nil, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/solutions/%s/conversations", url.PathEscape(solutionID)), nil, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2265,7 +2289,7 @@ func (c *Client) GenerateGovernanceAiPlan(ctx context.Context, body GovernanceAi
 // ListGovernanceAiConversations lists governance AI assistant conversations.
 func (c *Client) ListGovernanceAiConversations(ctx context.Context) ([]GovernanceConversationResponse, error) {
 	var out []GovernanceConversationResponse
-	if err := c.Do(ctx, http.MethodGet, "/governance/ai-assistant/conversations", nil, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/governance/ai-assistant/conversations", nil, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2409,7 +2433,7 @@ func (c *Client) DeleteAlertConfig(ctx context.Context, configID string) error {
 // ListOrganizationAlertPreferences lists organization alert preferences.
 func (c *Client) ListOrganizationAlertPreferences(ctx context.Context) (*OrganizationAlertPreferenceListResponse, error) {
 	var out OrganizationAlertPreferenceListResponse
-	if err := c.Do(ctx, http.MethodGet, "/alerts/organization-preferences/list", nil, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/alerts/organization-preferences/list", nil, nil, "preferences", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2499,7 +2523,7 @@ func (c *Client) ListModels(ctx context.Context, opts ListModelsOptions) ([]Prov
 		q["supports_thinking"] = fmt.Sprintf("%t", *opts.SupportsThinking)
 	}
 	var out []ProviderGroupResponse
-	if err := c.Do(ctx, http.MethodGet, "/models", q, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/models", q, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2542,7 +2566,7 @@ func (c *Client) ListEmbeddingModels(ctx context.Context, opts ListEmbeddingMode
 		q["supports_input_media"] = opts.SupportsInputMedia
 	}
 	var out EmbeddingModelListResponse
-	if err := c.Do(ctx, http.MethodGet, "/models/embedders", q, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/models/embedders", q, nil, "models", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2555,7 +2579,7 @@ func (c *Client) ListEmbeddingModels(ctx context.Context, opts ListEmbeddingMode
 // [RerankerModelListResponse.Items].
 func (c *Client) ListRerankerModels(ctx context.Context) (*RerankerModelListResponse, error) {
 	var out RerankerModelListResponse
-	if err := c.Do(ctx, http.MethodGet, "/models/rerankers", nil, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/models/rerankers", nil, nil, "models", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2715,7 +2739,7 @@ type DmarcOptions struct {
 // Requires a user-bound credential; an account-only API key is refused with 403.
 func (c *Client) ListEmailDomains(ctx context.Context) (*EmailDomainsListResponse, error) {
 	var out EmailDomainsListResponse
-	if err := c.Do(ctx, http.MethodGet, "/email-domains", nil, nil, nil, &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/email-domains", nil, nil, "domains", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2883,21 +2907,21 @@ func (c *Client) AcceptAiMemoryBankSuggestion(ctx context.Context, conversationI
 // ListCloudDriveProviders lists the cloud-drive providers this deployment has
 // configured. Either wire shape is accepted.
 func (c *Client) ListCloudDriveProviders(ctx context.Context) ([]CloudDriveProviderResponse, error) {
-	var raw json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/cloud-drives/providers", nil, nil, nil, &raw); err != nil {
+	var out []CloudDriveProviderResponse
+	if err := c.doList(ctx, http.MethodGet, "/cloud-drives/providers", nil, nil, "", &out); err != nil {
 		return nil, err
 	}
-	return decodeItems[CloudDriveProviderResponse](raw)
+	return out, nil
 }
 
 // ListCloudDrives lists the account's cloud-drive connections. Either wire
 // shape is accepted.
 func (c *Client) ListCloudDrives(ctx context.Context) ([]CloudDriveResponse, error) {
-	var raw json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/cloud-drives", nil, nil, nil, &raw); err != nil {
+	var out []CloudDriveResponse
+	if err := c.doList(ctx, http.MethodGet, "/cloud-drives", nil, nil, "", &out); err != nil {
 		return nil, err
 	}
-	return decodeItems[CloudDriveResponse](raw)
+	return out, nil
 }
 
 // GetCloudDrive retrieves a cloud-drive connection.
@@ -2946,11 +2970,11 @@ func (c *Client) DeleteCloudDrive(ctx context.Context, connectionID string) erro
 // GetAgentsUsingCloudDrive lists the agents that use a cloud-drive connection.
 // Either wire shape is accepted.
 func (c *Client) GetAgentsUsingCloudDrive(ctx context.Context, connectionID string) ([]AgentUsingCloudDriveResponse, error) {
-	var raw json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/agents", url.PathEscape(connectionID)), nil, nil, nil, &raw); err != nil {
+	var out []AgentUsingCloudDriveResponse
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/agents", url.PathEscape(connectionID)), nil, nil, "", &out); err != nil {
 		return nil, err
 	}
-	return decodeItems[AgentUsingCloudDriveResponse](raw)
+	return out, nil
 }
 
 // CloudDriveRejectionOptions controls query parameters for [Client.ListCloudDriveRejections].
@@ -2967,11 +2991,11 @@ func (c *Client) ListCloudDriveRejections(ctx context.Context, connectionID stri
 	if opts.Limit > 0 {
 		q["limit"] = fmt.Sprintf("%d", opts.Limit)
 	}
-	var raw json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/rejections", url.PathEscape(connectionID)), q, nil, nil, &raw); err != nil {
+	var out []CloudDriveRejectionResponse
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/rejections", url.PathEscape(connectionID)), q, nil, "", &out); err != nil {
 		return nil, err
 	}
-	return decodeItems[CloudDriveRejectionResponse](raw)
+	return out, nil
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────────
