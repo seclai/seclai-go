@@ -756,6 +756,8 @@ func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachme
 // doRaw issues a request without a body and returns the 2xx response
 // unread, for the download methods; the caller must close its body. A non-2xx
 // response is read, closed and returned as an *APIStatusError, a 422 included.
+// Keep it that way: v1.7.x shipped that type for download 422s, and callers
+// type-assert on it, so returning *APIValidationError here is a breaking change.
 func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[string]string) (*http.Response, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -778,7 +780,7 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, apiError(resp.StatusCode, method, reqURL.String(), raw)
+		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw))}
 	}
 	return resp, nil
 }
