@@ -16,6 +16,11 @@
 - Add the email-source and cloud-drive-source settings to `CreateSourceBody`, `UpdateSourceBody` and `SourceResponse` — `EmailAllowedSenders`, `DocumentImages`, `FeedAttachments` and the `CloudDrive*` fields — and `EmailAddress` to `SourceResponse`
 - Add `HeldForReview` to `SourceContentStatusResponse`, `SkippedAttachments` to `ContentDetailResponse`, and `IncludeReasoning` to `AgentRunStreamRequest`
 - Add 10 types for those endpoints and fields, including `AcceptedAttachmentSlot`, `ContentAttachmentResponse`, `ContentAttachmentDetailResponse`, `EmailSourceRejectionResponse` and `SkippedAttachmentResponse`
+- Add `ClearSourceRetention` to remove a source's retention window, so its content is kept indefinitely. `UpdateSource` no longer clears it, see below
+
+### Fixed
+
+- Send only the fields set on `UpdateSourceBody` from `UpdateSource`. Every call sent an explicit null for each unset field, and the API reads a null `retention_days` as "clear the retention window", so any update that did not set it, such as a rename, made the source keep its content indefinitely. A caller who relied on that to clear the window must now call `ClearSourceRetention`
 
 ## [1.7.1] - 2026-10-05
 

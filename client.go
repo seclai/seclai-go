@@ -1887,13 +1887,53 @@ func (c *Client) GetSource(ctx context.Context, sourceID string) (*SourceRespons
 	return &out, nil
 }
 
-// UpdateSource updates a source.
+// UpdateSource updates a source. Only the fields set on body are sent; a nil
+// field leaves that setting unchanged. To clear the retention window, use
+// ClearSourceRetention.
 func (c *Client) UpdateSource(ctx context.Context, sourceID string, body UpdateSourceBody) (*SourceResponse, error) {
+	// The generated struct has no omitempty tags, so marshalling it directly
+	// sends null for every unset field, and the API reads a null
+	// retention_days as "clear the retention window".
+	payload, err := withoutNulls(body)
+	if err != nil {
+		return nil, err
+	}
 	var out SourceResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, body, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ClearSourceRetention removes a source's retention window, so its content is
+// kept indefinitely. It sends an explicit null retention_days and leaves every
+// other setting unchanged.
+func (c *Client) ClearSourceRetention(ctx context.Context, sourceID string) (*SourceResponse, error) {
+	var out SourceResponse
+	payload := map[string]any{"retention_days": nil}
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, payload, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// withoutNulls marshals v to a JSON object and drops its top-level null
+// fields, so that an unset pointer field is omitted rather than sent as null.
+func withoutNulls(v any) (map[string]json.RawMessage, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	fields := map[string]json.RawMessage{}
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	for k, f := range fields {
+		if string(f) == "null" {
+			delete(fields, k)
+		}
+	}
+	return fields, nil
 }
 
 // DeleteSource deletes a source.

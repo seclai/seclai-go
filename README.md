@@ -535,6 +535,17 @@ _, _ = client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{})
 _ = client.DeleteSource(ctx, "source_id")
 ```
 
+`UpdateSource` sends only the fields you set; a nil field is left unchanged.
+To remove the retention window, so content is kept indefinitely, call
+`ClearSourceRetention`:
+
+<!-- sdksync:check -->
+```go
+days := 90
+_, _ = client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{RetentionDays: &days})
+_, _ = client.ClearSourceRetention(ctx, "source_id")
+```
+
 Indexing status of a source's content, keyed by the `content_version_id` the
 upload methods return:
 
