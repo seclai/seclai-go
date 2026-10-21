@@ -202,8 +202,8 @@ func TestClient_DownloadContentAttachment_WithheldIsAnError(t *testing.T) {
 	}
 }
 
-// The download methods return *APIStatusError for every non-2xx, a 422
-// included, as released; *APIValidationError does not unwrap to it.
+// The download methods return a bare *APIStatusError for every non-2xx, a 422
+// included, as released; callers type-assert on it.
 func TestClient_Download_ValidationErrorIsStatusError(t *testing.T) {
 	var rec requestRecorder
 	c := newRecordingServer(t, &rec, 422, "application/json",
@@ -225,9 +225,9 @@ func TestClient_Download_ValidationErrorIsStatusError(t *testing.T) {
 		if resp != nil {
 			t.Fatalf("%s: expected no response on 422", name)
 		}
-		var statusErr *APIStatusError
-		if !errors.As(err, &statusErr) || statusErr.StatusCode != 422 {
-			t.Fatalf("%s: expected a 422 APIStatusError, got %v", name, err)
+		statusErr, ok := err.(*APIStatusError)
+		if !ok || statusErr.StatusCode != 422 {
+			t.Fatalf("%s: expected a bare 422 *APIStatusError, got %T %v", name, err, err)
 		}
 	}
 }
