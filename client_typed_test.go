@@ -2545,7 +2545,8 @@ func TestAPIVersionConstants_TrackTheSpec(t *testing.T) {
 	}
 	known := []string{
 		APIVersion20260701, APIVersion20260727, APIVersion20260803, APIVersion20260821,
-		APIVersion20260928, APIVersion20260930, APIVersion20261003,
+		APIVersion20260928, APIVersion20260930, APIVersion20261003, APIVersion20261005,
+		APIVersion20261013, APIVersion20261016, APIVersion20261018, APIVersion20261019,
 	}
 	if strings.Join(KnownAPIVersions, ",") != strings.Join(known, ",") {
 		t.Fatalf("KnownAPIVersions %v does not list every constant %v", KnownAPIVersions, known)

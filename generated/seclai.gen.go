@@ -85,6 +85,14 @@ const (
 	VectorStoreUnavailable ServiceUnavailableErrorErrorCode = "vector_store_unavailable"
 )
 
+// Defines values for SkippedAttachmentReason.
+const (
+	DisplayedInBody SkippedAttachmentReason = "displayed_in_body"
+	NoFilename      SkippedAttachmentReason = "no_filename"
+	OverCap         SkippedAttachmentReason = "over_cap"
+	Undecodable     SkippedAttachmentReason = "undecodable"
+)
+
 // Defines values for SourceIndexMode.
 const (
 	SourceIndexModeBalanced        SourceIndexMode = "balanced"
@@ -98,6 +106,34 @@ const (
 	Keyword  DocsSearchApiDocsSearchGetParamsMode = "keyword"
 	Semantic DocsSearchApiDocsSearchGetParamsMode = "semantic"
 )
+
+// AcceptedAttachmentSlot defines model for AcceptedAttachmentSlot.
+type AcceptedAttachmentSlot struct {
+	// ContentTypes Accepted types, e.g. ``application/pdf`` or ``image/*``; empty accepts any type.
+	ContentTypes *[]string `json:"content_types,omitempty"`
+
+	// Label Shown to people.
+	Label *string `json:"label"`
+
+	// Max Most files a run may include; empty is no limit.
+	Max *int `json:"max"`
+
+	// Min Fewest files a run must include; fewer refuses the run, except on an email trigger set to run anyway, which lists the shortfall.
+	Min *int `json:"min,omitempty"`
+
+	// Name Lowercase letters, digits and underscores, starting with a letter. Steps reference the files as ``{{agent.attachments.<name>}}``.
+	Name string `json:"name"`
+
+	// NamePattern Filename glob a file must also match, ignoring case.
+	NamePattern *string `json:"name_pattern"`
+}
+
+// AcceptedAttachmentsResponse defines model for AcceptedAttachmentsResponse.
+type AcceptedAttachmentsResponse struct {
+	AcceptedAttachments []AcceptedAttachmentSlot `json:"accepted_attachments"`
+	AgentId             openapi_types.UUID       `json:"agent_id"`
+	TriggerId           openapi_types.UUID       `json:"trigger_id"`
+}
 
 // AddConversationTurnRequest defines model for AddConversationTurnRequest.
 type AddConversationTurnRequest struct {
@@ -120,17 +156,19 @@ type AddEmailDomainRequest struct {
 	Value string `json:"value"`
 }
 
-// AgentAttachmentRefsApiResponse Static attachment-reference contract for an agent.
+// AgentAttachmentRefsApiResponse The input attachments an agent's trigger declares.
 //
-// Mirrors the MCP “get_agent_attachment_references“ tool: returns
-// what files (if any) an agent's templates expect on a run so API
-// consumers can stage uploads correctly before calling
+// Mirrors the MCP “get_agent_attachment_references“ tool, so API
+// consumers can stage uploads that fit before calling
 // “POST /agents/{id}/runs“.
 type AgentAttachmentRefsApiResponse struct {
+	// AcceptedAttachments The attachments the agent's trigger declares. A run's files are each assigned to one; a file none accepts, or an attachment with fewer files than its ``min``, rejects the run with HTTP 400. Steps reference one as ``{{agent.attachments.<name>}}``.
+	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments,omitempty"`
+
 	// Agent Per-source attachment-reference summary.
 	Agent *AttachmentRefsSourceApiSummary `json:"agent,omitempty"`
 
-	// RequiresUploads When ``false`` the agent's definition does NOT reference any uploaded attachments — ``POST /agents/{id}/upload-input`` will reject with HTTP 400. When ``true`` the ``agent`` block lists the specific selectors a run-time batch must satisfy.
+	// RequiresUploads When ``false`` the agent takes no files through the API — it has no ``dynamic_input`` trigger, or that trigger declares no attachments — and ``POST /agents/{id}/upload-input`` will reject with HTTP 400. When ``true`` ``accepted_attachments`` lists what a run's files must fit.
 	RequiresUploads bool `json:"requires_uploads"`
 }
 
@@ -264,14 +302,14 @@ type AgentRunRequest struct {
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
 	Input *string `json:"input"`
 
-	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` — use that field to attach multiple files. May be combined with ``input``: the prompt text leads and the file's extracted text follows under a ``# {filename}`` heading.
+	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` — use that field to attach multiple files. May be combined with ``input``: the prompt text leads and the file follows under a ``# {filename}`` heading (before ``Seclai-Version: 2026-10-16``, followed by its extracted text).
 	//
-	// **Attachment visibility:** a step only sees the upload when its template references the input — via ``{{input}}`` / ``{{agent.input}}`` / ``{{step.<id>.input|output}}`` (implicit, all attachments) or the ``{{attachments[…]}}`` family (explicit narrowing — e.g. ``{{attachments[0]}}``, ``{{attachments[*.pdf]}}``).
+	// **Which steps receive it:** a step that sends or stores files takes the files its ``attachments`` field selects. An LLM step (``prompt_call``, ``extract_data``, ``evaluate_step``) takes the files its ``attachments`` field names, or else the files its plain-text templates reference: ``{{agent.attachments.<name>}}`` for one attachment the trigger declares, or ``{{agent.input}}`` for every upload unless a template also names an agent attachment.
 	//
-	// **Per-batch validation:** every selector the agent's definition declares must be satisfied or the run is rejected with HTTP 400. Exact-name selectors require that filename to be present; indexed selectors require at least N+1 files; glob patterns require at least one matching filename.
+	// **Per-batch validation:** the batch must fit the trigger's ``accepted_attachments`` — every file fits one declared attachment and each attachment gets at least its ``min`` files — or the run is rejected with HTTP 400.
 	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
 
-	// InputUploadIds IDs of multiple previously uploaded files. Each upload's extracted text is concatenated under a heading; each upload's binary is surfaced as a separate ``MediaAttachment`` so multi-modal prompt steps reason over all files at once. Steps narrow visibility via ``{{attachments[…]}}`` selectors (by index, filename, or fnmatch glob). The batch must satisfy every selector the agent declares — exact names, indexed references (length must exceed the highest index), and glob patterns (each pattern needs at least one match). Mismatches return HTTP 400 with the unmet requirements listed.  Mutually exclusive with ``input_upload_id`` (two spellings of the same batch), but may be combined with ``input`` — the prompt text leads and the per-file sections follow, so "a photo plus a sentence about it" needs no synthetic text upload. Max 20 uploads per run.
+	// InputUploadIds IDs of multiple previously uploaded files. Each upload gets a heading in ``input`` (before ``Seclai-Version: 2026-10-16``, followed by its extracted text); each upload reaches steps as a separate file (before ``Seclai-Version: 2026-10-16``, a text upload in the open ``files`` attachment is written into ``input`` instead). Steps choose files as described under ``input_upload_id``. The batch must fit the trigger's ``accepted_attachments``; a mismatch returns HTTP 400 listing what does not fit.  Mutually exclusive with ``input_upload_id`` (two spellings of the same batch), but may be combined with ``input`` — the prompt text leads and the per-file sections follow, so "a photo plus a sentence about it" needs no synthetic text upload. Max 20 uploads per run.
 	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
@@ -280,7 +318,7 @@ type AgentRunRequest struct {
 	// Priority If true, the agent run will be treated as priority execution.
 	Priority *bool `json:"priority,omitempty"`
 
-	// ReplayOfRunId Re-run this agent reusing a prior run's uploaded input files. The files are re-resolved server-side from the source run (which must belong to this account and agent) — you do not re-upload them. Combine with ``input`` to change the text while keeping the files. A fresh upload batch (``input_upload_id(s)``) takes precedence and disables replay. Binaries swept by retention fall back to their extracted text.
+	// ReplayOfRunId Re-run this agent reusing a prior run's uploaded input files. The files are re-resolved server-side from the source run (which must belong to this account and agent) — you do not re-upload them. Combine with ``input`` to change the text while keeping the files. A fresh upload batch (``input_upload_id(s)``) takes precedence and disables replay. Binaries swept by retention fall back to their extracted text. Files the trigger's ``accepted_attachments`` no longer accepts are left out.
 	ReplayOfRunId *openapi_types.UUID `json:"replay_of_run_id"`
 }
 
@@ -319,7 +357,7 @@ type AgentRunResponse struct {
 	// InputScanStatus Result of the prompt injection scan: safe, unsafe, skipped, timed_out, or error.
 	InputScanStatus *string `json:"input_scan_status"`
 
-	// Output The run's output text; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30` an output that has files is instead the manifest JSON `{schema, text, attachments: [{storage_key, mime, name, label, bytes}]}`; `bytes` is absent on runs made before that version shipped.
+	// Output The run's output text; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30` an output that has files is instead the manifest JSON `{schema, text, attachments: [{storage_key, mime, name, label, bytes}]}`; `bytes` can be `null` on runs made before that version shipped.
 	Output *string `json:"output"`
 
 	// OutputContentType MIME type of `output` — mirrors the terminal step's `output_content_type`.  `text/plain` / `text/*` are free-form text and `application/json` is a JSON document.  Below `Seclai-Version: 2026-09-30` an output that has files reads `application/vnd.seclai.manifest+json` (see `output`); the same files are in `attachments` on every version, each with a `download_url`.  Null on runs that produced no terminal output or that pre-date this column.
@@ -338,7 +376,7 @@ type AgentRunResponse struct {
 	// Steps Step outputs and per-step timing/credits. Only included when requested.
 	Steps *[]AgentRunStepResponse `json:"steps"`
 
-	// TracePurgedAt When this run's trace content was deleted under the account's agent-trace retention window.  Non-null means `input`, `output` and every step's and tool call's I/O are null **by design** and will never be available again — the run aged out, it did not fail.  Branch on this rather than on a null `output`: a run that genuinely produced nothing looks identical.  Status, timing and credits remain accurate.
+	// TracePurgedAt When this run's trace content was deleted under the account's agent-trace retention window.  Non-null means `input`, `output` and every step's and tool call's I/O are null **by design** and will never be available again — the run aged out, it did not fail.  A tool call's `error` may be null as well, so a failed tool call can report its status without a message.  Branch on this rather than on a null `output`: a run that genuinely produced nothing looks identical.  Status, timing and credits remain accurate.
 	TracePurgedAt *time.Time `json:"trace_purged_at"`
 
 	// WaitMs Cumulative milliseconds the run was parked on standard-mode wait steps.  Subtracted from active duration in run-detail and duration-stats responses, exactly like hitl_wait_ms.  Priority waits block inline and are not counted here.
@@ -381,25 +419,28 @@ type AgentRunStepResponse struct {
 	// ToolCalls LLM tool calls made during this step (prompt_call steps only), ordered by execution. Empty for steps that invoked no tools.
 	ToolCalls *[]AgentRunToolCallResponse `json:"tool_calls,omitempty"`
 
-	// Warnings Authoring problems the step ran into, whether or not it then failed, such as a file name selector that matched none of its source's files.
+	// Warnings Problems the step ran into, whether or not it then failed, such as a file name selector that matched none of its source's files, or a model that returned no answer.
 	Warnings *[]string `json:"warnings"`
 }
 
 // AgentRunStreamRequest defines model for AgentRunStreamRequest.
 type AgentRunStreamRequest struct {
+	// IncludeReasoning Receive `stream_reasoning` events carrying the model's reasoning while it thinks. They are sent only for a `streaming_result` step whose author enabled `show_reasoning`, and never when a governance policy redacts that step.
+	IncludeReasoning *bool `json:"include_reasoning,omitempty"`
+
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
 	Input *string `json:"input"`
 
-	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` — use that field to attach multiple files. May be combined with ``input``. Subject to the same per-batch attachment-selector validation as the non-streaming endpoint.
+	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` — use that field to attach multiple files. May be combined with ``input``. Must fit the trigger's ``accepted_attachments``, as on the non-streaming endpoint.
 	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
 
-	// InputUploadIds IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including per-batch selector validation (exact names, indexed references, and glob patterns must all be satisfied or the run is rejected with HTTP 400) and combining the batch with ``input`` prompt text. Max 20.
+	// InputUploadIds IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including fitting the trigger's ``accepted_attachments`` (else HTTP 400) and combining the batch with ``input`` prompt text. Max 20.
 	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
 	Metadata *map[string]JsonValue `json:"metadata"`
 
-	// ReplayOfRunId Re-run reusing a prior run's uploaded input files (re-resolved server-side from the source run, which must belong to this account and agent). A fresh upload batch takes precedence.
+	// ReplayOfRunId Re-run reusing a prior run's uploaded input files (re-resolved server-side from the source run, which must belong to this account and agent). A fresh upload batch takes precedence. Files the trigger's ``accepted_attachments`` no longer accepts are left out.
 	ReplayOfRunId *openapi_types.UUID `json:"replay_of_run_id"`
 }
 
@@ -491,6 +532,9 @@ type AgentSummaryResponse struct {
 
 	// SamplingConfig Sampling configuration for sample_and_flag mode.
 	SamplingConfig *map[string]interface{} `json:"sampling_config"`
+
+	// TriggerId ID of the agent's trigger, for the `/agents/{agent_id}/triggers/{trigger_id}/…` endpoints such as `accepted-attachments` and `email-config`.
+	TriggerId *string `json:"trigger_id"`
 
 	// TriggerType Trigger type for the agent.
 	TriggerType *string `json:"trigger_type"`
@@ -968,6 +1012,39 @@ type CompatibleRunResponse struct {
 	StartedAt        *string            `json:"started_at"`
 }
 
+// ContentAttachmentResponse A file attached to a content item.
+type ContentAttachmentResponse struct {
+	// ContentType MIME type of the attached file.
+	ContentType string `json:"content_type"`
+
+	// CreatedAt When the file was first attached.
+	CreatedAt string `json:"created_at"`
+
+	// Id The attachment's id, which the single-attachment endpoints take.
+	Id string `json:"id"`
+
+	// Indexed Whether indexing the file for search was asked for.
+	Indexed bool `json:"indexed"`
+
+	// IndexingError Why the file was not indexed, when `indexing_status` is `failed`.
+	IndexingError *string `json:"indexing_error"`
+
+	// IndexingStatus `pending`, `completed` or `failed`; null when indexing was not asked for. Search finds the file only when `completed`.
+	IndexingStatus *string `json:"indexing_status"`
+
+	// Key The attachment's key, unique within the item.
+	Key string `json:"key"`
+
+	// Metadata What is known about the file beyond its bytes. An image extracted from a PDF carries its `page_number`, and `page_render: true` when it is a render of the whole page. An image or video from a web page carries `source_url` (the address it was fetched from), `position` (its place among the media the page listed, from 0) and, when the page gave one, `alt_text`. Empty for most files. A retrieval metadata filter matches these keys, except `alt_text`, which is indexed as the attachment's text.
+	Metadata map[string]interface{} `json:"metadata"`
+
+	// SizeBytes Size of the attached file in bytes.
+	SizeBytes int `json:"size_bytes"`
+
+	// UpdatedAt When the attachment last changed.
+	UpdatedAt string `json:"updated_at"`
+}
+
 // ContentEmbeddingResponse Response model for content embedding.
 type ContentEmbeddingResponse struct {
 	BatchDuration float32   `json:"batch_duration"`
@@ -1137,14 +1214,38 @@ type CreateSourceBody struct {
 	// ChunkSize Chunk size for content processing.
 	ChunkSize *int `json:"chunk_size"`
 
+	// CloudDriveConnectionId Required for a cloud_drive source, and ignored on any other: the id of a connected drive, from GET /cloud-drives.
+	CloudDriveConnectionId *string `json:"cloud_drive_connection_id"`
+
+	// CloudDriveContentTypes For a cloud_drive source: comma-separated MIME types a file must have to be indexed. Omit for no filter.
+	CloudDriveContentTypes *string `json:"cloud_drive_content_types"`
+
+	// CloudDriveFolderPath For a cloud_drive source: the folder to index, as a path inside the drive. Omit to index the connected drive's own folder.
+	CloudDriveFolderPath *string `json:"cloud_drive_folder_path"`
+
+	// CloudDriveMaxFileMb For a cloud_drive source: files larger than this many megabytes are skipped. Omit for no limit of the source's own.
+	CloudDriveMaxFileMb *int `json:"cloud_drive_max_file_mb"`
+
+	// CloudDrivePathPattern For a cloud_drive source: a glob a file's path must match to be indexed, such as `**/*.pdf` or `/reports/*`. Omit for no filter.
+	CloudDrivePathPattern *string `json:"cloud_drive_path_pattern"`
+
 	// ContentFilter Content filter type.
 	ContentFilter *string `json:"content_filter"`
 
 	// Dimensions Embedding dimensions override.
 	Dimensions *int `json:"dimensions"`
 
+	// DocumentImages Whether the images inside PDF, DOCX, PPTX and XLSX files are attached to the item and indexed; on a text-only embedder, by the text in each image. Applies to documents added after it changes. Defaults to true; below Seclai-Version 2026-10-18 it defaults to false on a text-only embedder. On a website or RSS source it is ignored: `media_types` decides.
+	DocumentImages *bool `json:"document_images"`
+
+	// EmailAllowedSenders Required for an email source, and only valid there: the senders whose mail is stored. Each entry is a full address (news@example.com) or a bare domain (example.com), which also matches its sub-domains. Matched against the message's From address, which must pass DMARC.
+	EmailAllowedSenders *[]string `json:"email_allowed_senders"`
+
 	// EmbeddingModel Embedding model override — a `model_type` from `GET /models/embedders`, which also reports each embedder's `supported_input_media`. Defaults to the platform embedder (`default_model_type` on that endpoint) when omitted. Indexing images or video requires an embedder that lists that modality.
 	EmbeddingModel *string `json:"embedding_model"`
+
+	// FeedAttachments Kinds of file listed beside a feed item's content to attach to the item and index, on an RSS source. Subset of ['enclosures', 'item_image', 'media_rss']; any other value is refused. None are attached unless chosen.
+	FeedAttachments *[]string `json:"feed_attachments"`
 
 	// IndexMode Embedding quality / cost trade-off preset for custom_index sources.
 	//
@@ -1159,7 +1260,7 @@ type CreateSourceBody struct {
 	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
 	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
 
-	// MediaTypes Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored (see `supported_input_media` on GET /models/embedders); unsupported values are dropped. Omit / [] for text-only.
+	// MediaTypes Media kinds in a web page's main content to attach to the page's item and index, on a website or RSS source. Subset of ['images', 'video']. From `Seclai-Version: 2026-10-13` any other value, and any kind on another source type, is refused with a 400; older versions drop an unknown value and store the rest. A kind the source's embedder cannot index is stored and not indexed (see `supported_input_media` on GET /models/embedders). 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files. Applies to pages and documents added after it is set.
 	MediaTypes *[]string `json:"media_types"`
 
 	// Name Source name.
@@ -1171,13 +1272,13 @@ type CreateSourceBody struct {
 	// PollingAction Polling action.
 	PollingAction *string `json:"polling_action"`
 
-	// PollingMaxItems Max items per poll.
+	// PollingMaxItems The most new feed items a scheduled poll takes. Read for RSS feeds only: from Seclai-Version 2026-10-19 any other source type rejects it with 400. Earlier versions store it there. An email source rejects it at every version.
 	PollingMaxItems *int `json:"polling_max_items"`
 
 	// Retention Retention period in days.
 	Retention *int `json:"retention"`
 
-	// SourceType Source type: rss, website, or custom_index. The legacy value 'file_uploads' is accepted as an alias for custom_index.
+	// SourceType Source type: rss_feed, website, custom_index, cloud_drive or email. The legacy value 'file_uploads' is accepted as an alias for custom_index.
 	SourceType string `json:"source_type"`
 
 	// UrlId URL record ID (required for rss/website sources).
@@ -1278,17 +1379,57 @@ type EmailDomainsListResponse struct {
 	VanityPlanNames *[]string              `json:"vanity_plan_names,omitempty"`
 }
 
+// EmailSourceRejectionListResponse A page of mail an email content source refused.
+type EmailSourceRejectionListResponse struct {
+	Data []EmailSourceRejectionResponse `json:"data"`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:"pagination"`
+}
+
+// EmailSourceRejectionResponse Mail an email content source refused: who sent it and why, never what
+// it said.
+type EmailSourceRejectionResponse struct {
+	// AuthVerdicts The SPF, DKIM and DMARC verdicts reported for the message.
+	AuthVerdicts *map[string]string `json:"auth_verdicts,omitempty"`
+
+	// Authenticated Whether the message passed DMARC, which is what authenticates its From address. Adding an unauthenticated sender to the allowed senders does not let its mail in.
+	Authenticated bool `json:"authenticated"`
+
+	// CreatedAt When the mail was refused.
+	CreatedAt string `json:"created_at"`
+
+	// FromAddress The address in the message's From line, which the source's allowed senders are matched against. Null when no single From address could be read from the message unambiguously.
+	FromAddress *string `json:"from_address"`
+
+	// Id Unique identifier of the refusal.
+	Id string `json:"id"`
+
+	// Reason Why it was refused: sender_not_allowed, unauthenticated_sender, unreadable_from, sender_blocked, spam, virus, unsafe_content, rate_limited, account_not_chargeable or empty_message; or, for a message the source received before, what became of the earlier one: repeat_stored, repeat_held, repeat_deleted or repeat_in_progress.
+	Reason string `json:"reason"`
+
+	// Recipient The source address it was sent to.
+	Recipient string `json:"recipient"`
+
+	// Sender The envelope sender. For bulk mail this is the delivery provider's bounce address, not the From address.
+	Sender string `json:"sender"`
+
+	// SenderIp IP address the mail came from.
+	SenderIp *string `json:"sender_ip"`
+}
+
 // EmailTriggerConfigResponse An EMAIL_RECEIVED trigger's resolved address(es) and config.
 type EmailTriggerConfigResponse struct {
-	AgentId                  openapi_types.UUID `json:"agent_id"`
-	EmailAddresses           *[]string          `json:"email_addresses,omitempty"`
-	EmailAlias               *string            `json:"email_alias"`
-	EmailAllowedSenders      *[]string          `json:"email_allowed_senders"`
-	EmailIgnoreAutoGenerated *bool              `json:"email_ignore_auto_generated,omitempty"`
-	EmailQueueOnQuota        *bool              `json:"email_queue_on_quota,omitempty"`
-	EmailRequireSenderAuth   *bool              `json:"email_require_sender_auth,omitempty"`
-	TriggerId                openapi_types.UUID `json:"trigger_id"`
-	TriggerType              string             `json:"trigger_type"`
+	AgentId                      openapi_types.UUID `json:"agent_id"`
+	EmailAddresses               *[]string          `json:"email_addresses,omitempty"`
+	EmailAlias                   *string            `json:"email_alias"`
+	EmailAllowedSenders          *[]string          `json:"email_allowed_senders"`
+	EmailIgnoreAutoGenerated     *bool              `json:"email_ignore_auto_generated,omitempty"`
+	EmailQueueOnQuota            *bool              `json:"email_queue_on_quota,omitempty"`
+	EmailRequireSenderAuth       *bool              `json:"email_require_sender_auth,omitempty"`
+	EmailRunOnAttachmentMismatch *bool              `json:"email_run_on_attachment_mismatch,omitempty"`
+	TriggerId                    openapi_types.UUID `json:"trigger_id"`
+	TriggerType                  string             `json:"trigger_type"`
 }
 
 // EmbeddingModalityRateResponse Per-modality rate for a multi-modal embedder.
@@ -1613,7 +1754,7 @@ type GenerateAgentStepsRequest struct {
 
 // GenerateAgentStepsResponse defines model for GenerateAgentStepsResponse.
 type GenerateAgentStepsResponse struct {
-	// AgentConfig Suggested agent-level configuration, if any.
+	// AgentConfig Suggested agent-level configuration, if any. For an email_received agent it may carry `email_run_on_attachment_mismatch`, which the caller applies through the trigger's email-config endpoint. For a dynamic_input or email_received agent it may carry `accepted_attachments`, which the caller passes with the steps to `PUT /agents/{agent_id}/definition` so both save together.
 	AgentConfig *map[string]interface{} `json:"agent_config"`
 
 	// ConversationId Conversation turn ID for tracking.
@@ -2239,9 +2380,31 @@ type ServiceUnavailableError struct {
 // ServiceUnavailableErrorErrorCode defines model for ServiceUnavailableError.Error.Code.
 type ServiceUnavailableErrorErrorCode string
 
+// SetAcceptedAttachmentsRequest defines model for SetAcceptedAttachmentsRequest.
+type SetAcceptedAttachmentsRequest struct {
+	// AcceptedAttachments The input attachments the trigger accepts; ``null`` accepts any files (one attachment named ``files``). Only ``dynamic_input`` and ``email_received`` triggers take files.
+	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments"`
+}
+
 // SetAutoBlockModeRequest Set the account's governance auto-block mode (shared REST request).
 type SetAutoBlockModeRequest struct {
 	Mode string `json:"mode"`
+}
+
+// SkippedAttachmentReason defines model for SkippedAttachmentReason.
+type SkippedAttachmentReason string
+
+// SkippedAttachmentResponse A part of an email that was not stored as an attachment.
+type SkippedAttachmentResponse struct {
+	// ContentType The part's declared media type.
+	ContentType string `json:"content_type"`
+
+	// Filename The file name the part is listed under; null when it had none.
+	Filename *string                 `json:"filename"`
+	Reason   SkippedAttachmentReason `json:"reason"`
+
+	// SizeBytes Decoded size in bytes.
+	SizeBytes *int `json:"size_bytes"`
 }
 
 // SolutionSourceConnectionResponse defines model for SolutionSourceConnectionResponse.
@@ -2332,14 +2495,17 @@ type SourceContentStatusResponse struct {
 	// Error Why the item failed, when `content_status` is `failed`.
 	Error *string `json:"error"`
 
-	// ExtractedMediaCapped True when extraction stopped with media still unread, so the item references more media than was indexed and media search will not match anything past the cut. Two causes: a web page that ran out of the budget for fetching remote assets, or a container that could not be read to the end (a truncated or hostile archive). An uploaded document that reads cleanly is never capped, however much media it holds — there is no limit on that.
+	// ExtractedMediaCapped True when extraction stopped with media still unread, so the item references more media than was attached and media search will not match anything past the cut. The cause is a web page that ran out of the budget for fetching remote assets or listed more media than is recorded, or a web page or document that could not be read to the end.
 	ExtractedMediaCapped *bool `json:"extracted_media_capped,omitempty"`
 
-	// ExtractedMediaCount Number of embedded images / videos extracted from inside this item and indexed as their own chunks. There is no limit on this — a document contributes as many as it holds. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container, or found nothing. Treat null as 'unknown', never as zero.
+	// ExtractedMediaCount Number of images / videos in this web page's main content, or of images inside this PDF or Office document, that were attached to the item on this source; a file over the per-file size limit, listed as a failed attachment, is not counted. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container or this source's settings, or found nothing. Treat null as 'unknown', never as zero.
 	ExtractedMediaCount *int `json:"extracted_media_count"`
 
-	// ExtractedMediaLimit The bound that was reached, when extracted_media_capped is true and the stop was a bound — a number of fetch attempts, or a number of seconds. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.
+	// ExtractedMediaLimit The bound that was reached, when extracted_media_capped is true and the stop was a bound — a number of fetch attempts, of seconds, of bytes, or of media listed. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.
 	ExtractedMediaLimit *int `json:"extracted_media_limit"`
+
+	// HeldForReview An ENFORCE governance policy blocked this item at import. It is held for review and is not retrievable: resolving its blocking evaluations releases it into the source, and it is purged when the hold window ends.
+	HeldForReview *bool `json:"held_for_review,omitempty"`
 
 	// IndexedAt Timestamp when the item finished indexing and became retrievable. `null` until then.
 	IndexedAt *string `json:"indexed_at"`
@@ -2422,6 +2588,21 @@ type SourceResponse struct {
 	// ChunkSize Chunk size for content processing.
 	ChunkSize *int `json:"chunk_size"`
 
+	// CloudDriveConnectionId For a cloud_drive source: the id of the connected drive it indexes. Null for every other source type.
+	CloudDriveConnectionId *string `json:"cloud_drive_connection_id"`
+
+	// CloudDriveContentTypes For a cloud_drive source: the comma-separated MIME types a file must have to be indexed. Null when there is no filter.
+	CloudDriveContentTypes *string `json:"cloud_drive_content_types"`
+
+	// CloudDriveFolderPath For a cloud_drive source: the folder it indexes. Null when it indexes the connected drive's own folder.
+	CloudDriveFolderPath *string `json:"cloud_drive_folder_path"`
+
+	// CloudDriveMaxFileMb For a cloud_drive source: the size in megabytes above which a file is skipped. Null when the source sets no limit of its own.
+	CloudDriveMaxFileMb *int `json:"cloud_drive_max_file_mb"`
+
+	// CloudDrivePathPattern For a cloud_drive source: the glob a file's path must match to be indexed. Null when there is none.
+	CloudDrivePathPattern *string `json:"cloud_drive_path_pattern"`
+
 	// ContentCount Number of content items associated with the source connection.
 	ContentCount *int `json:"content_count,omitempty"`
 
@@ -2434,11 +2615,23 @@ type SourceResponse struct {
 	// Dimensions Dimensions of the embedding model.
 	Dimensions *int `json:"dimensions"`
 
+	// DocumentImages Whether the images inside PDF, DOCX, PPTX and XLSX files are attached to the item and indexed; on a source that follows no web pages and has a text-only embedder, by the text in each image. Applies to documents added after it changes. On a website or RSS source it reports whether `media_types` holds 'images', and the images are attached only when the source's embedder indexes images.
+	DocumentImages *bool `json:"document_images,omitempty"`
+
+	// EmailAddress For an email source: the address to send mail to. Null for every other source type.
+	EmailAddress *string `json:"email_address"`
+
+	// EmailAllowedSenders For an email source: the addresses and domains whose mail is stored. Null for every other source type.
+	EmailAllowedSenders *[]string `json:"email_allowed_senders"`
+
 	// EmbeddingModel Embedding model used for the source connection.
 	EmbeddingModel *string `json:"embedding_model"`
 
 	// EmbeddingModelType Type of the embedding model.
 	EmbeddingModelType *string `json:"embedding_model_type"`
+
+	// FeedAttachments Kinds of file listed beside a feed item's content that an RSS source attaches to the item and indexes (subset of ['enclosures', 'item_image', 'media_rss']).
+	FeedAttachments *[]string `json:"feed_attachments,omitempty"`
 
 	// FreeRetentionDays Number of days content is stored for free before billing applies.
 	FreeRetentionDays *int `json:"free_retention_days"`
@@ -2462,7 +2655,7 @@ type SourceResponse struct {
 	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
 	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
 
-	// MediaTypes Media kinds extracted from indexed content and embedded as multi-modal KB chunks (subset of ['images', 'video']). Empty = text-only.
+	// MediaTypes Media kinds in a web page's main content that are attached to the page's item and indexed (subset of ['images', 'video']). On a website or RSS source 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files.
 	MediaTypes *[]string `json:"media_types,omitempty"`
 
 	// Name Name of the source connection.
@@ -2477,7 +2670,7 @@ type SourceResponse struct {
 	// PollingAction Polling action for the source connection.
 	PollingAction *string `json:"polling_action"`
 
-	// PollingMaxItems Maximum items to poll for the source connection.
+	// PollingMaxItems The most new feed items a scheduled poll takes. Read for RSS feeds only.
 	PollingMaxItems *int `json:"polling_max_items"`
 
 	// PulledAt Timestamp when content was last pulled.
@@ -2624,6 +2817,9 @@ type UnreadCountResponse struct {
 
 // UpdateAgentDefinitionRequest defines model for UpdateAgentDefinitionRequest.
 type UpdateAgentDefinitionRequest struct {
+	// AcceptedAttachments When given, declared on the main branch's file-taking triggers in the same save, so the steps may read its slots as `{{agent.attachments.<slot>}}`; omitted, the triggers keep theirs.
+	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments"`
+
 	// Definition The full agent definition (name, description, tags, steps). Steps form a tree workflow. Each step has a `step_type`, `id`, `name`, and type-specific config. Content enrichment steps (write_metadata, write_content_attachment, load_content_attachment, load_content) require content-triggered agents.
 	Definition map[string]interface{} `json:"definition"`
 
@@ -2740,7 +2936,28 @@ type UpdateSolutionRequest struct {
 
 // UpdateSourceBody Request body for updating a content source.
 type UpdateSourceBody struct {
-	// MediaTypes Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored (see `supported_input_media` on GET /models/embedders); unsupported values are dropped. [] disables media extraction (text-only).
+	// CloudDriveContentTypes For a cloud_drive source: comma-separated MIME types a file must have to be indexed. Send an empty string to clear it; omit to leave it unchanged.
+	CloudDriveContentTypes *string `json:"cloud_drive_content_types"`
+
+	// CloudDriveFolderPath For a cloud_drive source: the folder to index, as a path inside the drive. Send an empty string to index the connected drive's own folder; omit to leave it unchanged.
+	CloudDriveFolderPath *string `json:"cloud_drive_folder_path"`
+
+	// CloudDriveMaxFileMb For a cloud_drive source: files larger than this many megabytes are skipped. Send 0 to clear the source's own limit; omit to leave it unchanged.
+	CloudDriveMaxFileMb *int `json:"cloud_drive_max_file_mb"`
+
+	// CloudDrivePathPattern For a cloud_drive source: a glob a file's path must match to be indexed, such as `**/*.pdf` or `/reports/*`. Send an empty string to clear it; omit to leave it unchanged.
+	CloudDrivePathPattern *string `json:"cloud_drive_path_pattern"`
+
+	// DocumentImages Whether the images inside PDF, DOCX, PPTX and XLSX files are attached to the item and indexed; on a text-only embedder, by the text in each image. Applies to documents added after it changes. Omit the field to leave it unchanged. On a website or RSS source it is ignored: `media_types` decides.
+	DocumentImages *bool `json:"document_images"`
+
+	// EmailAllowedSenders For an email source: replaces the allowed senders. Each entry is a full address or a bare domain. The list cannot be emptied. Omit to leave it unchanged.
+	EmailAllowedSenders *[]string `json:"email_allowed_senders"`
+
+	// FeedAttachments Kinds of file listed beside a feed item's content to attach to the item and index, on an RSS source. Subset of ['enclosures', 'item_image', 'media_rss']; any other value is refused. [] attaches none. Applies to items added after it changes. Omit the field to leave it unchanged.
+	FeedAttachments *[]string `json:"feed_attachments"`
+
+	// MediaTypes Media kinds in a web page's main content to attach to the page's item and index, on a website or RSS source. Subset of ['images', 'video']. From `Seclai-Version: 2026-10-13` any other value, and any kind on another source type, is refused with a 400; older versions drop an unknown value and store the rest. A kind the source's embedder cannot index is stored and not indexed (see `supported_input_media` on GET /models/embedders). [] attaches no media from web pages. 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files. Applies to pages and documents added after it changes.
 	MediaTypes *[]string `json:"media_types"`
 
 	// Name New name.
@@ -2917,6 +3134,9 @@ type RoutersApiAgentsAgentTraceSearchRequest struct {
 
 // RoutersApiAgentsCreateAgentRequest defines model for routers__api__agents__CreateAgentRequest.
 type RoutersApiAgentsCreateAgentRequest struct {
+	// AcceptedAttachments The input attachments the trigger accepts. Omitted, the ``agent_definition`` trigger's declaration is kept when the export carries one and both trigger types take files; otherwise a dynamic_input or email_received trigger accepts any files (one attachment named ``files``), and any other trigger none.
+	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments"`
+
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, replaces any template-derived workflow and pre-fills metadata/trigger fields the request does not specify explicitly. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
 	AgentDefinition *map[string]interface{} `json:"agent_definition"`
 
@@ -2964,6 +3184,9 @@ type RoutersApiAgentsSetEmailTriggerConfigRequest struct {
 
 	// RequireSenderAuth When true (default for new triggers), the envelope sender must pass SPF or DMARC even on an open inbox (no allowlist); unauthenticated, spoofable mail is rejected. Set false to accept fully unauthenticated mail on an open inbox.
 	RequireSenderAuth *bool `json:"require_sender_auth"`
+
+	// RunOnAttachmentMismatch When true (default false), an email whose attachments don't fit what the agent expects still runs: files the agent can't take are left out and the problems are listed in the `email_attachment_issues` run metadata. When false, the run fails.
+	RunOnAttachmentMismatch *bool `json:"run_on_attachment_mismatch"`
 }
 
 // RoutersApiAgentsUpdateAgentRequest defines model for routers__api__agents__UpdateAgentRequest.
@@ -3114,6 +3337,56 @@ type RoutersApiAlertsUpdateOrganizationAlertPreferenceRequest struct {
 	Subscribed bool `json:"subscribed"`
 }
 
+// RoutersApiContentsContentAttachmentDetailResponse One attached file, with the text indexed from it.
+type RoutersApiContentsContentAttachmentDetailResponse struct {
+	// ContentType MIME type of the attached file.
+	ContentType string `json:"content_type"`
+
+	// CreatedAt When the file was first attached.
+	CreatedAt string `json:"created_at"`
+
+	// FileWithheld Why the file's bytes are not served, or null when they are: `blocked_by_governance_policy`, `redacted_by_governance_policy` (any text below is the redacted text), or `pending_screening`.
+	FileWithheld *string `json:"file_withheld"`
+
+	// Id The attachment's id, which the single-attachment endpoints take.
+	Id string `json:"id"`
+
+	// Indexed Whether indexing the file for search was asked for.
+	Indexed bool `json:"indexed"`
+
+	// IndexingError Why the file was not indexed, when `indexing_status` is `failed`.
+	IndexingError *string `json:"indexing_error"`
+
+	// IndexingStatus `pending`, `completed` or `failed`; null when indexing was not asked for. Search finds the file only when `completed`.
+	IndexingStatus *string `json:"indexing_status"`
+
+	// Key The attachment's key, unique within the item.
+	Key string `json:"key"`
+
+	// Metadata What is known about the file beyond its bytes. An image extracted from a PDF carries its `page_number`, and `page_render: true` when it is a render of the whole page. An image or video from a web page carries `source_url` (the address it was fetched from), `position` (its place among the media the page listed, from 0) and, when the page gave one, `alt_text`. Empty for most files. A retrieval metadata filter matches these keys, except `alt_text`, which is indexed as the attachment's text.
+	Metadata map[string]interface{} `json:"metadata"`
+
+	// SizeBytes Size of the attached file in bytes.
+	SizeBytes int `json:"size_bytes"`
+
+	// TextContent The requested range of the text the file is indexed by; null when the file has no completed index or was indexed without text.
+	TextContent            *string `json:"text_content"`
+	TextContentEnd         int     `json:"text_content_end"`
+	TextContentStart       int     `json:"text_content_start"`
+	TextContentTotalLength int     `json:"text_content_total_length"`
+
+	// UpdatedAt When the attachment last changed.
+	UpdatedAt string `json:"updated_at"`
+}
+
+// RoutersApiContentsContentAttachmentsListResponse Response model for a content item's attachments.
+type RoutersApiContentsContentAttachmentsListResponse struct {
+	Data []ContentAttachmentResponse `json:"data"`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:"pagination"`
+}
+
 // RoutersApiContentsContentDetailResponse Response model for content detail.
 type RoutersApiContentsContentDetailResponse struct {
 	// ContentDuration Duration of the content in seconds.
@@ -3143,13 +3416,13 @@ type RoutersApiContentsContentDetailResponse struct {
 	// Error Error message, if any.
 	Error *string `json:"error"`
 
-	// ExtractedMediaCapped True when extraction stopped with media still unread, so the item references more media than was indexed and media search will not match anything past the cut. Two causes: a web page that ran out of the budget for fetching remote assets, or a container that could not be read to the end (a truncated or hostile archive). An uploaded document that reads cleanly is never capped, however much media it holds — there is no limit on that.
+	// ExtractedMediaCapped True when extraction stopped with media still unread, so the item references more media than was attached and media search will not match anything past the cut. The cause is a web page that ran out of the budget for fetching remote assets or listed more media than is recorded, or a web page or document that could not be read to the end.
 	ExtractedMediaCapped *bool `json:"extracted_media_capped,omitempty"`
 
-	// ExtractedMediaCount Number of embedded images / videos extracted from inside this item and indexed as their own chunks. There is no limit on this — a document contributes as many as it holds. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container, or found nothing. Treat null as 'unknown', never as zero.
+	// ExtractedMediaCount Number of images / videos in this web page's main content, or of images inside this PDF or Office document, that were attached to the item on this source; a file over the per-file size limit, listed as a failed attachment, is not counted. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container or this source's settings, or found nothing. Treat null as 'unknown', never as zero.
 	ExtractedMediaCount *int `json:"extracted_media_count"`
 
-	// ExtractedMediaLimit The bound that was reached, when extracted_media_capped is true and the stop was a bound — a number of fetch attempts, or a number of seconds. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.
+	// ExtractedMediaLimit The bound that was reached, when extracted_media_capped is true and the stop was a bound — a number of fetch attempts, of seconds, of bytes, or of media listed. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.
 	ExtractedMediaLimit *int `json:"extracted_media_limit"`
 
 	// Id Unique identifier for the content version.
@@ -3163,6 +3436,9 @@ type RoutersApiContentsContentDetailResponse struct {
 
 	// PulledAt Timestamp when the content was pulled.
 	PulledAt string `json:"pulled_at"`
+
+	// SkippedAttachments Parts of an email delivered to an email content source that were not stored as attachments of this item, each with the reason: displayed_in_body (an image the message body shows, such as a signature logo), over_cap (beyond the per-message attachment limit), no_filename, or undecodable. size_bytes is null for a part that was never decoded. Empty for every other item.
+	SkippedAttachments *[]SkippedAttachmentResponse `json:"skipped_attachments,omitempty"`
 
 	// SourceConnectionContentVersionId ID of the source connection content version.
 	SourceConnectionContentVersionId string `json:"source_connection_content_version_id"`
@@ -3596,7 +3872,7 @@ type RoutersApiSourcesFileUploadResponse struct {
 	// ContentVersionId ID of the created content version, and what the source content status endpoints take. Set when `status` is `uploaded`; `null` when `status` is `duplicate`, because no new version was created.
 	ContentVersionId *string `json:"content_version_id"`
 
-	// EmbedderWarning Set when the file is non-text but the source's embedder is text-only — indexing will rely on OCR / transcription and may produce a FAILED row if no text can be extracted.
+	// EmbedderWarning Set when a file that is not text is indexed from its extracted text alone rather than embedded whole: the item is FAILED if no text can be extracted. Says so when the images inside a document are attached to the item and indexed as well.
 	EmbedderWarning *string `json:"embedder_warning"`
 
 	// Filename Original filename
@@ -4248,6 +4524,15 @@ type ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams
 	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
+// SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams defines parameters for SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPut.
+type SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
 // SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams defines parameters for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut.
 type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -4609,6 +4894,51 @@ type GetContentDetailApiContentsSourceConnectionContentVersionGetParams struct {
 
 // ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams defines parameters for ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut.
 type ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetParams defines parameters for ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGet.
+type ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetParams defines parameters for GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGet.
+type GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetParams struct {
+	Start *int `form:"start,omitempty" json:"start,omitempty"`
+	End   *int `form:"end,omitempty" json:"end,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetParams defines parameters for ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGet.
+type ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetParams struct {
+	Page  *int `form:"page,omitempty" json:"page,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetParams defines parameters for GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGet.
+type GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 
@@ -5502,6 +5832,21 @@ type GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVe
 	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
+// ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetParams defines parameters for ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGet.
+type ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetParams struct {
+	// Page Page number.
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
 // GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams defines parameters for GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet.
 type GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -5680,6 +6025,9 @@ type RunAgentApiAgentsAgentIdRunsPostJSONRequestBody = AgentRunRequest
 
 // RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody defines body for RunStreamingAgentApiAgentsAgentIdRunsStreamPost for application/json ContentType.
 type RunStreamingAgentApiAgentsAgentIdRunsStreamPostJSONRequestBody = AgentRunStreamRequest
+
+// SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutJSONRequestBody defines body for SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPut for application/json ContentType.
+type SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutJSONRequestBody = SetAcceptedAttachmentsRequest
 
 // SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody defines body for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut for application/json ContentType.
 type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody = RoutersApiAgentsSetEmailTriggerConfigRequest
@@ -6139,6 +6487,11 @@ type ClientInterface interface {
 	// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet request
 	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGet(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithBody request with any body
+	SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPut(ctx context.Context, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, body SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody request with any body
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -6273,6 +6626,18 @@ type ClientInterface interface {
 	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBody(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGet request
+	ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGet(ctx context.Context, sourceConnectionContentVersion string, params *ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGet request
+	GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGet(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGet request
+	ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGet(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGet request
+	GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGet(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet request
 	ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGet(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6566,6 +6931,9 @@ type ClientInterface interface {
 
 	// GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet request
 	GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, contentVersionId openapi_types.UUID, params *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGet request
+	ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet request
 	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7386,6 +7754,30 @@ func (c *Client) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResu
 	return c.Client.Do(req)
 }
 
+func (c *Client) SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutRequestWithBody(c.Server, agentId, triggerId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPut(ctx context.Context, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, body SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutRequest(c.Server, agentId, triggerId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequestWithBody(c.Server, agentId, triggerId, params, contentType, body)
 	if err != nil {
@@ -7976,6 +8368,54 @@ func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentV
 
 func (c *Client) ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutRequest(c.Server, sourceConnectionContentVersion, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGet(ctx context.Context, sourceConnectionContentVersion string, params *ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetRequest(c.Server, sourceConnectionContentVersion, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGet(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetRequest(c.Server, sourceConnectionContentVersion, attachmentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGet(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetRequest(c.Server, sourceConnectionContentVersion, attachmentId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGet(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetRequest(c.Server, sourceConnectionContentVersion, attachmentId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9260,6 +9700,18 @@ func (c *Client) ListSourceContentsApiSourcesSourceConnectionIdContentsGet(ctx c
 
 func (c *Client) GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGet(ctx context.Context, sourceConnectionId openapi_types.UUID, contentVersionId openapi_types.UUID, params *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetRequest(c.Server, sourceConnectionId, contentVersionId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGet(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetRequest(c.Server, sourceConnectionId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -13358,6 +13810,86 @@ func NewListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetReq
 	return req, nil
 }
 
+// NewSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutRequest calls the generic SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPut builder with application/json body
+func NewSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutRequest(server string, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, body SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutRequestWithBody(server, agentId, triggerId, params, "application/json", bodyReader)
+}
+
+// NewSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutRequestWithBody generates requests for SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPut with any type of body
+func NewSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutRequestWithBody(server string, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "trigger_id", runtime.ParamLocationPath, triggerId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/triggers/%s/accepted-attachments", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequest calls the generic SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut builder with application/json body
 func NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequest(server string, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -15893,6 +16425,381 @@ func NewReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetRequest generates requests for ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGet
+func NewListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetRequest(server string, sourceConnectionContentVersion string, params *ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_content_version", runtime.ParamLocationPath, sourceConnectionContentVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/contents/%s/attachments", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetRequest generates requests for GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGet
+func NewGetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetRequest(server string, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_content_version", runtime.ParamLocationPath, sourceConnectionContentVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "attachment_id", runtime.ParamLocationPath, attachmentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/contents/%s/attachments/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Start != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "start", runtime.ParamLocationQuery, *params.Start); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.End != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "end", runtime.ParamLocationQuery, *params.End); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetRequest generates requests for ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGet
+func NewListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetRequest(server string, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_content_version", runtime.ParamLocationPath, sourceConnectionContentVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "attachment_id", runtime.ParamLocationPath, attachmentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/contents/%s/attachments/%s/embeddings", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetRequest generates requests for GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGet
+func NewGetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetRequest(server string, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_content_version", runtime.ParamLocationPath, sourceConnectionContentVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "attachment_id", runtime.ParamLocationPath, attachmentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/contents/%s/attachments/%s/file", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -21924,6 +22831,104 @@ func NewGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsConten
 	return req, nil
 }
 
+// NewListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetRequest generates requests for ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGet
+func NewListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetRequest(server string, sourceConnectionId openapi_types.UUID, params *ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "source_connection_id", runtime.ParamLocationPath, sourceConnectionId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/sources/%s/email-rejections", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest generates requests for GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGet
 func NewGetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetRequest(server string, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams) (*http.Request, error) {
 	var err error
@@ -23118,6 +24123,11 @@ type ClientWithResponsesInterface interface {
 	// ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse request
 	ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetWithResponse(ctx context.Context, agentId string, runId string, params *ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse, error)
 
+	// SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithBodyWithResponse request with any body
+	SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithBodyWithResponse(ctx context.Context, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse, error)
+
+	SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithResponse(ctx context.Context, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, body SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse, error)
+
 	// SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse request with any body
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error)
 
@@ -23252,6 +24262,18 @@ type ClientWithResponsesInterface interface {
 	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithBodyWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error)
 
 	ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutParams, body ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse, error)
+
+	// ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetWithResponse request
+	ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetParams, reqEditors ...RequestEditorFn) (*ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse, error)
+
+	// GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetWithResponse request
+	GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetWithResponse(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse, error)
+
+	// ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetWithResponse request
+	ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetWithResponse(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse, error)
+
+	// GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetWithResponse request
+	GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetWithResponse(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetParams, reqEditors ...RequestEditorFn) (*GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse, error)
 
 	// ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse request
 	ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse, error)
@@ -23545,6 +24567,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetWithResponse request
 	GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, contentVersionId openapi_types.UUID, params *GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetParams, reqEditors ...RequestEditorFn) (*GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse, error)
+
+	// ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetWithResponse request
+	ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse, error)
 
 	// GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse request
 	GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetParams, reqEditors ...RequestEditorFn) (*GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse, error)
@@ -24744,6 +25769,30 @@ func (r ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetRes
 	return 0
 }
 
+type SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AcceptedAttachmentsResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -25573,6 +26622,101 @@ func (r ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPut
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiContentsContentAttachmentsListResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiContentsContentAttachmentDetailResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RoutersApiContentsContentEmbeddingsListResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -27455,6 +28599,30 @@ func (r GetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsConten
 	return 0
 }
 
+type ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *EmailSourceRejectionListResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -28349,6 +29517,23 @@ func (c *ClientWithResponses) ListRunEvaluationResultsApiAgentsAgentIdRunsRunIdE
 	return ParseListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetResponse(rsp)
 }
 
+// SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithBodyWithResponse request with arbitrary body returning *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse
+func (c *ClientWithResponses) SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithBodyWithResponse(ctx context.Context, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse, error) {
+	rsp, err := c.SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithBody(ctx, agentId, triggerId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithResponse(ctx context.Context, agentId string, triggerId string, params *SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutParams, body SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse, error) {
+	rsp, err := c.SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPut(ctx, agentId, triggerId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse(rsp)
+}
+
 // SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse request with arbitrary body returning *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse
 func (c *ClientWithResponses) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error) {
 	rsp, err := c.SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx, agentId, triggerId, params, contentType, body, reqEditors...)
@@ -28782,6 +29967,42 @@ func (c *ClientWithResponses) ReplaceContentWithInlineTextApiContentsSourceConne
 		return nil, err
 	}
 	return ParseReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionPutResponse(rsp)
+}
+
+// ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetWithResponse request returning *ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse
+func (c *ClientWithResponses) ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetWithResponse(ctx context.Context, sourceConnectionContentVersion string, params *ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetParams, reqEditors ...RequestEditorFn) (*ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse, error) {
+	rsp, err := c.ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGet(ctx, sourceConnectionContentVersion, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse(rsp)
+}
+
+// GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetWithResponse request returning *GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse
+func (c *ClientWithResponses) GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetWithResponse(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetParams, reqEditors ...RequestEditorFn) (*GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse, error) {
+	rsp, err := c.GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGet(ctx, sourceConnectionContentVersion, attachmentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse(rsp)
+}
+
+// ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetWithResponse request returning *ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse
+func (c *ClientWithResponses) ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetWithResponse(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetParams, reqEditors ...RequestEditorFn) (*ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse, error) {
+	rsp, err := c.ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGet(ctx, sourceConnectionContentVersion, attachmentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse(rsp)
+}
+
+// GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetWithResponse request returning *GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse
+func (c *ClientWithResponses) GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetWithResponse(ctx context.Context, sourceConnectionContentVersion openapi_types.UUID, attachmentId openapi_types.UUID, params *GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetParams, reqEditors ...RequestEditorFn) (*GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse, error) {
+	rsp, err := c.GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGet(ctx, sourceConnectionContentVersion, attachmentId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse(rsp)
 }
 
 // ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetWithResponse request returning *ListContentEmbeddingsApiContentsSourceConnectionContentVersionEmbeddingsGetResponse
@@ -29717,6 +30938,15 @@ func (c *ClientWithResponses) GetSourceContentStatusEndpointApiSourcesSourceConn
 		return nil, err
 	}
 	return ParseGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsContentVersionIdGetResponse(rsp)
+}
+
+// ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetWithResponse request returning *ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse
+func (c *ClientWithResponses) ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse, error) {
+	rsp, err := c.ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGet(ctx, sourceConnectionId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse(rsp)
 }
 
 // GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetWithResponse request returning *GetSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationGetResponse
@@ -31765,6 +32995,46 @@ func ParseListRunEvaluationResultsApiAgentsAgentIdRunsRunIdEvaluationResultsGetR
 	return response, nil
 }
 
+// ParseSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse parses an HTTP response from a SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutWithResponse call
+func ParseSetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse(rsp *http.Response) (*SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmentsPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AcceptedAttachmentsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse parses an HTTP response from a SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithResponse call
 func ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse(rsp *http.Response) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -33111,6 +34381,159 @@ func ParseReplaceContentWithInlineTextApiContentsSourceConnectionContentVersionP
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse parses an HTTP response from a ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetWithResponse call
+func ParseListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse(rsp *http.Response) (*ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListContentAttachmentsApiContentsSourceConnectionContentVersionAttachmentsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiContentsContentAttachmentsListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse parses an HTTP response from a GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetWithResponse call
+func ParseGetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse(rsp *http.Response) (*GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetContentAttachmentApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiContentsContentAttachmentDetailResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse parses an HTTP response from a ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetWithResponse call
+func ParseListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse(rsp *http.Response) (*ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListContentAttachmentEmbeddingsApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdEmbeddingsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoutersApiContentsContentEmbeddingsListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse parses an HTTP response from a GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetWithResponse call
+func ParseGetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse(rsp *http.Response) (*GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetContentAttachmentFileApiContentsSourceConnectionContentVersionAttachmentsAttachmentIdFileGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest HTTPValidationError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -36126,6 +37549,46 @@ func ParseGetSourceContentStatusEndpointApiSourcesSourceConnectionIdContentsCont
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest SourceContentStatusResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse parses an HTTP response from a ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetWithResponse call
+func ParseListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse(rsp *http.Response) (*ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListEmailSourceRejectionsApiApiSourcesSourceConnectionIdEmailRejectionsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EmailSourceRejectionListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

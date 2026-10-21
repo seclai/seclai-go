@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.8.0] - 2026-10-21
+
+### Changed
+
+- Sync the bundled OpenAPI spec, adding 6 paths and 10 schemas, and regenerate the `generated` package from it
+
+### Added
+
+- Add `SetAcceptedAttachments` to declare the named input attachments an agent's trigger accepts, which steps read as `{{agent.attachments.<name>}}`; a nil declaration is sent as null and accepts any files. `CreateAgentRequest` and `UpdateAgentDefinitionRequest` gain `AcceptedAttachments` to declare them in the same call, `AgentAttachmentRefsApiResponse` reports them, and `AgentSummaryResponse` gains the `TriggerId` the method takes
+- Add content-attachment methods: `ListContentAttachments`, `GetContentAttachment` for one file's indexing status and indexed text, `ListContentAttachmentEmbeddings`, and `DownloadContentAttachment`, which returns the raw `*http.Response` and an `*APIStatusError` with status 403 for a withheld file
+- Add `ListEmailSourceRejections` for the mail an email content source refused, with the sender, the reason and whether the message was authenticated
+- Add `RunOnAttachmentMismatch` to `SetEmailTriggerConfig`, sent only when set, and `EmailRunOnAttachmentMismatch` to `EmailTriggerConfigResponse`
+- Add the `APIVersion20261005`, `APIVersion20261013`, `APIVersion20261016`, `APIVersion20261018` and `APIVersion20261019` constants, and move `APIVersionLatest` to `2026-10-19`. None of the five changes a response shape this client decodes; the README lists what each changes
+- Add the email-source and cloud-drive-source settings to `CreateSourceBody`, `UpdateSourceBody` and `SourceResponse` — `EmailAllowedSenders`, `DocumentImages`, `FeedAttachments` and the `CloudDrive*` fields — and `EmailAddress` to `SourceResponse`
+- Add `HeldForReview` to `SourceContentStatusResponse`, `SkippedAttachments` to `ContentDetailResponse`, and `IncludeReasoning` to `AgentRunStreamRequest`
+- Add 10 types for those endpoints and fields, including `AcceptedAttachmentSlot`, `ContentAttachmentResponse`, `ContentAttachmentDetailResponse`, `EmailSourceRejectionResponse` and `SkippedAttachmentResponse`
+
 ## [1.7.1] - 2026-10-05
 
 ### Changed
@@ -188,6 +205,7 @@ _Stable release. No functional changes since 0.0.2._
 
 _Initial release._
 
+[1.8.0]: https://github.com/seclai/seclai-go/releases/tag/v1.8.0
 [1.7.1]: https://github.com/seclai/seclai-go/releases/tag/v1.7.1
 [1.7.0]: https://github.com/seclai/seclai-go/releases/tag/v1.7.0
 [1.6.0]: https://github.com/seclai/seclai-go/releases/tag/v1.6.0

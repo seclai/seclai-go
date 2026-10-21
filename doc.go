@@ -2,14 +2,14 @@
 //
 // The SDK provides typed convenience methods for the full Seclai API, covering:
 //
-//   - Agents: CRUD, definitions, runs, streaming, polling, input uploads, AI assistant
+//   - Agents: CRUD, definitions, runs, streaming, polling, input uploads, accepted attachments, AI assistant
 //   - Agent Evaluations: criteria, results, summaries, compatible runs, draft tests
 //   - Knowledge Bases: CRUD
 //   - Memory Banks: CRUD, compaction, templates, AI assistant
-//   - Sources: CRUD, file uploads, inline text, embedding migrations, per-item indexing status
+//   - Sources: CRUD, file uploads, inline text, embedding migrations, per-item indexing status, refused email
 //   - Source Exports: create, list, download, estimate, cancel
 //   - Cloud Drives: providers, connections, dependent agents, skipped files
-//   - Content: detail, embeddings, inline text replace, file uploads
+//   - Content: detail, embeddings, attachments, inline text replace, file uploads
 //   - Solutions: CRUD, resource linking, conversations, AI assistant
 //   - Governance: AI assistant for policy management
 //   - Alerts: CRUD, configs, organization preferences

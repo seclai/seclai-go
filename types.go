@@ -61,6 +61,18 @@ type AgentExportResponse = generated.AgentExportResponse
 // UpdateAgentDefinitionRequest is the request body for updating an agent definition.
 type UpdateAgentDefinitionRequest = generated.UpdateAgentDefinitionRequest
 
+// ── Accepted Attachments ────────────────────────────────────────────────────
+
+// AcceptedAttachmentSlot is one named input attachment a trigger accepts: the
+// content types it takes and how many files a run may include.
+type AcceptedAttachmentSlot = generated.AcceptedAttachmentSlot
+
+// SetAcceptedAttachmentsRequest is the request body for [Client.SetAcceptedAttachments].
+type SetAcceptedAttachmentsRequest = generated.SetAcceptedAttachmentsRequest
+
+// AcceptedAttachmentsResponse is the input attachments a trigger accepts.
+type AcceptedAttachmentsResponse = generated.AcceptedAttachmentsResponse
+
 // ── Agent Import ────────────────────────────────────────────────────────────
 
 // AgentImportPreviewRequest is the request body for previewing an agent_definition import (dry-run validation).
@@ -489,6 +501,22 @@ type ContentEmbeddingsListResponse = generated.RoutersApiContentsContentEmbeddin
 // ContentEmbeddingResponse is an individual content embedding.
 type ContentEmbeddingResponse = generated.ContentEmbeddingResponse
 
+// ContentAttachmentResponse is a file attached to a content item.
+type ContentAttachmentResponse = generated.ContentAttachmentResponse
+
+// ContentAttachmentsListResponse is a page of a content item's attachments.
+type ContentAttachmentsListResponse = generated.RoutersApiContentsContentAttachmentsListResponse
+
+// ContentAttachmentDetailResponse is one content attachment: its indexing
+// status, metadata and the text it is indexed by.
+type ContentAttachmentDetailResponse = generated.RoutersApiContentsContentAttachmentDetailResponse
+
+// SkippedAttachmentResponse is a part of an email that was not stored as an attachment.
+type SkippedAttachmentResponse = generated.SkippedAttachmentResponse
+
+// SkippedAttachmentReason is why an email part was not stored as an attachment.
+type SkippedAttachmentReason = generated.SkippedAttachmentReason
+
 // ContentFileUploadResponse is the upload response for content replacement uploads.
 type ContentFileUploadResponse = generated.RoutersApiContentsFileUploadResponse
 
@@ -731,6 +759,15 @@ type SourceContentStatusResponse = generated.SourceContentStatusResponse
 // SourceContentStatusListResponse is a page of content items and their
 // indexing status. Always the canonical {data, pagination} envelope.
 type SourceContentStatusListResponse = generated.SourceContentStatusListResponse
+
+// ── Email Source Rejections ─────────────────────────────────────────────────
+
+// EmailSourceRejectionResponse is mail an email content source refused: who
+// sent it and why, never what it said.
+type EmailSourceRejectionResponse = generated.EmailSourceRejectionResponse
+
+// EmailSourceRejectionListResponse is a page of mail an email content source refused.
+type EmailSourceRejectionListResponse = generated.EmailSourceRejectionListResponse
 
 // ── Embedding and Reranker Models ───────────────────────────────────────────
 

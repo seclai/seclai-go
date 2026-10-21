@@ -149,7 +149,7 @@ baseline applies and responses keep their current shapes. Upgrading this module
 alone never changes the wire contract.
 
 Known versions are package constants (`APIVersion20260701` through
-`APIVersion20261003`, one per version in the table below, plus
+`APIVersion20261019`, one per version in the table below, plus
 `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
 this release was **not** built against makes `NewClient` fail: a newer version
 can reshape responses, and this client would decode them incorrectly rather than
@@ -235,6 +235,11 @@ client decodes:
 | `2026-09-28` | `APIVersion20260928` | Agent-definition writes use the current file-list grammar: an omitted `attachments` keeps the stored list and `[]` means no files |
 | `2026-09-30` | `APIVersion20260930` | A run's and a step's `Output`, and a step's `Input`, are the text rather than a JSON manifest; files are in `Attachments` on every version |
 | `2026-10-03` | `APIVersion20261003` | A new LLM step written without `attachments` takes its parent's files, and a new retrieval step's matched media are its files |
+| `2026-10-05` | `APIVersion20261005` | A source item an enforcing governance policy holds at import is `completed` with `HeldForReview` set, rather than `failed` with the hold as its error |
+| `2026-10-13` | `APIVersion20261013` | `CreateSource` and `UpdateSource` reject an unknown `media_types` kind, and any kind on a source that is not a website or RSS feed, with a 400 |
+| `2026-10-16` | `APIVersion20261016` | An uploaded agent input file is `ready` at once and its text is not written into `input`; steps receive the file |
+| `2026-10-18` | `APIVersion20261018` | A source that follows no web pages, created on a text-only embedder without `document_images`, gets it turned on |
+| `2026-10-19` | `APIVersion20261019` | `CreateSource` rejects `polling_max_items` on a website, custom index or cloud drive source with a 400 |
 
 ## Typed responses
 
@@ -405,6 +410,30 @@ upload, _ := client.UploadAgentInput(ctx, "agent_id", seclai.UploadFileRequest{
 status, _ := client.GetAgentInputUploadStatus(ctx, "agent_id", upload.UploadId)
 ```
 
+### Accepted attachments
+
+Declare the named input attachments a trigger accepts. Each file in a run is
+assigned to one of them before any step runs, and steps read one as
+`{{agent.attachments.<name>}}`. The trigger id is the `TriggerId` that
+`GetAgent` returns.
+
+<!-- sdksync:check -->
+```go
+pdf := []string{"application/pdf"}
+one := 1
+slots := []seclai.AcceptedAttachmentSlot{{Name: "invoice", ContentTypes: &pdf, Min: &one, Max: &one}}
+accepted, _ := client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id",
+	seclai.SetAcceptedAttachmentsRequest{AcceptedAttachments: &slots})
+fmt.Println(accepted.AcceptedAttachments[0].Name)
+
+// A nil declaration is sent as null: the trigger accepts any files, as one
+// attachment named "files".
+_, _ = client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id", seclai.SetAcceptedAttachmentsRequest{})
+```
+
+`CreateAgentRequest` and `UpdateAgentDefinitionRequest` take the same
+`AcceptedAttachments` to declare them in the same call.
+
 ### Agent run attachments
 
 ```go
@@ -528,6 +557,20 @@ one, _ := client.GetSourceContentStatus(ctx, "source_id", "cv_1")
 fmt.Println(one.ContentStatus)
 ```
 
+Mail an email source refused, newest first — who sent it and why, never its
+content. Adding an authenticated sender's address or domain to the source's
+`EmailAllowedSenders` lets its mail in:
+
+<!-- sdksync:check -->
+```go
+rejected, _ := client.ListEmailSourceRejections(ctx, "source_id", seclai.ListOptions{Limit: 50})
+for _, r := range rejected.Data {
+	if r.FromAddress != nil && r.Authenticated {
+		fmt.Println(*r.FromAddress, r.Reason)
+	}
+}
+```
+
 ### Cloud drives
 
 <!-- sdksync:check -->
@@ -618,6 +661,32 @@ _, _ = client.ReplaceContentWithInlineText(ctx, "content_id", seclai.InlineTextR
 })
 ```
 
+Files attached to a content item — an email's attachments, an RSS item's feed
+files, a web page's media, the images inside a document, or files an agent
+attached:
+
+<!-- sdksync:check -->
+```go
+attachments, _ := client.ListContentAttachments(ctx, "content_id", seclai.ListOptions{})
+for _, a := range attachments.Data {
+	fmt.Println(a.Id, a.ContentType, a.Indexed)
+}
+
+// Indexed text (paged with start/end; 0 keeps the API defaults) and embeddings
+att, _ := client.GetContentAttachment(ctx, "content_id", "attachment_id", 0, 0)
+if att.FileWithheld != nil {
+	fmt.Println("withheld:", *att.FileWithheld) // downloading it answers 403
+}
+attEmbeddings, _ := client.ListContentAttachmentEmbeddings(ctx, "content_id", "attachment_id", seclai.ListOptions{})
+fmt.Println(attEmbeddings.Pagination.Total)
+
+// The file itself; the caller closes the body.
+file, err := client.DownloadContentAttachment(ctx, "content_id", "attachment_id")
+if err == nil {
+	defer file.Body.Close()
+}
+```
+
 ### Solutions
 
 ```go
@@ -698,7 +767,7 @@ cfg, _ := client.SetEmailTriggerConfig(ctx, "agent_id", "trigger_id",
         Alias:             &alias,
         AllowedSenders:    &senders,
         RequireSenderAuth: &requireAuth,
-        // IgnoreAutoGenerated and QueueOnQuota left nil — unchanged.
+        // IgnoreAutoGenerated, QueueOnQuota and RunOnAttachmentMismatch left nil — unchanged.
     })
 fmt.Println(cfg.EmailAddresses)
 

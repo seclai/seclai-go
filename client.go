@@ -704,6 +704,23 @@ func (c *Client) GetAgentAttachmentReferences(ctx context.Context, agentID strin
 	return &out, nil
 }
 
+// SetAcceptedAttachments replaces the input attachments an agent's trigger
+// accepts. A run's files are each assigned to one declared attachment before
+// any step runs, and steps reference one as {{agent.attachments.<name>}}.
+//
+// triggerID is the TriggerId that [Client.GetAgent] returns. A nil
+// AcceptedAttachments is sent as null and accepts any files, as one attachment
+// named "files"; only dynamic_input and email_received triggers take files.
+// The API answers 400 when the agent references an attachment the new
+// declaration leaves out.
+func (c *Client) SetAcceptedAttachments(ctx context.Context, agentID, triggerID string, body SetAcceptedAttachmentsRequest) (*AcceptedAttachmentsResponse, error) {
+	var out AcceptedAttachmentsResponse
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/accepted-attachments", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, body, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // DownloadAgentRunAttachment downloads a file attachment emitted by a step in an
 // agent run. Returns the raw HTTP response so the caller can stream the body. The
 // caller must close the response body.
@@ -1499,6 +1516,9 @@ func (c *Client) SetEmailTriggerConfig(ctx context.Context, agentID string, trig
 	if body.RequireSenderAuth != nil {
 		payload["require_sender_auth"] = body.RequireSenderAuth
 	}
+	if body.RunOnAttachmentMismatch != nil {
+		payload["run_on_attachment_mismatch"] = body.RunOnAttachmentMismatch
+	}
 
 	var out EmailTriggerConfigResponse
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/email-config", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, payload, nil, &out); err != nil {
@@ -2073,6 +2093,23 @@ func (c *Client) GetSourceContentStatus(ctx context.Context, sourceID, contentVe
 	return &out, nil
 }
 
+// ListEmailSourceRejections lists mail an email content source refused, newest
+// first. Each entry says who sent the message and why it was refused, never its
+// subject or body. To accept a refused sender, add its FromAddress or that
+// address's domain to the source's EmailAllowedSenders — which only helps when
+// Authenticated is true.
+//
+// Requires an account owner or administrator (403 otherwise); the API answers
+// 404 for a source that is not an email source. The response is the
+// {data, pagination} envelope on every API version.
+func (c *Client) ListEmailSourceRejections(ctx context.Context, sourceID string, opts ListOptions) (*EmailSourceRejectionListResponse, error) {
+	var out EmailSourceRejectionListResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/email-rejections", url.PathEscape(sourceID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ── Content ─────────────────────────────────────────────────────────────────
 
 // GetContentDetail fetches content detail.
@@ -2112,6 +2149,84 @@ func (c *Client) ListContentEmbeddings(ctx context.Context, contentVersionID str
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ListContentAttachments lists the files attached to a content item: those an
+// agent's write_content_attachment step attached, the files sent with an email,
+// the feed files an RSS source keeps, a web page's media and the images inside
+// documents. Each entry says whether the file is indexed and, when indexing
+// failed, why. The response is the {data, pagination} envelope on every API
+// version.
+func (c *Client) ListContentAttachments(ctx context.Context, contentVersionID string, opts ListOptions) (*ContentAttachmentsListResponse, error) {
+	var out ContentAttachmentsListResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments", url.PathEscape(contentVersionID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetContentAttachment fetches one file attached to a content item: its
+// indexing status and reason, its metadata, and the text it is indexed by.
+// attachmentID is the Id of an entry from [Client.ListContentAttachments].
+// start and end page through long text; zero omits each, so the API applies
+// its defaults (0 and 5000). A file that was not indexed has no text.
+func (c *Client) GetContentAttachment(ctx context.Context, contentVersionID, attachmentID string, start, end int) (*ContentAttachmentDetailResponse, error) {
+	q := map[string]string{}
+	if start > 0 {
+		q["start"] = fmt.Sprintf("%d", start)
+	}
+	if end > 0 {
+		q["end"] = fmt.Sprintf("%d", end)
+	}
+	var out ContentAttachmentDetailResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), q, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListContentAttachmentEmbeddings lists the embeddings (chunk vectors) an
+// attached file is indexed by. The list is empty for a file with no completed index.
+func (c *Client) ListContentAttachmentEmbeddings(ctx context.Context, contentVersionID, attachmentID string, opts ListOptions) (*ContentEmbeddingsListResponse, error) {
+	var out ContentEmbeddingsListResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/embeddings", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DownloadContentAttachment downloads an attached file's bytes. Returns the raw
+// HTTP response so the caller can stream the body; the caller must close it.
+//
+// The API answers 403 (an [*APIStatusError]) when the file is withheld: a
+// governance policy blocked or redacted it, or it arrived from outside and is
+// still being indexed. The attachment's FileWithheld field says which.
+func (c *Client) DownloadContentAttachment(ctx context.Context, contentVersionID, attachmentID string) (*http.Response, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	reqURL := c.buildURL(fmt.Sprintf("/contents/%s/attachments/%s/file", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range c.defaultHeaders {
+		req.Header.Set(k, v)
+	}
+	if err := c.applyAuth(ctx, req); err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		text := strings.TrimSpace(string(raw))
+		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodGet, URL: reqURL.String(), ResponseText: text}
+	}
+	return resp, nil
 }
 
 // ── Solutions ───────────────────────────────────────────────────────────────
