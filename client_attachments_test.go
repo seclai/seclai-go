@@ -202,8 +202,9 @@ func TestClient_DownloadContentAttachment_WithheldIsAnError(t *testing.T) {
 	}
 }
 
-// The download methods map a 422 to *APIValidationError, as Do does.
-func TestClient_Download_ValidationErrorIsTyped(t *testing.T) {
+// The download methods return *APIStatusError for every non-2xx, a 422
+// included, as released; *APIValidationError does not unwrap to it.
+func TestClient_Download_ValidationErrorIsStatusError(t *testing.T) {
 	var rec requestRecorder
 	c := newRecordingServer(t, &rec, 422, "application/json",
 		`{"detail":[{"loc":["path","attachment_id"],"msg":"bad id","type":"value_error"}]}`)
@@ -224,12 +225,9 @@ func TestClient_Download_ValidationErrorIsTyped(t *testing.T) {
 		if resp != nil {
 			t.Fatalf("%s: expected no response on 422", name)
 		}
-		var valErr *APIValidationError
-		if !errors.As(err, &valErr) || valErr.StatusCode != 422 {
-			t.Fatalf("%s: expected a 422 APIValidationError, got %v", name, err)
-		}
-		if valErr.ValidationError == nil || len(*valErr.ValidationError.Detail) != 1 {
-			t.Fatalf("%s: expected the decoded validation detail, got %+v", name, valErr.ValidationError)
+		var statusErr *APIStatusError
+		if !errors.As(err, &statusErr) || statusErr.StatusCode != 422 {
+			t.Fatalf("%s: expected a 422 APIStatusError, got %v", name, err)
 		}
 	}
 }

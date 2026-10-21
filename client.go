@@ -755,8 +755,7 @@ func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachme
 
 // doRaw issues a request without a body and returns the 2xx response
 // unread, for the download methods; the caller must close its body. A non-2xx
-// response is read, closed and returned as the same error [Client.Do] returns:
-// an *APIValidationError for a 422 and an *APIStatusError otherwise.
+// response is read, closed and returned as an *APIStatusError, a 422 included.
 func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[string]string) (*http.Response, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -779,7 +778,7 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, apiError(resp.StatusCode, method, reqURL.String(), raw)
+		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw))}
 	}
 	return resp, nil
 }
@@ -1825,12 +1824,8 @@ func (c *Client) UpdateMemoryBank(ctx context.Context, memoryBankID string, body
 // the update endpoint spells "no window", and leaves every other setting
 // unchanged.
 func (c *Client) ClearMemoryBankRetention(ctx context.Context, memoryBankID string) (*MemoryBankResponse, error) {
-	var out MemoryBankResponse
-	payload := map[string]any{"retention_days": 0}
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/memory_banks/%s", url.PathEscape(memoryBankID)), nil, payload, nil, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
+	zero := 0
+	return c.UpdateMemoryBank(ctx, memoryBankID, UpdateMemoryBankBody{RetentionDays: &zero})
 }
 
 // DeleteMemoryBank deletes a memory bank.

@@ -29,7 +29,6 @@
 - Stop `UpdateSource` clearing the retention window on any update that did not set `RetentionDays`, such as a rename, which left the source keeping its content indefinitely. A caller who relied on that must now call `ClearSourceRetention`
 - Stop `UpdateEvaluationCriteria` clearing the description, evaluation prompt and expectation config when the call did not set them, and failing unless it set both `StepId`, without which it answered 400, and `PassThreshold`, a required setting the null could not clear. `Enabled` and `EvaluationTier` were already left unchanged. To clear the description, evaluation prompt or expectation config, call `ClearEvaluationCriteriaFields`
 - Stop a `Generated()` request built from `RoutersApiAgentsSetEmailTriggerConfigRequest` clearing the trigger's alias and sender allowlist and turning off `ignore_auto_generated`, `require_sender_auth` and `queue_on_quota` when they were not set, and one built from `CloudDriveUpdateRequest` clearing the connection's name and pointing it at the whole drive. `SetEmailTriggerConfig` and `UpdateCloudDrive` already sent only the fields that were set
-- Return an `*APIValidationError` for a 422 from `DownloadAgentRunAttachment` and `DownloadSourceExport`, as every other method does. They returned a plain `*APIStatusError`, so code that looks for `*APIStatusError` on a 422 from them must now look for `*APIValidationError`
 
 ## [1.7.1] - 2026-10-05
 
