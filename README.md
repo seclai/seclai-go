@@ -230,7 +230,7 @@ client decodes:
 
 | Version | Constant | What it changes |
 | --- | --- | --- |
-| `2026-08-03` | `APIVersion20260803` | `CreateMemoryBank` rejects `max_age_days` with a 400, and an omitted `retention_days` resolves per bank type instead of to 30 |
+| `2026-08-03` | `APIVersion20260803` | `CreateMemoryBank` rejects `max_age_days` with a 400, and an omitted `retention_days` resolves per bank type instead of to 30: 90 days for a conversation bank, indefinite for a general bank. `CreateMemoryBank` leaves a nil `RetentionDays` out, so this default applies; `RetentionIndefinite` keeps entries indefinitely on every version |
 | `2026-08-21` | `APIVersion20260821` | `CreateSource` rejects an embedding dimension its embedder does not support with a 400 — `ListEmbeddingModels` reports the supported ones |
 | `2026-09-28` | `APIVersion20260928` | Agent-definition writes use the current file-list grammar: an omitted `attachments` keeps the stored list and `[]` means no files |
 | `2026-09-30` | `APIVersion20260930` | A run's and a step's `Output`, and a step's `Input`, are the text rather than a JSON manifest; files are in `Attachments` on every version |
@@ -404,9 +404,12 @@ refs, _ := client.GetAgentAttachmentReferences(ctx, "agent_id")
 // refs.RequiresUploads reports whether the agent accepts files; refs.Agent lists
 // the exact names / indexes / glob patterns a run-time upload batch must satisfy.
 
+// Only a dynamic_input agent takes uploads; any other answers 400.
 upload, _ := client.UploadAgentInput(ctx, "agent_id", seclai.UploadFileRequest{
 	File: data, FileName: "input.pdf",
 })
+// Before API version 2026-10-16, poll until the upload's status is "ready"
+// before running. From 2026-10-16 an upload is ready at once.
 status, _ := client.GetAgentInputUploadStatus(ctx, "agent_id", upload.UploadId)
 ```
 
@@ -422,13 +425,23 @@ assigned to one of them before any step runs, and steps read one as
 pdf := []string{"application/pdf"}
 one := 1
 slots := []seclai.AcceptedAttachmentSlot{{Name: "invoice", ContentTypes: &pdf, Min: &one, Max: &one}}
-accepted, _ := client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id",
+accepted, err := client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id",
 	seclai.SetAcceptedAttachmentsRequest{AcceptedAttachments: &slots})
-fmt.Println(accepted.AcceptedAttachments[0].Name)
+if err != nil {
+	// A 400 means the agent still references an attachment this leaves out.
+	fmt.Println(err)
+	return
+}
+for _, slot := range accepted.AcceptedAttachments {
+	fmt.Println(slot.Name)
+}
 
 // A nil declaration is sent as null: the trigger accepts any files, as one
 // attachment named "files".
-_, _ = client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id", seclai.SetAcceptedAttachmentsRequest{})
+if _, err := client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id", seclai.SetAcceptedAttachmentsRequest{}); err != nil {
+	fmt.Println(err)
+	return
+}
 ```
 
 `CreateAgentRequest` and `UpdateAgentDefinitionRequest` take the same
@@ -485,6 +498,22 @@ nonManual, _ := client.GetNonManualEvaluationSummary(ctx, "agent_id")
 compatible, _ := client.ListCompatibleRuns(ctx, "criteria_id", seclai.ListOptions{})
 ```
 
+`UpdateEvaluationCriteria` sends only the fields you set. To clear a
+description, evaluation prompt or expectation config, or to remove a pinned
+tier so the criteria falls back to the agent's default tier, name the fields
+with `ClearEvaluationCriteriaFields`:
+
+<!-- sdksync:check -->
+```go
+if _, err := client.ClearEvaluationCriteriaFields(ctx, "criteria_id",
+	seclai.EvaluationCriteriaEvaluationTier,
+	seclai.EvaluationCriteriaDescription,
+); err != nil {
+	fmt.Println(err)
+	return
+}
+```
+
 ### Knowledge bases
 
 ```go
@@ -525,6 +554,25 @@ _, _ = client.AcceptMemoryBankAiSuggestion(ctx, "conversation_id", seclai.Memory
 _ = client.DeleteMemoryBankSource(ctx, "mb_id")
 ```
 
+A nil `RetentionDays` on `CreateMemoryBank` is left out, so the API's default
+applies: from API version `2026-08-03`, 90 days for a conversation bank and
+indefinite for a general bank; earlier versions give a conversation bank 30
+days. Set `RetentionDays` to `RetentionIndefinite` to keep entries indefinitely
+on every version, on `CreateMemoryBank` or `UpdateMemoryBank`:
+
+<!-- sdksync:check -->
+```go
+keep := seclai.RetentionIndefinite
+if _, err := client.CreateMemoryBank(ctx, seclai.CreateMemoryBankBody{Name: "support", RetentionDays: &keep}); err != nil {
+	fmt.Println(err)
+	return
+}
+if _, err := client.UpdateMemoryBank(ctx, "mb_id", seclai.UpdateMemoryBankBody{RetentionDays: &keep}); err != nil {
+	fmt.Println(err)
+	return
+}
+```
+
 ### Sources
 
 ```go
@@ -542,9 +590,23 @@ To remove the retention window, so content is kept indefinitely, call
 <!-- sdksync:check -->
 ```go
 days := 90
-_, _ = client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{RetentionDays: &days})
-_, _ = client.ClearSourceRetention(ctx, "source_id")
+if _, err := client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{RetentionDays: &days}); err != nil {
+	fmt.Println(err)
+	return
+}
+if _, err := client.ClearSourceRetention(ctx, "source_id"); err != nil {
+	fmt.Println(err)
+	return
+}
 ```
+
+Every request body works this way: a nil optional field is left out rather
+than sent as `null`. The exceptions are documented on their methods: a nil
+`AcceptedAttachments` on `SetAcceptedAttachments` and a nil version on
+`UpdateAPIVersion` are sent as `null`. Where the API gives an explicit `null`
+a meaning of its own, a named method sends it: `ClearSourceRetention`,
+`ClearEvaluationCriteriaFields`, and `RetentionIndefinite` on
+`CreateMemoryBank`.
 
 Indexing status of a source's content, keyed by the `content_version_id` the
 upload methods return:
@@ -683,8 +745,15 @@ for _, a := range attachments.Data {
 	fmt.Println(a.Id, a.ContentType, a.Indexed)
 }
 
-// Indexed text (paged with start/end; 0 keeps the API defaults) and embeddings
-att, _ := client.GetContentAttachment(ctx, "content_id", "attachment_id", 0, 0)
+// Indexed text, paged with Start and End (nil keeps the API defaults of 0 and
+// 5000; an End of 0 fetches the metadata alone), and embeddings
+end := 2000
+att, err := client.GetContentAttachment(ctx, "content_id", "attachment_id",
+	seclai.ContentAttachmentOptions{End: &end})
+if err != nil {
+	fmt.Println(err) // a 402 means the account has no credits left
+	return
+}
 if att.FileWithheld != nil {
 	fmt.Println("withheld:", *att.FileWithheld) // downloading it answers 403
 }

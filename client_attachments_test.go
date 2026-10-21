@@ -134,7 +134,8 @@ func TestClient_GetContentAttachment(t *testing.T) {
 	c := newRecordingServer(t, &rec, 200, "application/json",
 		`{`+testAttachment+`,"file_withheld":null,"text_content":"hello","text_content_start":10,"text_content_end":15,"text_content_total_length":15}`)
 
-	got, err := c.GetContentAttachment(context.Background(), "cv_1", "att_1", 10, 20)
+	start, end := 10, 20
+	got, err := c.GetContentAttachment(context.Background(), "cv_1", "att_1", ContentAttachmentOptions{Start: &start, End: &end})
 	if err != nil {
 		t.Fatalf("GetContentAttachment: %v", err)
 	}
@@ -143,11 +144,18 @@ func TestClient_GetContentAttachment(t *testing.T) {
 		t.Fatalf("unexpected response %+v", got)
 	}
 
-	// Zero start and end leave the API's defaults in place.
-	if _, err := c.GetContentAttachment(context.Background(), "cv_1", "att_1", 0, 0); err != nil {
+	// Nil Start and End leave the API's defaults in place.
+	if _, err := c.GetContentAttachment(context.Background(), "cv_1", "att_1", ContentAttachmentOptions{}); err != nil {
 		t.Fatalf("GetContentAttachment: %v", err)
 	}
 	rec.expect(t, http.MethodGet, "/contents/cv_1/attachments/att_1", "")
+
+	// A pointer to 0 is sent, for a fetch of the metadata alone.
+	zero := 0
+	if _, err := c.GetContentAttachment(context.Background(), "cv_1", "att_1", ContentAttachmentOptions{End: &zero}); err != nil {
+		t.Fatalf("GetContentAttachment: %v", err)
+	}
+	rec.expect(t, http.MethodGet, "/contents/cv_1/attachments/att_1", "end=0")
 }
 
 func TestClient_ListContentAttachmentEmbeddings(t *testing.T) {
@@ -217,7 +225,7 @@ func TestClient_ListEmailSourceRejections(t *testing.T) {
 func TestNewFields_RoundTripOnExistingModels(t *testing.T) {
 	var src SourceResponse
 	if err := json.Unmarshal([]byte(`{"email_address":"in@agent.seclai.com","email_allowed_senders":["example.com"],
-		"document_images":true,"feed_attachments":["audio"],"cloud_drive_folder_path":"/reports"}`), &src); err != nil {
+		"document_images":true,"feed_attachments":["enclosures"],"cloud_drive_folder_path":"/reports"}`), &src); err != nil {
 		t.Fatalf("SourceResponse: %v", err)
 	}
 	if src.EmailAddress == nil || *src.EmailAddress != "in@agent.seclai.com" || src.DocumentImages == nil || !*src.DocumentImages ||

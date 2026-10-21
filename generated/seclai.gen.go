@@ -113,10 +113,10 @@ type AcceptedAttachmentSlot struct {
 	ContentTypes *[]string `json:"content_types,omitempty"`
 
 	// Label Shown to people.
-	Label *string `json:"label"`
+	Label *string `json:"label,omitempty"`
 
 	// Max Most files a run may include; empty is no limit.
-	Max *int `json:"max"`
+	Max *int `json:"max,omitempty"`
 
 	// Min Fewest files a run must include; fewer refuses the run, except on an email trigger set to run anyway, which lists the shortfall.
 	Min *int `json:"min,omitempty"`
@@ -125,7 +125,7 @@ type AcceptedAttachmentSlot struct {
 	Name string `json:"name"`
 
 	// NamePattern Filename glob a file must also match, ignoring case.
-	NamePattern *string `json:"name_pattern"`
+	NamePattern *string `json:"name_pattern,omitempty"`
 }
 
 // AcceptedAttachmentsResponse defines model for AcceptedAttachmentsResponse.
@@ -138,10 +138,10 @@ type AcceptedAttachmentsResponse struct {
 // AddConversationTurnRequest defines model for AddConversationTurnRequest.
 type AddConversationTurnRequest struct {
 	// ActionsTaken Actions taken by the AI
-	ActionsTaken *map[string]interface{} `json:"actions_taken"`
+	ActionsTaken *map[string]interface{} `json:"actions_taken,omitempty"`
 
 	// AiResponse AI response text
-	AiResponse *string `json:"ai_response"`
+	AiResponse *string `json:"ai_response,omitempty"`
 
 	// UserInput User input text
 	UserInput string `json:"user_input"`
@@ -300,26 +300,26 @@ type AgentRunFileResponse struct {
 // AgentRunRequest defines model for AgentRunRequest.
 type AgentRunRequest struct {
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
-	Input *string `json:"input"`
+	Input *string `json:"input,omitempty"`
 
 	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` — use that field to attach multiple files. May be combined with ``input``: the prompt text leads and the file follows under a ``# {filename}`` heading (before ``Seclai-Version: 2026-10-16``, followed by its extracted text).
 	//
 	// **Which steps receive it:** a step that sends or stores files takes the files its ``attachments`` field selects. An LLM step (``prompt_call``, ``extract_data``, ``evaluate_step``) takes the files its ``attachments`` field names, or else the files its plain-text templates reference: ``{{agent.attachments.<name>}}`` for one attachment the trigger declares, or ``{{agent.input}}`` for every upload unless a template also names an agent attachment.
 	//
 	// **Per-batch validation:** the batch must fit the trigger's ``accepted_attachments`` — every file fits one declared attachment and each attachment gets at least its ``min`` files — or the run is rejected with HTTP 400.
-	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
+	InputUploadId *openapi_types.UUID `json:"input_upload_id,omitempty"`
 
 	// InputUploadIds IDs of multiple previously uploaded files. Each upload gets a heading in ``input`` (before ``Seclai-Version: 2026-10-16``, followed by its extracted text); each upload reaches steps as a separate file (before ``Seclai-Version: 2026-10-16``, a text upload in the open ``files`` attachment is written into ``input`` instead). Steps choose files as described under ``input_upload_id``. The batch must fit the trigger's ``accepted_attachments``; a mismatch returns HTTP 400 listing what does not fit.  Mutually exclusive with ``input_upload_id`` (two spellings of the same batch), but may be combined with ``input`` — the prompt text leads and the per-file sections follow, so "a photo plus a sentence about it" needs no synthetic text upload. Max 20 uploads per run.
-	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids"`
+	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids,omitempty"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
-	Metadata *map[string]JsonValue `json:"metadata"`
+	Metadata *map[string]JsonValue `json:"metadata,omitempty"`
 
 	// Priority If true, the agent run will be treated as priority execution.
 	Priority *bool `json:"priority,omitempty"`
 
 	// ReplayOfRunId Re-run this agent reusing a prior run's uploaded input files. The files are re-resolved server-side from the source run (which must belong to this account and agent) — you do not re-upload them. Combine with ``input`` to change the text while keeping the files. A fresh upload batch (``input_upload_id(s)``) takes precedence and disables replay. Binaries swept by retention fall back to their extracted text. Files the trigger's ``accepted_attachments`` no longer accepts are left out.
-	ReplayOfRunId *openapi_types.UUID `json:"replay_of_run_id"`
+	ReplayOfRunId *openapi_types.UUID `json:"replay_of_run_id,omitempty"`
 }
 
 // AgentRunResponse defines model for AgentRunResponse.
@@ -429,19 +429,19 @@ type AgentRunStreamRequest struct {
 	IncludeReasoning *bool `json:"include_reasoning,omitempty"`
 
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
-	Input *string `json:"input"`
+	Input *string `json:"input,omitempty"`
 
 	// InputUploadId ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` — use that field to attach multiple files. May be combined with ``input``. Must fit the trigger's ``accepted_attachments``, as on the non-streaming endpoint.
-	InputUploadId *openapi_types.UUID `json:"input_upload_id"`
+	InputUploadId *openapi_types.UUID `json:"input_upload_id,omitempty"`
 
 	// InputUploadIds IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including fitting the trigger's ``accepted_attachments`` (else HTTP 400) and combining the batch with ``input`` prompt text. Max 20.
-	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids"`
+	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids,omitempty"`
 
 	// Metadata Metadata to make available for string substitution expressions in agent tasks.
-	Metadata *map[string]JsonValue `json:"metadata"`
+	Metadata *map[string]JsonValue `json:"metadata,omitempty"`
 
 	// ReplayOfRunId Re-run reusing a prior run's uploaded input files (re-resolved server-side from the source run, which must belong to this account and agent). A fresh upload batch takes precedence. Files the trigger's ``accepted_attachments`` no longer accepts are left out.
-	ReplayOfRunId *openapi_types.UUID `json:"replay_of_run_id"`
+	ReplayOfRunId *openapi_types.UUID `json:"replay_of_run_id,omitempty"`
 }
 
 // AgentRunToolCallResponse A single LLM tool call made during a prompt_call step.
@@ -764,7 +764,7 @@ type AttachmentRefsSourceApiSummary struct {
 // BlockEmailSenderRequest Add one sender/domain to the account blocklist (shared REST request).
 type BlockEmailSenderRequest struct {
 	MatchType   *string `json:"match_type,omitempty"`
-	Note        *string `json:"note"`
+	Note        *string `json:"note,omitempty"`
 	SenderEmail string  `json:"sender_email"`
 }
 
@@ -822,7 +822,7 @@ type CancelQueuedRunsResponse struct {
 // ChangeStatusRequest defines model for ChangeStatusRequest.
 type ChangeStatusRequest struct {
 	// Note Optional note
-	Note *string `json:"note"`
+	Note *string `json:"note,omitempty"`
 
 	// Status New alert status
 	Status string `json:"status"`
@@ -951,10 +951,10 @@ type CloudDriveScopeResponseModel struct {
 // CloudDriveUpdateRequest defines model for CloudDriveUpdateRequest.
 type CloudDriveUpdateRequest struct {
 	// FolderPath New watched folder; empty means the whole drive. A folder on a shared drive is written `/Shared drives/<drive name>/<folder>`. Changing it resets the sync cursor, so files already in the new folder are NOT replayed as triggers — only subsequent changes fire, matching connect-time behaviour. Rejected when the new folder would make an agent that writes there re-trigger itself.
-	FolderPath *string `json:"folder_path"`
+	FolderPath *string `json:"folder_path,omitempty"`
 
 	// Name New display name for the connection.
-	Name *string `json:"name"`
+	Name *string `json:"name,omitempty"`
 }
 
 // CompactionEvaluationModel Structured LLM-as-judge evaluation result.
@@ -1063,13 +1063,13 @@ type ContentEmbeddingResponse struct {
 // CreateAlertConfigRequest defines model for CreateAlertConfigRequest.
 type CreateAlertConfigRequest struct {
 	// AgentId Agent ID (for agent alerts)
-	AgentId *string `json:"agent_id"`
+	AgentId *string `json:"agent_id,omitempty"`
 
 	// AlertType Alert type
 	AlertType string `json:"alert_type"`
 
 	// CooldownMinutes Cooldown period in minutes. Omit to use the per-alert-type default (1440 for credit alerts, 60 otherwise).
-	CooldownMinutes *int `json:"cooldown_minutes"`
+	CooldownMinutes *int `json:"cooldown_minutes,omitempty"`
 
 	// DistributionType Distribution type (owner, owner_admins, selected_members)
 	DistributionType *string `json:"distribution_type,omitempty"`
@@ -1078,13 +1078,13 @@ type CreateAlertConfigRequest struct {
 	Enabled *bool `json:"enabled,omitempty"`
 
 	// RecipientUserIds User IDs for selected_members distribution
-	RecipientUserIds *[]string `json:"recipient_user_ids"`
+	RecipientUserIds *[]string `json:"recipient_user_ids,omitempty"`
 
 	// SourceConnectionId Source connection ID (for source alerts)
-	SourceConnectionId *string `json:"source_connection_id"`
+	SourceConnectionId *string `json:"source_connection_id,omitempty"`
 
 	// Threshold Threshold configuration
-	Threshold *map[string]interface{} `json:"threshold"`
+	Threshold *map[string]interface{} `json:"threshold,omitempty"`
 }
 
 // CreateEvaluationCriteriaRequest Request body for creating an evaluation criteria.
@@ -1092,9 +1092,9 @@ type CreateAlertConfigRequest struct {
 // The evaluation mode, retry settings, and sample frequency are set at the
 // agent level, not per-criteria.
 type CreateEvaluationCriteriaRequest struct {
-	Description      *string `json:"description"`
+	Description      *string `json:"description,omitempty"`
 	Enabled          *bool   `json:"enabled,omitempty"`
-	EvaluationPrompt *string `json:"evaluation_prompt"`
+	EvaluationPrompt *string `json:"evaluation_prompt,omitempty"`
 
 	// EvaluationTier Controls model selection for agent evaluation.
 	//
@@ -1103,7 +1103,7 @@ type CreateEvaluationCriteriaRequest struct {
 	//   BALANCED  → "Balanced speed and cost"
 	//   THOROUGH  → "Slow and thorough"
 	EvaluationTier    *AgentEvaluationTier    `json:"evaluation_tier,omitempty"`
-	ExpectationConfig *map[string]interface{} `json:"expectation_config"`
+	ExpectationConfig *map[string]interface{} `json:"expectation_config,omitempty"`
 	PassThreshold     *float32                `json:"pass_threshold,omitempty"`
 	StepId            string                  `json:"step_id"`
 }
@@ -1111,12 +1111,12 @@ type CreateEvaluationCriteriaRequest struct {
 // CreateEvaluationResultRequest Request body for recording an evaluation result.
 type CreateEvaluationResultRequest struct {
 	AgentRunId     openapi_types.UUID      `json:"agent_run_id"`
-	AgentStepRunId *openapi_types.UUID     `json:"agent_step_run_id"`
-	Details        *map[string]interface{} `json:"details"`
+	AgentStepRunId *openapi_types.UUID     `json:"agent_step_run_id,omitempty"`
+	Details        *map[string]interface{} `json:"details,omitempty"`
 	Flagged        *bool                   `json:"flagged,omitempty"`
 	RetryCount     *int                    `json:"retry_count,omitempty"`
 	RetryTriggered *bool                   `json:"retry_triggered,omitempty"`
-	Score          *float32                `json:"score"`
+	Score          *float32                `json:"score,omitempty"`
 
 	// Status Result status of a single evaluation run.
 	Status EvaluationStatus `json:"status"`
@@ -1131,22 +1131,22 @@ type CreateExperimentResponse struct {
 // CreateKnowledgeBaseBody Request body for creating a knowledge base.
 type CreateKnowledgeBaseBody struct {
 	// DefaultScoreThreshold Prefilled into Minimum Rerank Score on a new retrieval step in the editor. Not applied at retrieval time — the step's own value is used.
-	DefaultScoreThreshold *float32 `json:"default_score_threshold"`
+	DefaultScoreThreshold *float32 `json:"default_score_threshold,omitempty"`
 
 	// DefaultTopK Prefilled into Top K on a new retrieval step in the editor. Not applied at retrieval time.
-	DefaultTopK *int `json:"default_top_k"`
+	DefaultTopK *int `json:"default_top_k,omitempty"`
 
 	// DefaultTopN Prefilled into Top N on a new retrieval step in the editor. Not applied at retrieval time — the step's own value is used.
-	DefaultTopN *int `json:"default_top_n"`
+	DefaultTopN *int `json:"default_top_n,omitempty"`
 
 	// Description Optional description.
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 
 	// Name Knowledge base name.
 	Name string `json:"name"`
 
 	// RerankerModel Reranker model to use — a `model_type` from `GET /models/rerankers`. Pass "none" to disable reranking (not a value from that list). Omit it for a default chosen from the sources ("none" when every source embeds media natively, whose chunks carry no text for a reranker to score). "" is accepted as a synonym for "none".
-	RerankerModel *string `json:"reranker_model"`
+	RerankerModel *string `json:"reranker_model,omitempty"`
 
 	// SourceIds List of source connection IDs to link.
 	SourceIds []string `json:"source_ids"`
@@ -1155,31 +1155,31 @@ type CreateKnowledgeBaseBody struct {
 // CreateMemoryBankBody Request body for creating a memory bank.
 type CreateMemoryBankBody struct {
 	// ChunkOverlap Chunk overlap (custom mode only).
-	ChunkOverlap *int `json:"chunk_overlap"`
+	ChunkOverlap *int `json:"chunk_overlap,omitempty"`
 
 	// ChunkSize Chunk size (custom mode only).
-	ChunkSize *int `json:"chunk_size"`
+	ChunkSize *int `json:"chunk_size,omitempty"`
 
 	// CompactionPrompt Custom prompt used when compacting older entries. When set, entries that exceed a threshold are summarized into a new entry before being soft-deleted.
-	CompactionPrompt *string `json:"compaction_prompt"`
+	CompactionPrompt *string `json:"compaction_prompt,omitempty"`
 
 	// Description Optional description of the bank's purpose.
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 
 	// Dimensions Embedding dimensions (custom mode only).
-	Dimensions *int `json:"dimensions"`
+	Dimensions *int `json:"dimensions,omitempty"`
 
 	// EmbeddingModel Custom embedding model (custom mode only).
-	EmbeddingModel *string `json:"embedding_model"`
+	EmbeddingModel *string `json:"embedding_model,omitempty"`
 
 	// MaxAgeDays DEPRECATED and no longer applied. Age used to trigger compaction, which duplicated retention_days — both removed the same entries at the same age. Age now belongs solely to retention_days, which deletes; compaction triggers on max_size_tokens and max_turns. Rejected with 400 for clients sending Seclai-Version 2026-08-03 or later; accepted and stored but inert for older clients.
-	MaxAgeDays *int `json:"max_age_days"`
+	MaxAgeDays *int `json:"max_age_days,omitempty"`
 
 	// MaxSizeTokens Max total tokens (per partition) before compaction. Checked inline after each write and by the hourly background sweep.
-	MaxSizeTokens *int `json:"max_size_tokens"`
+	MaxSizeTokens *int `json:"max_size_tokens,omitempty"`
 
 	// MaxTurns Max conversation turns (per partition) before compaction. Checked inline after each write and by the hourly background sweep.
-	MaxTurns *int `json:"max_turns"`
+	MaxTurns *int `json:"max_turns,omitempty"`
 
 	// Mode Embedding quality / cost trade-off. One of: fast_and_cheap, balanced, slow_and_thorough, custom.
 	Mode *string `json:"mode,omitempty"`
@@ -1188,7 +1188,7 @@ type CreateMemoryBankBody struct {
 	Name string `json:"name"`
 
 	// RetentionDays Retention in days — when entries are deleted outright, text and embeddings. This is the only age-based control; compaction triggers on max_size_tokens and max_turns. For clients sending Seclai-Version 2026-08-03 or later, omitting the field resolves per bank type: 90 days for a conversation bank, indefinite for a general bank. Older clients keep the previous default of 30 days for a conversation bank — unless a longer max_age_days was sent, which wins, since the window is never lowered beneath the only age the caller expressed — while a general bank keeps entries indefinitely. Send an explicit value (or null for indefinite) to be unambiguous on every version.
-	RetentionDays *int `json:"retention_days"`
+	RetentionDays *int `json:"retention_days,omitempty"`
 
 	// StripQuotedReplyChains Conversation banks only. When true, a conversation turn written to this bank has the quoted reply chain an email client prepends to a reply dropped from it. Only inbound (user) turns are affected, and only words in a run of at least ~40 matching a recent turn word for word are dropped (line wrapping and punctuation at a word's edge are ignored). A word the sender changed is kept, including a one-character change inside a link, address or amount, unless the change is only to that edge punctuation.
 	StripQuotedReplyChains *bool `json:"strip_quoted_reply_chains,omitempty"`
@@ -1209,43 +1209,43 @@ type CreateSolutionRequest struct {
 // CreateSourceBody Request body for creating a content source.
 type CreateSourceBody struct {
 	// ChunkOverlap Chunk overlap for content processing.
-	ChunkOverlap *int `json:"chunk_overlap"`
+	ChunkOverlap *int `json:"chunk_overlap,omitempty"`
 
 	// ChunkSize Chunk size for content processing.
-	ChunkSize *int `json:"chunk_size"`
+	ChunkSize *int `json:"chunk_size,omitempty"`
 
 	// CloudDriveConnectionId Required for a cloud_drive source, and ignored on any other: the id of a connected drive, from GET /cloud-drives.
-	CloudDriveConnectionId *string `json:"cloud_drive_connection_id"`
+	CloudDriveConnectionId *string `json:"cloud_drive_connection_id,omitempty"`
 
 	// CloudDriveContentTypes For a cloud_drive source: comma-separated MIME types a file must have to be indexed. Omit for no filter.
-	CloudDriveContentTypes *string `json:"cloud_drive_content_types"`
+	CloudDriveContentTypes *string `json:"cloud_drive_content_types,omitempty"`
 
 	// CloudDriveFolderPath For a cloud_drive source: the folder to index, as a path inside the drive. Omit to index the connected drive's own folder.
-	CloudDriveFolderPath *string `json:"cloud_drive_folder_path"`
+	CloudDriveFolderPath *string `json:"cloud_drive_folder_path,omitempty"`
 
 	// CloudDriveMaxFileMb For a cloud_drive source: files larger than this many megabytes are skipped. Omit for no limit of the source's own.
-	CloudDriveMaxFileMb *int `json:"cloud_drive_max_file_mb"`
+	CloudDriveMaxFileMb *int `json:"cloud_drive_max_file_mb,omitempty"`
 
 	// CloudDrivePathPattern For a cloud_drive source: a glob a file's path must match to be indexed, such as `**/*.pdf` or `/reports/*`. Omit for no filter.
-	CloudDrivePathPattern *string `json:"cloud_drive_path_pattern"`
+	CloudDrivePathPattern *string `json:"cloud_drive_path_pattern,omitempty"`
 
 	// ContentFilter Content filter type.
-	ContentFilter *string `json:"content_filter"`
+	ContentFilter *string `json:"content_filter,omitempty"`
 
 	// Dimensions Embedding dimensions override.
-	Dimensions *int `json:"dimensions"`
+	Dimensions *int `json:"dimensions,omitempty"`
 
 	// DocumentImages Whether the images inside PDF, DOCX, PPTX and XLSX files are attached to the item and indexed; on a text-only embedder, by the text in each image. Applies to documents added after it changes. Defaults to true; below Seclai-Version 2026-10-18 it defaults to false on a text-only embedder. On a website or RSS source it is ignored: `media_types` decides.
-	DocumentImages *bool `json:"document_images"`
+	DocumentImages *bool `json:"document_images,omitempty"`
 
 	// EmailAllowedSenders Required for an email source, and only valid there: the senders whose mail is stored. Each entry is a full address (news@example.com) or a bare domain (example.com), which also matches its sub-domains. Matched against the message's From address, which must pass DMARC.
-	EmailAllowedSenders *[]string `json:"email_allowed_senders"`
+	EmailAllowedSenders *[]string `json:"email_allowed_senders,omitempty"`
 
 	// EmbeddingModel Embedding model override — a `model_type` from `GET /models/embedders`, which also reports each embedder's `supported_input_media`. Defaults to the platform embedder (`default_model_type` on that endpoint) when omitted. Indexing images or video requires an embedder that lists that modality.
-	EmbeddingModel *string `json:"embedding_model"`
+	EmbeddingModel *string `json:"embedding_model,omitempty"`
 
 	// FeedAttachments Kinds of file listed beside a feed item's content to attach to the item and index, on an RSS source. Subset of ['enclosures', 'item_image', 'media_rss']; any other value is refused. None are attached unless chosen.
-	FeedAttachments *[]string `json:"feed_attachments"`
+	FeedAttachments *[]string `json:"feed_attachments,omitempty"`
 
 	// IndexMode Embedding quality / cost trade-off preset for custom_index sources.
 	//
@@ -1261,28 +1261,28 @@ type CreateSourceBody struct {
 	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
 
 	// MediaTypes Media kinds in a web page's main content to attach to the page's item and index, on a website or RSS source. Subset of ['images', 'video']. From `Seclai-Version: 2026-10-13` any other value, and any kind on another source type, is refused with a 400; older versions drop an unknown value and store the rest. A kind the source's embedder cannot index is stored and not indexed (see `supported_input_media` on GET /models/embedders). 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files. Applies to pages and documents added after it is set.
-	MediaTypes *[]string `json:"media_types"`
+	MediaTypes *[]string `json:"media_types,omitempty"`
 
 	// Name Source name.
 	Name string `json:"name"`
 
 	// Polling Polling interval (e.g. hourly, daily).
-	Polling *string `json:"polling"`
+	Polling *string `json:"polling,omitempty"`
 
 	// PollingAction Polling action.
-	PollingAction *string `json:"polling_action"`
+	PollingAction *string `json:"polling_action,omitempty"`
 
 	// PollingMaxItems The most new feed items a scheduled poll takes. Read for RSS feeds only: from Seclai-Version 2026-10-19 any other source type rejects it with 400. Earlier versions store it there. An email source rejects it at every version.
-	PollingMaxItems *int `json:"polling_max_items"`
+	PollingMaxItems *int `json:"polling_max_items,omitempty"`
 
 	// Retention Retention period in days.
-	Retention *int `json:"retention"`
+	Retention *int `json:"retention,omitempty"`
 
 	// SourceType Source type: rss_feed, website, custom_index, cloud_drive or email. The legacy value 'file_uploads' is accepted as an alias for custom_index.
 	SourceType string `json:"source_type"`
 
 	// UrlId URL record ID (required for rss/website sources).
-	UrlId *string `json:"url_id"`
+	UrlId *string `json:"url_id,omitempty"`
 }
 
 // DmarcFailingSourceResponse defines model for DmarcFailingSourceResponse.
@@ -1737,16 +1737,16 @@ type ExportListResponse struct {
 // GenerateAgentStepsRequest defines model for GenerateAgentStepsRequest.
 type GenerateAgentStepsRequest struct {
 	// AgentDescription Agent description for additional AI context.
-	AgentDescription *string `json:"agent_description"`
+	AgentDescription *string `json:"agent_description,omitempty"`
 
 	// AgentSteps Current agent step hierarchy for context when modifying.
-	AgentSteps *[]map[string]interface{} `json:"agent_steps"`
+	AgentSteps *[]map[string]interface{} `json:"agent_steps,omitempty"`
 
 	// Mode 'generate_full' to create from scratch, 'modify_workflow' to refine.
 	Mode *string `json:"mode,omitempty"`
 
 	// TriggerType Agent trigger type for context (e.g. 'dynamic_input', 'content_added').
-	TriggerType *string `json:"trigger_type"`
+	TriggerType *string `json:"trigger_type,omitempty"`
 
 	// UserInput Natural language description of the desired agent workflow.
 	UserInput string `json:"user_input"`
@@ -1779,13 +1779,13 @@ type GenerateAgentStepsResponse struct {
 // GenerateStepConfigRequest defines model for GenerateStepConfigRequest.
 type GenerateStepConfigRequest struct {
 	// AgentSteps Current agent step hierarchy for context.
-	AgentSteps *[]map[string]interface{} `json:"agent_steps"`
+	AgentSteps *[]map[string]interface{} `json:"agent_steps,omitempty"`
 
 	// CurrentConfig Current step configuration to refine, if any.
-	CurrentConfig *map[string]interface{} `json:"current_config"`
+	CurrentConfig *map[string]interface{} `json:"current_config,omitempty"`
 
 	// StepId ID of the specific step to refine. Omit for new steps.
-	StepId *string `json:"step_id"`
+	StepId *string `json:"step_id,omitempty"`
 
 	// StepType The step type to generate config for (e.g. 'regex_replace', 'gate', 'text', 'prompt_call', 'retrieval').
 	StepType string `json:"step_type"`
@@ -1931,31 +1931,31 @@ type InboundEmailStatusResponse struct {
 // InlineTextReplaceRequest Request model for inline text content replacement.
 type InlineTextReplaceRequest struct {
 	// ContentType MIME type for the text content
-	ContentType *string `json:"content_type"`
+	ContentType *string `json:"content_type,omitempty"`
 
 	// Metadata Optional metadata object
-	Metadata *map[string]interface{} `json:"metadata"`
+	Metadata *map[string]interface{} `json:"metadata,omitempty"`
 
 	// Text Text content to upload
 	Text string `json:"text"`
 
 	// Title Optional title
-	Title *string `json:"title"`
+	Title *string `json:"title,omitempty"`
 }
 
 // InlineTextUploadRequest Request model for inline text uploads.
 type InlineTextUploadRequest struct {
 	// ContentType MIME type for the text content
-	ContentType *string `json:"content_type"`
+	ContentType *string `json:"content_type,omitempty"`
 
 	// Metadata Optional metadata object
-	Metadata *map[string]interface{} `json:"metadata"`
+	Metadata *map[string]interface{} `json:"metadata,omitempty"`
 
 	// Text Text content to upload
 	Text string `json:"text"`
 
 	// Title Optional title
-	Title *string `json:"title"`
+	Title *string `json:"title,omitempty"`
 }
 
 // InsufficientCreditsDetail “detail“ body for a 402 “insufficient_credits“ response.
@@ -2225,7 +2225,7 @@ type PendingProcessingCompletedFailedStatus string
 // PlaygroundCreateRequest Create a model playground experiment via the public API.
 type PlaygroundCreateRequest struct {
 	// Effort Reasoning effort per model id, each one of that model's `effort_options` values. Not combinable with `json_template`.
-	Effort *map[string]string `json:"effort"`
+	Effort *map[string]string `json:"effort,omitempty"`
 
 	// EvaluationComplexity simple, medium, or complex
 	EvaluationComplexity *PlaygroundCreateRequestEvaluationComplexity `json:"evaluation_complexity,omitempty"`
@@ -2234,13 +2234,13 @@ type PlaygroundCreateRequest struct {
 	EvaluationMode *PlaygroundCreateRequestEvaluationMode `json:"evaluation_mode,omitempty"`
 
 	// EvaluatorModelId Evaluator model ID when evaluation_mode is prompt.
-	EvaluatorModelId *string `json:"evaluator_model_id"`
+	EvaluatorModelId *string `json:"evaluator_model_id,omitempty"`
 
 	// IncludeStepOutputInEvaluation Whether to include selected step output as evaluator context.
 	IncludeStepOutputInEvaluation *bool `json:"include_step_output_in_evaluation,omitempty"`
 
 	// JsonTemplate Optional JSON template for advanced mode.
-	JsonTemplate *string `json:"json_template"`
+	JsonTemplate *string `json:"json_template,omitempty"`
 
 	// ModelIds Selected model IDs (1-10).
 	ModelIds []string `json:"model_ids"`
@@ -2249,7 +2249,7 @@ type PlaygroundCreateRequest struct {
 	Prompt string `json:"prompt"`
 
 	// SelectedStepOutput Optional step output text for evaluator context.
-	SelectedStepOutput *string `json:"selected_step_output"`
+	SelectedStepOutput *string `json:"selected_step_output,omitempty"`
 
 	// SystemPrompt Optional system prompt.
 	SystemPrompt *string `json:"system_prompt,omitempty"`
@@ -2712,31 +2712,31 @@ type StandaloneTestCompactionRequest struct {
 	EntryCount *int `json:"entry_count,omitempty"`
 
 	// GenerateDirection Direction for the LLM to generate sample entries.
-	GenerateDirection *string `json:"generate_direction"`
+	GenerateDirection *string `json:"generate_direction,omitempty"`
 
 	// SampleEntries Explicit sample entries to compact.
-	SampleEntries *[]string `json:"sample_entries"`
+	SampleEntries *[]string `json:"sample_entries,omitempty"`
 }
 
 // StartSourceEmbeddingMigrationRequest Request payload to start a source embedding migration.
 type StartSourceEmbeddingMigrationRequest struct {
 	// ChunkLanguage Language-specific chunking language code
-	ChunkLanguage *string `json:"chunk_language"`
+	ChunkLanguage *string `json:"chunk_language,omitempty"`
 
 	// ChunkOverlap Override chunk overlap (characters)
-	ChunkOverlap *int `json:"chunk_overlap"`
+	ChunkOverlap *int `json:"chunk_overlap,omitempty"`
 
 	// ChunkRegexSeparators Whether chunk separators are regex patterns
-	ChunkRegexSeparators *bool `json:"chunk_regex_separators"`
+	ChunkRegexSeparators *bool `json:"chunk_regex_separators,omitempty"`
 
 	// ChunkSeparators Custom chunk separators (JSON-encoded list)
-	ChunkSeparators *string `json:"chunk_separators"`
+	ChunkSeparators *string `json:"chunk_separators,omitempty"`
 
 	// ChunkSize Override chunk size (characters per chunk)
-	ChunkSize *int `json:"chunk_size"`
+	ChunkSize *int `json:"chunk_size,omitempty"`
 
 	// NotificationRecipients Optional notification recipient emails
-	NotificationRecipients *[]string `json:"notification_recipients"`
+	NotificationRecipients *[]string `json:"notification_recipients,omitempty"`
 
 	// TargetDimensions Target embedding dimensions
 	TargetDimensions int `json:"target_dimensions"`
@@ -2759,16 +2759,16 @@ type StartSourceEmbeddingMigrationRequest struct {
 // At most one of “sample_entries“ / “generate_direction“ may be given.
 type TestCompactionRequest struct {
 	// CompactionPrompt Compaction prompt to test.  Falls back to the bank's current prompt when omitted.
-	CompactionPrompt *string `json:"compaction_prompt"`
+	CompactionPrompt *string `json:"compaction_prompt,omitempty"`
 
 	// EntryCount Number of entries to generate when using generate_direction.
 	EntryCount *int `json:"entry_count,omitempty"`
 
 	// GenerateDirection Direction for the LLM to generate sample entries (e.g. 'Generate 5 entries about a customer support interaction').
-	GenerateDirection *string `json:"generate_direction"`
+	GenerateDirection *string `json:"generate_direction,omitempty"`
 
 	// SampleEntries Explicit sample entries to compact.
-	SampleEntries *[]string `json:"sample_entries"`
+	SampleEntries *[]string `json:"sample_entries,omitempty"`
 }
 
 // TestDraftEvaluationRequest Request body for ephemeral (non-persisted) evaluation testing.
@@ -2777,11 +2777,11 @@ type TestCompactionRequest struct {
 // (to load output from storage).  Exactly one must be supplied.
 type TestDraftEvaluationRequest struct {
 	// AgentInput The original agent run input for context.  When agent_step_run_id is supplied this is loaded automatically from the parent run if omitted.
-	AgentInput *string `json:"agent_input"`
+	AgentInput *string `json:"agent_input,omitempty"`
 
 	// AgentStepRunId Load step output from this completed step run instead of supplying text.
-	AgentStepRunId   *openapi_types.UUID `json:"agent_step_run_id"`
-	EvaluationPrompt *string             `json:"evaluation_prompt"`
+	AgentStepRunId   *openapi_types.UUID `json:"agent_step_run_id,omitempty"`
+	EvaluationPrompt *string             `json:"evaluation_prompt,omitempty"`
 
 	// EvaluationTier Controls model selection for agent evaluation.
 	//
@@ -2790,11 +2790,11 @@ type TestDraftEvaluationRequest struct {
 	//   BALANCED  → "Balanced speed and cost"
 	//   THOROUGH  → "Slow and thorough"
 	EvaluationTier    *AgentEvaluationTier    `json:"evaluation_tier,omitempty"`
-	ExpectationConfig *map[string]interface{} `json:"expectation_config"`
+	ExpectationConfig *map[string]interface{} `json:"expectation_config,omitempty"`
 	PassThreshold     *float32                `json:"pass_threshold,omitempty"`
 
 	// StepOutput The step output text to evaluate.  Omit if agent_step_run_id is supplied.
-	StepOutput *string `json:"step_output"`
+	StepOutput *string `json:"step_output,omitempty"`
 }
 
 // TestDraftEvaluationResponse Response for an ephemeral evaluation test.
@@ -2818,7 +2818,7 @@ type UnreadCountResponse struct {
 // UpdateAgentDefinitionRequest defines model for UpdateAgentDefinitionRequest.
 type UpdateAgentDefinitionRequest struct {
 	// AcceptedAttachments When given, declared on the main branch's file-taking triggers in the same save, so the steps may read its slots as `{{agent.attachments.<slot>}}`; omitted, the triggers keep theirs.
-	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments"`
+	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments,omitempty"`
 
 	// Definition The full agent definition (name, description, tags, steps). Steps form a tree workflow. Each step has a `step_type`, `id`, `name`, and type-specific config. Content enrichment steps (write_metadata, write_content_attachment, load_content_attachment, load_content) require content-triggered agents.
 	Definition map[string]interface{} `json:"definition"`
@@ -2830,34 +2830,34 @@ type UpdateAgentDefinitionRequest struct {
 // UpdateAlertConfigRequest defines model for UpdateAlertConfigRequest.
 type UpdateAlertConfigRequest struct {
 	// CooldownMinutes Cooldown period in minutes
-	CooldownMinutes *int `json:"cooldown_minutes"`
+	CooldownMinutes *int `json:"cooldown_minutes,omitempty"`
 
 	// DistributionType Distribution type
-	DistributionType *string `json:"distribution_type"`
+	DistributionType *string `json:"distribution_type,omitempty"`
 
 	// Enabled Whether the alert config is enabled
-	Enabled *bool `json:"enabled"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// RecipientUserIds User IDs for selected_members distribution
-	RecipientUserIds *[]string `json:"recipient_user_ids"`
+	RecipientUserIds *[]string `json:"recipient_user_ids,omitempty"`
 
 	// Threshold Threshold configuration
-	Threshold *map[string]interface{} `json:"threshold"`
+	Threshold *map[string]interface{} `json:"threshold,omitempty"`
 }
 
 // UpdateApiVersionRequest defines model for UpdateApiVersionRequest.
 type UpdateApiVersionRequest struct {
 	// Version A YYYY-MM-DD date to pin the account to, or null to clear the pin (revert to the default baseline).
-	Version *string `json:"version"`
+	Version *string `json:"version,omitempty"`
 }
 
 // UpdateEvaluationCriteriaRequest Request body for updating an evaluation criteria.
 //
 // Retry settings and sample frequency are set at the agent level.
 type UpdateEvaluationCriteriaRequest struct {
-	Description      *string `json:"description"`
-	Enabled          *bool   `json:"enabled"`
-	EvaluationPrompt *string `json:"evaluation_prompt"`
+	Description      *string `json:"description,omitempty"`
+	Enabled          *bool   `json:"enabled,omitempty"`
+	EvaluationPrompt *string `json:"evaluation_prompt,omitempty"`
 
 	// EvaluationTier Controls model selection for agent evaluation.
 	//
@@ -2866,33 +2866,33 @@ type UpdateEvaluationCriteriaRequest struct {
 	//   BALANCED  → "Balanced speed and cost"
 	//   THOROUGH  → "Slow and thorough"
 	EvaluationTier    *AgentEvaluationTier    `json:"evaluation_tier,omitempty"`
-	ExpectationConfig *map[string]interface{} `json:"expectation_config"`
-	PassThreshold     *float32                `json:"pass_threshold"`
-	StepId            *string                 `json:"step_id"`
+	ExpectationConfig *map[string]interface{} `json:"expectation_config,omitempty"`
+	PassThreshold     *float32                `json:"pass_threshold,omitempty"`
+	StepId            *string                 `json:"step_id,omitempty"`
 }
 
 // UpdateKnowledgeBaseBody Request body for updating a knowledge base.
 type UpdateKnowledgeBaseBody struct {
 	// DefaultScoreThreshold Prefilled into Minimum Rerank Score on a new retrieval step (-1 to clear).
-	DefaultScoreThreshold *float32 `json:"default_score_threshold"`
+	DefaultScoreThreshold *float32 `json:"default_score_threshold,omitempty"`
 
 	// DefaultTopK Prefilled into Top K on a new retrieval step (0 to clear).
-	DefaultTopK *int `json:"default_top_k"`
+	DefaultTopK *int `json:"default_top_k,omitempty"`
 
 	// DefaultTopN Prefilled into Top N on a new retrieval step (0 to clear).
-	DefaultTopN *int `json:"default_top_n"`
+	DefaultTopN *int `json:"default_top_n,omitempty"`
 
 	// Description New description.
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 
 	// Name New name.
-	Name *string `json:"name"`
+	Name *string `json:"name,omitempty"`
 
 	// RerankerModel New reranker model — a `model_type` from `GET /models/rerankers`. Pass "none" to turn reranking off (not a value from that list). Omitting the field (or sending null) leaves the current reranker in place — it does NOT turn it off. "" is accepted as a synonym for "none", but prefer "none": an empty string does not survive every client's serialization.
-	RerankerModel *string `json:"reranker_model"`
+	RerankerModel *string `json:"reranker_model,omitempty"`
 
 	// SourceIds New list of source connection IDs.
-	SourceIds *[]string `json:"source_ids"`
+	SourceIds *[]string `json:"source_ids,omitempty"`
 }
 
 // UpdateMemoryBankBody Request body for updating a memory bank.
@@ -2901,73 +2901,73 @@ type UpdateKnowledgeBaseBody struct {
 // send a zero-value sentinel: “0“ for integers, “""“ for strings.
 type UpdateMemoryBankBody struct {
 	// CompactionPrompt Custom prompt used when compacting older entries. When set, entries that exceed a threshold are summarized into a new entry before being soft-deleted. Send empty string "" to clear and disable summarisation.
-	CompactionPrompt *string `json:"compaction_prompt"`
+	CompactionPrompt *string `json:"compaction_prompt,omitempty"`
 
 	// Description Optional description. Send empty string "" to clear.
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 
 	// MaxAgeDays DEPRECATED and no longer applied. Age now belongs solely to retention_days, which deletes; compaction triggers on max_size_tokens and max_turns. Rejected with 400 for clients sending Seclai-Version 2026-08-03 or later, except 0, which clears a value stored earlier. Accepted and stored but inert for older clients.
-	MaxAgeDays *int `json:"max_age_days"`
+	MaxAgeDays *int `json:"max_age_days,omitempty"`
 
 	// MaxSizeTokens Max total tokens (per partition) before compaction. Checked inline after each write and by the hourly background sweep. Send 0 to disable.
-	MaxSizeTokens *int `json:"max_size_tokens"`
+	MaxSizeTokens *int `json:"max_size_tokens,omitempty"`
 
 	// MaxTurns Max conversation turns (per partition) before compaction. Checked inline after each write and by the hourly background sweep. Send 0 to disable.
-	MaxTurns *int `json:"max_turns"`
+	MaxTurns *int `json:"max_turns,omitempty"`
 
 	// Name New name.
-	Name *string `json:"name"`
+	Name *string `json:"name,omitempty"`
 
 	// RetentionDays Content source retention in days. Send 0 to clear (indefinite).
-	RetentionDays *int `json:"retention_days"`
+	RetentionDays *int `json:"retention_days,omitempty"`
 
 	// StripQuotedReplyChains Conversation banks only. When true, a conversation turn written to this bank has the quoted reply chain an email client prepends to a reply dropped from it. Only inbound (user) turns are affected, and only words in a run of at least ~40 matching a recent turn word for word are dropped (line wrapping and punctuation at a word's edge are ignored). A word the sender changed is kept, including a one-character change inside a link, address or amount, unless the change is only to that edge punctuation.
-	StripQuotedReplyChains *bool `json:"strip_quoted_reply_chains"`
+	StripQuotedReplyChains *bool `json:"strip_quoted_reply_chains,omitempty"`
 }
 
 // UpdateSolutionRequest Request model for updating a solution
 type UpdateSolutionRequest struct {
 	// Description Description of the solution
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 
 	// Name Name of the solution
-	Name *string `json:"name"`
+	Name *string `json:"name,omitempty"`
 }
 
 // UpdateSourceBody Request body for updating a content source.
 type UpdateSourceBody struct {
 	// CloudDriveContentTypes For a cloud_drive source: comma-separated MIME types a file must have to be indexed. Send an empty string to clear it; omit to leave it unchanged.
-	CloudDriveContentTypes *string `json:"cloud_drive_content_types"`
+	CloudDriveContentTypes *string `json:"cloud_drive_content_types,omitempty"`
 
 	// CloudDriveFolderPath For a cloud_drive source: the folder to index, as a path inside the drive. Send an empty string to index the connected drive's own folder; omit to leave it unchanged.
-	CloudDriveFolderPath *string `json:"cloud_drive_folder_path"`
+	CloudDriveFolderPath *string `json:"cloud_drive_folder_path,omitempty"`
 
 	// CloudDriveMaxFileMb For a cloud_drive source: files larger than this many megabytes are skipped. Send 0 to clear the source's own limit; omit to leave it unchanged.
-	CloudDriveMaxFileMb *int `json:"cloud_drive_max_file_mb"`
+	CloudDriveMaxFileMb *int `json:"cloud_drive_max_file_mb,omitempty"`
 
 	// CloudDrivePathPattern For a cloud_drive source: a glob a file's path must match to be indexed, such as `**/*.pdf` or `/reports/*`. Send an empty string to clear it; omit to leave it unchanged.
-	CloudDrivePathPattern *string `json:"cloud_drive_path_pattern"`
+	CloudDrivePathPattern *string `json:"cloud_drive_path_pattern,omitempty"`
 
 	// DocumentImages Whether the images inside PDF, DOCX, PPTX and XLSX files are attached to the item and indexed; on a text-only embedder, by the text in each image. Applies to documents added after it changes. Omit the field to leave it unchanged. On a website or RSS source it is ignored: `media_types` decides.
-	DocumentImages *bool `json:"document_images"`
+	DocumentImages *bool `json:"document_images,omitempty"`
 
 	// EmailAllowedSenders For an email source: replaces the allowed senders. Each entry is a full address or a bare domain. The list cannot be emptied. Omit to leave it unchanged.
-	EmailAllowedSenders *[]string `json:"email_allowed_senders"`
+	EmailAllowedSenders *[]string `json:"email_allowed_senders,omitempty"`
 
 	// FeedAttachments Kinds of file listed beside a feed item's content to attach to the item and index, on an RSS source. Subset of ['enclosures', 'item_image', 'media_rss']; any other value is refused. [] attaches none. Applies to items added after it changes. Omit the field to leave it unchanged.
-	FeedAttachments *[]string `json:"feed_attachments"`
+	FeedAttachments *[]string `json:"feed_attachments,omitempty"`
 
 	// MediaTypes Media kinds in a web page's main content to attach to the page's item and index, on a website or RSS source. Subset of ['images', 'video']. From `Seclai-Version: 2026-10-13` any other value, and any kind on another source type, is refused with a 400; older versions drop an unknown value and store the rest. A kind the source's embedder cannot index is stored and not indexed (see `supported_input_media` on GET /models/embedders). [] attaches no media from web pages. 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files. Applies to pages and documents added after it changes.
-	MediaTypes *[]string `json:"media_types"`
+	MediaTypes *[]string `json:"media_types,omitempty"`
 
 	// Name New name.
-	Name *string `json:"name"`
+	Name *string `json:"name,omitempty"`
 
 	// Polling New polling interval.
-	Polling *string `json:"polling"`
+	Polling *string `json:"polling,omitempty"`
 
 	// RetentionDays New retention period in days — content older than this is deleted permanently. Send null to clear the window: content is then kept indefinitely. Omit the field to leave it unchanged.
-	RetentionDays *int `json:"retention_days"`
+	RetentionDays *int `json:"retention_days,omitempty"`
 }
 
 // UploadAgentInputApiResponse defines model for UploadAgentInputApiResponse.
@@ -3117,16 +3117,16 @@ type RoutersApiAgentsAgentRunListResponse struct {
 // RoutersApiAgentsAgentTraceSearchRequest defines model for routers__api__agents__AgentTraceSearchRequest.
 type RoutersApiAgentsAgentTraceSearchRequest struct {
 	// AgentId Filter by agent ID.
-	AgentId *string `json:"agent_id"`
+	AgentId *string `json:"agent_id,omitempty"`
 
 	// Query Search query text.
 	Query string `json:"query"`
 
 	// RunStatus Filter by run status.
-	RunStatus *string `json:"run_status"`
+	RunStatus *string `json:"run_status,omitempty"`
 
 	// StepType Filter by step type.
-	StepType *string `json:"step_type"`
+	StepType *string `json:"step_type,omitempty"`
 
 	// TopN Maximum number of results.
 	TopN *int `json:"top_n,omitempty"`
@@ -3135,19 +3135,19 @@ type RoutersApiAgentsAgentTraceSearchRequest struct {
 // RoutersApiAgentsCreateAgentRequest defines model for routers__api__agents__CreateAgentRequest.
 type RoutersApiAgentsCreateAgentRequest struct {
 	// AcceptedAttachments The input attachments the trigger accepts. Omitted, the ``agent_definition`` trigger's declaration is kept when the export carries one and both trigger types take files; otherwise a dynamic_input or email_received trigger accepts any files (one attachment named ``files``), and any other trigger none.
-	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments"`
+	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments,omitempty"`
 
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, replaces any template-derived workflow and pre-fills metadata/trigger fields the request does not specify explicitly. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
-	AgentDefinition *map[string]interface{} `json:"agent_definition"`
+	AgentDefinition *map[string]interface{} `json:"agent_definition,omitempty"`
 
 	// AgentTemplate Template to initialize the agent from. Values: blank, retrieval_example, simple_qa, summarizer, json_extractor, content_change_notifier, scheduled_report, webhook_pipeline.
-	AgentTemplate *string `json:"agent_template"`
+	AgentTemplate *string `json:"agent_template,omitempty"`
 
 	// Description Optional description.
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 
 	// EntityRemap Optional UUID-substitution map applied to the imported workflow before save. Each key is a source-account UUID (as returned by /agents/preview-import's ``unresolved_refs``); each value is the target-account UUID to substitute. Used to relink knowledge bases, memory banks, source connections, and sub-agents on cross-account imports.
-	EntityRemap *map[string]string `json:"entity_remap"`
+	EntityRemap *map[string]string `json:"entity_remap,omitempty"`
 
 	// Name Name for the new agent.
 	Name string `json:"name"`
@@ -3171,59 +3171,59 @@ type RoutersApiAgentsGovernancePolicyRefResponse struct {
 // “alias“) clears it.
 type RoutersApiAgentsSetEmailTriggerConfigRequest struct {
 	// Alias Custom alias, unique per account, answering as `<alias>.<accountID>@agent.seclai.com` and as `<alias>@<domain>` on each verified account email domain (alphanumeric plus '+', '.', '-'; 1–32 chars; not starting/ending with '+', '.', '-'; not UUID-shaped). Pass null/empty to clear.
-	Alias *string `json:"alias"`
+	Alias *string `json:"alias,omitempty"`
 
 	// AllowedSenders Allowlist of full sender addresses and/or bare domains (a bare domain also matches sub-domains). Empty/null accepts any sender.
-	AllowedSenders *[]string `json:"allowed_senders"`
+	AllowedSenders *[]string `json:"allowed_senders,omitempty"`
 
 	// IgnoreAutoGenerated When true (default for new triggers), machine-generated inbound mail (auto-replies, bulk/list mail, bounces) is dropped before a run to prevent auto-reply loops. Set false to process automated mail.
-	IgnoreAutoGenerated *bool `json:"ignore_auto_generated"`
+	IgnoreAutoGenerated *bool `json:"ignore_auto_generated,omitempty"`
 
 	// QueueOnQuota When true (default false), inbound mail that exceeds the account's hourly email-trigger rate is parked in a QUEUED run and drained later by the catch-up sweep instead of being failed; when false, over-rate mail fails immediately.
-	QueueOnQuota *bool `json:"queue_on_quota"`
+	QueueOnQuota *bool `json:"queue_on_quota,omitempty"`
 
 	// RequireSenderAuth When true (default for new triggers), the envelope sender must pass SPF or DMARC even on an open inbox (no allowlist); unauthenticated, spoofable mail is rejected. Set false to accept fully unauthenticated mail on an open inbox.
-	RequireSenderAuth *bool `json:"require_sender_auth"`
+	RequireSenderAuth *bool `json:"require_sender_auth,omitempty"`
 
 	// RunOnAttachmentMismatch When true (default false), an email whose attachments don't fit what the agent expects still runs: files the agent can't take are left out and the problems are listed in the `email_attachment_issues` run metadata. When false, the run fails.
-	RunOnAttachmentMismatch *bool `json:"run_on_attachment_mismatch"`
+	RunOnAttachmentMismatch *bool `json:"run_on_attachment_mismatch,omitempty"`
 }
 
 // RoutersApiAgentsUpdateAgentRequest defines model for routers__api__agents__UpdateAgentRequest.
 type RoutersApiAgentsUpdateAgentRequest struct {
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, agent metadata fields the request does not set explicitly are taken from the payload, and the agent's workflow is replaced from `agent.definition`. The previous version is preserved in history. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
-	AgentDefinition *map[string]interface{} `json:"agent_definition"`
+	AgentDefinition *map[string]interface{} `json:"agent_definition,omitempty"`
 
 	// DefaultEvaluationTier Default evaluation tier: 'fast', 'balanced', or 'thorough'.
-	DefaultEvaluationTier *string `json:"default_evaluation_tier"`
+	DefaultEvaluationTier *string `json:"default_evaluation_tier,omitempty"`
 
 	// Description New description for the agent.
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 
 	// EntityRemap Optional UUID-substitution map applied to the imported workflow before save (same shape as on POST /agents).
-	EntityRemap *map[string]string `json:"entity_remap"`
+	EntityRemap *map[string]string `json:"entity_remap,omitempty"`
 
 	// EvaluationMode Evaluation mode: 'output_expectation', 'eval_and_retry', or 'sample_and_flag'.
-	EvaluationMode *string `json:"evaluation_mode"`
+	EvaluationMode *string `json:"evaluation_mode,omitempty"`
 
 	// MaxRetries Max retries for eval_and_retry mode (1-10).
-	MaxRetries *int `json:"max_retries"`
+	MaxRetries *int `json:"max_retries,omitempty"`
 
 	// Name New name for the agent.
-	Name *string `json:"name"`
+	Name *string `json:"name,omitempty"`
 
 	// PromptModelAutoRollbackEnabled Enable or disable automatic rollback for upgraded models.
-	PromptModelAutoRollbackEnabled *bool `json:"prompt_model_auto_rollback_enabled"`
+	PromptModelAutoRollbackEnabled *bool `json:"prompt_model_auto_rollback_enabled,omitempty"`
 
 	// PromptModelAutoRollbackTriggers Failure signals that trigger rollback: agent_eval_fail, governance_flag, governance_block, agent_run_failed.
-	PromptModelAutoRollbackTriggers *[]string                       `json:"prompt_model_auto_rollback_triggers"`
+	PromptModelAutoRollbackTriggers *[]string                       `json:"prompt_model_auto_rollback_triggers,omitempty"`
 	PromptModelAutoUpgradeStrategy  *PromptModelAutoUpgradeStrategy `json:"prompt_model_auto_upgrade_strategy,omitempty"`
 
 	// RetryOnFailure Whether to retry on evaluation failure.
-	RetryOnFailure *bool `json:"retry_on_failure"`
+	RetryOnFailure *bool `json:"retry_on_failure,omitempty"`
 
 	// SamplingConfig Sampling configuration for sample_and_flag mode. Format: {combinator: 'and'|'or', rules: [...]}.
-	SamplingConfig *map[string]interface{} `json:"sampling_config"`
+	SamplingConfig *map[string]interface{} `json:"sampling_config,omitempty"`
 
 	// SetDefaultEvaluationTier When true and default_evaluation_tier is omitted, clears the tier to null (system default).
 	SetDefaultEvaluationTier *bool `json:"set_default_evaluation_tier,omitempty"`
@@ -3238,25 +3238,25 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 // RoutersApiAiAssistantAiAssistantFeedbackRequest Request body for submitting AI assistant feedback.
 type RoutersApiAiAssistantAiAssistantFeedbackRequest struct {
 	// AgentConversationId Agent conversation ID, if applicable.
-	AgentConversationId *openapi_types.UUID `json:"agent_conversation_id"`
+	AgentConversationId *openapi_types.UUID `json:"agent_conversation_id,omitempty"`
 
 	// Comment Optional comment.
-	Comment *string `json:"comment"`
+	Comment *string `json:"comment,omitempty"`
 
 	// Context Additional context.
-	Context *map[string]interface{} `json:"context"`
+	Context *map[string]interface{} `json:"context,omitempty"`
 
 	// ConversationId Conversation ID for the interaction.
-	ConversationId *openapi_types.UUID `json:"conversation_id"`
+	ConversationId *openapi_types.UUID `json:"conversation_id,omitempty"`
 
 	// Feature Feature name (e.g. 'source', 'solution').
 	Feature string `json:"feature"`
 
 	// GovernanceConversationId Governance conversation ID, if applicable.
-	GovernanceConversationId *openapi_types.UUID `json:"governance_conversation_id"`
+	GovernanceConversationId *openapi_types.UUID `json:"governance_conversation_id,omitempty"`
 
 	// PromptCallId Prompt call ID for credit tracking.
-	PromptCallId *openapi_types.UUID `json:"prompt_call_id"`
+	PromptCallId *openapi_types.UUID `json:"prompt_call_id,omitempty"`
 
 	// Rating Rating: 'thumbs_up' or 'thumbs_down'.
 	Rating string `json:"rating"`
@@ -3536,10 +3536,10 @@ type RoutersApiMemoryBanksMemoryBankAcceptRequest struct {
 // RoutersApiMemoryBanksMemoryBankAiAssistantRequest Request body for the memory bank AI assistant.
 type RoutersApiMemoryBanksMemoryBankAiAssistantRequest struct {
 	// CurrentConfig Current configuration to refine, if any.
-	CurrentConfig *map[string]interface{} `json:"current_config"`
+	CurrentConfig *map[string]interface{} `json:"current_config,omitempty"`
 
 	// HistorySince Optional ISO 8601 timestamp.  When set, only conversation turns created at or after this timestamp are loaded as context, scoping history to the current session so the assistant remembers earlier turns in a multi-turn refinement.
-	HistorySince *time.Time `json:"history_since"`
+	HistorySince *time.Time `json:"history_since,omitempty"`
 
 	// UserInput Natural-language description of the memory bank.
 	UserInput string `json:"user_input"`
@@ -3658,16 +3658,16 @@ type RoutersApiSolutionsAiAssistantAcceptRequest struct {
 	ConfirmDeletions *bool `json:"confirm_deletions,omitempty"`
 
 	// SolutionDescription When running in standalone mode (no pre-existing solution), provide a description for the auto-created solution.
-	SolutionDescription *string `json:"solution_description"`
+	SolutionDescription *string `json:"solution_description,omitempty"`
 
 	// SolutionName When running in standalone mode (no pre-existing solution), provide a name to auto-create a solution and link resources.
-	SolutionName *string `json:"solution_name"`
+	SolutionName *string `json:"solution_name,omitempty"`
 }
 
 // RoutersApiSolutionsAiAssistantGenerateRequest Request body for AI assistant generate endpoints.
 type RoutersApiSolutionsAiAssistantGenerateRequest struct {
 	// HistorySince Optional ISO 8601 timestamp.  When set, only conversation turns created at or after this timestamp are loaded as context, scoping history to the current session so the assistant remembers earlier turns in a create flow.
-	HistorySince *time.Time `json:"history_since"`
+	HistorySince *time.Time `json:"history_since,omitempty"`
 
 	// UserInput User input describing what to do
 	UserInput string `json:"user_input"`
@@ -3750,37 +3750,37 @@ type RoutersApiSolutionsSolutionResponse struct {
 // RoutersApiSourceExportsCreateExportRequest Parameters for creating a new export job.
 type RoutersApiSourceExportsCreateExportRequest struct {
 	// DateFrom Only include content created on or after this timestamp.
-	DateFrom *time.Time `json:"date_from"`
+	DateFrom *time.Time `json:"date_from,omitempty"`
 
 	// DateTo Only include content created on or before this timestamp.
-	DateTo *time.Time `json:"date_to"`
+	DateTo *time.Time `json:"date_to,omitempty"`
 
 	// Format Supported export file formats.
 	Format ExportFormat `json:"format"`
 
 	// MetadataFilter JSONB containment filter applied to content metadata.
-	MetadataFilter *map[string]interface{} `json:"metadata_filter"`
+	MetadataFilter *map[string]interface{} `json:"metadata_filter,omitempty"`
 
 	// QueryFilter Title substring filter (case-insensitive ILIKE).
-	QueryFilter *string `json:"query_filter"`
+	QueryFilter *string `json:"query_filter,omitempty"`
 }
 
 // RoutersApiSourceExportsEstimateExportRequest Parameters for estimating export size.
 type RoutersApiSourceExportsEstimateExportRequest struct {
 	// DateFrom Only include content created on or after this timestamp.
-	DateFrom *time.Time `json:"date_from"`
+	DateFrom *time.Time `json:"date_from,omitempty"`
 
 	// DateTo Only include content created on or before this timestamp.
-	DateTo *time.Time `json:"date_to"`
+	DateTo *time.Time `json:"date_to,omitempty"`
 
 	// Format Supported export file formats.
 	Format ExportFormat `json:"format"`
 
 	// MetadataFilter JSONB containment filter applied to content metadata.
-	MetadataFilter *map[string]interface{} `json:"metadata_filter"`
+	MetadataFilter *map[string]interface{} `json:"metadata_filter,omitempty"`
 
 	// QueryFilter Title substring filter (case-insensitive ILIKE).
-	QueryFilter *string `json:"query_filter"`
+	QueryFilter *string `json:"query_filter,omitempty"`
 }
 
 // RoutersApiSourceExportsEstimateExportResponse Rough size estimate for a potential export.
