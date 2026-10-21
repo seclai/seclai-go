@@ -47,6 +47,11 @@ PATH_LITERAL_RE = r"""(?:"(/[^"\n]*)"|`(/[^`\n]*)`|'(/[^'\n]*)')"""
 #               "this method sends no params" — a silent false pass.
 #   helpers   — positional helper calls that expand to a fixed, ordered key list.
 #               Expansion is arity-aware: only as many keys as arguments supplied.
+# Endpoint helpers, used by `params` and `returns` (see `request_blocks`):
+#   helper_re   — a NON-public method declaration on the client, name captured.
+#   helper_call — how the client calls one of its own methods; `{name}` is filled
+#                 in. Receiver-qualified so `_client.X(` and `t.c.x(` — a typed
+#                 façade calling in from another class — are not followed.
 LANGS = {
     "python": {
         "sig_re": r"\n    (?:async )?def ([a-z]\w*)\(([^)]*)\)\s*->\s*([^:]+):",
@@ -62,6 +67,8 @@ LANGS = {
         "return_re": r"\s*->\s*([^:\n]+):",
         "dict_at": [r"params\s*=\s*(?:_strip_none\()?\s*"],
         "dict_key_re": r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:',
+        "helper_re": r"^[ \t]+(?:async )?def (_[a-z0-9][a-z0-9_]*)\(",
+        "helper_call": r"\bself\.{name}\(",
         "skip": {"request", "request_raw", "stream", "paginate"},
     },
     "javascript": {
@@ -82,6 +89,11 @@ LANGS = {
         "return_re": r"\s*:\s*([^{\n]+?)\s*\{",
         "dict_at": [r"query:\s*"],
         "dict_key_re": r'["\']?([a-zA-Z_][a-zA-Z0-9_]*)["\']?\s*:',
+        # `private`/`protected`/`#name` members only. An unmodified `_name(` is
+        # matched by method_re and already audited as a block of its own.
+        "helper_re": (r"^  (?:(?:private|protected) (?:static )?(?:async )?\*?|(?:async )?\*?#)"
+                      r"([a-zA-Z_][a-zA-Z0-9_]*)\s*[(<]"),
+        "helper_call": r"\bthis\.#?{name}\s*[(<]",
         "skip": {"request", "requestRaw", "uploadFile", "paginate"},
     },
     "go": {
@@ -105,6 +117,10 @@ LANGS = {
         "dict_at": [r"map\[string\]string"],
         "dict_key_re": r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:',
         "helpers": {"listQuery(": ["page", "limit"]},
+        "helper_re": r"^func \(c \*Client\) ([a-z][A-Za-z0-9]*)\(",
+        "helper_call": r"(?<![\w.])c\.{name}\(",
+        # The receiver type scopes a Go method, not the file it sits in.
+        "helper_scope": "package",
         "skip": {"Do", "buildURL"},
     },
     "csharp": {
@@ -122,6 +138,9 @@ LANGS = {
         "return_head_re": r"^\s*public (?:async )?(.+?)\s+[A-Z][A-Za-z0-9]*\s*\(",
         "key_re": r'\["([a-zA-Z_][a-zA-Z0-9_]*)"\]\s*=',
         "helpers": {"PaginationQuery(": ["page", "limit", "sort", "order"]},
+        "helper_re": (r"^    (?:(?:private|internal|protected|static|async) )+"
+                      r"[\w<>,?\[\]. ]+ ([A-Z][A-Za-z0-9]*)\s*\("),
+        "helper_call": r"(?<![\w.])(?:this\.)?{name}\s*\(",
         "skip": {"SendJsonAsync", "SendNoContentAsync", "SendRawAsync", "BuildUri", "PaginationQuery"},
     },
 }
@@ -308,6 +327,85 @@ def block_call(body: str, verb_re: str) -> tuple[str, str] | None:
     return v.group(1).upper(), path
 
 
+def strip_docs(text: str) -> str:
+    """Drop docstrings, block comments and whole-line comments.
+
+    Helper detection reads through this: a docstring's `"GET"` and `"/sources"`
+    example made seclai-python's `_raise_for_openapi_response` look like the
+    request behind twenty methods that never issue one.
+    """
+    text = re.sub(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|/\*[\s\S]*?\*/', "", text)
+    return re.sub(r"(?m)^[ \t]*(?://|#).*$", "", text)
+
+
+def endpoint_helpers(text: str, cfg: dict) -> dict[str, str]:
+    """Non-public client method name -> body, for those that DEFINE a request.
+
+    Defining one means holding a verb and a path literal. Transport plumbing
+    (`doBytes`, `SendRawResponseAsync`) takes both as arguments and holds neither,
+    which is what keeps it out of this index.
+    """
+    if "helper_re" not in cfg:
+        return {}
+    ends = sorted({m.start()
+                   for pat in (cfg["helper_re"], cfg["method_re"], cfg.get("boundary_re")) if pat
+                   for m in re.finditer(pat, text, re.M)})
+    out: dict[str, str] = {}
+    for m in re.finditer(cfg["helper_re"], text, re.M):
+        name = m.group(1)
+        if name in cfg.get("skip", ()) or name in out:
+            continue
+        end = next((e for e in ends if e > m.start()), len(text))
+        body = strip_docs(text[m.start():end])
+        if block_call(body, cfg["verb_re"]):
+            out[name] = body
+    return out
+
+
+def helper_called(body: str, cfg: dict, helpers: dict[str, str]) -> str | None:
+    """Name of the first endpoint helper a method body calls, if any."""
+    code = strip_docs(body)   # a comment naming a helper is not a call to it
+    first: tuple[int, str] | None = None
+    for name in helpers:
+        m = re.search(cfg["helper_call"].replace("{name}", re.escape(name)), code)
+        if m and (first is None or m.start() < first[0]):
+            first = (m.start(), name)
+    return first[1] if first else None
+
+
+def request_blocks(texts: list[str], cfg: dict):
+    """Yield (name, body, call, request_body, helper) per public method with a request.
+
+    A method with no request call of its own that calls a non-public method
+    defining one is read through that helper — ONE hop. `body` stays the public
+    method's, so its declared return type is what `returns` compares;
+    `request_body` is where query keys are read. `helper` is None for own requests.
+    """
+    shared: dict[str, str] = {}
+    if cfg.get("helper_scope") == "package":
+        for text in texts:
+            for k, v in endpoint_helpers(text, cfg).items():
+                shared.setdefault(k, v)
+    for text in texts:
+        helpers = shared or endpoint_helpers(text, cfg)
+        for mname, body in method_blocks(text, cfg["method_re"], cfg.get("boundary_re")):
+            if mname in cfg.get("skip", ()):
+                continue
+            call = block_call(body, cfg["verb_re"])
+            if call:
+                yield mname, body, call, body, None
+                continue
+            helper = helper_called(body, cfg, helpers)
+            if helper:
+                hbody = helpers[helper]
+                yield mname, body, block_call(hbody, cfg["verb_re"]), body + "\n" + hbody, helper
+
+
+def via_helper_line(n: int) -> str:
+    return (f"   {n} of the methods read were resolved through a non-public helper"
+            f" holding the request (one hop)")
+
+
 def block_query_keys(body: str, cfg: dict) -> tuple[set[str], bool]:
     """(keys, parsed_ok). parsed_ok is False when a construction site was found
     but could not be read — reported as an error, never as "sends nothing"."""
@@ -367,32 +465,30 @@ def cmd_params(args) -> int:
     undeclared, not_in_spec, unparsed, exposed = set(), set(), set(), {}
     missing_required: set[tuple[str, str, str]] = set()
 
-    for f in files:
-        text = f.read_text(errors="replace")
-        for mname, body in method_blocks(text, cfg["method_re"], cfg.get("boundary_re")):
-            if mname in cfg.get("skip", ()):
-                continue
-            call = block_call(body, cfg["verb_re"])
-            if not call:
-                continue
-            keys, ok = block_query_keys(body, cfg)
-            if not ok:
-                unparsed.add((mname, f"{call[0]} {call[1]}"))
-            if call not in index:
-                not_in_spec.add((mname, f"{call[0]} {call[1]}"))
-                continue
-            raw, declared, required = index[call]
-            exposed.setdefault((call[0], raw), set()).update(keys)
-            if ok:
-                # Only trust this when the query construction parsed: an
-                # unreadable site would otherwise look like "sends nothing".
-                for k in sorted(required - keys):
-                    missing_required.add((mname, f"{call[0]} {raw}", k))
-            for k in sorted(keys - declared):
-                undeclared.add((mname, f"{call[0]} {raw}", k, tuple(sorted(declared))))
+    via_helper = 0
+    texts = [f.read_text(errors="replace") for f in files]
+    for mname, _body, call, request_body, helper in request_blocks(texts, cfg):
+        via_helper += helper is not None
+        keys, ok = block_query_keys(request_body, cfg)
+        if not ok:
+            unparsed.add((mname, f"{call[0]} {call[1]}"))
+        if call not in index:
+            not_in_spec.add((mname, f"{call[0]} {call[1]}"))
+            continue
+        raw, declared, required = index[call]
+        exposed.setdefault((call[0], raw), set()).update(keys)
+        if ok:
+            # Only trust this when the query construction parsed: an
+            # unreadable site would otherwise look like "sends nothing".
+            for k in sorted(required - keys):
+                missing_required.add((mname, f"{call[0]} {raw}", k))
+        for k in sorted(keys - declared):
+            undeclared.add((mname, f"{call[0]} {raw}", k, tuple(sorted(declared))))
 
     print(f"{name} [{lang}] — {len(files)} client file(s), "
           f"{len(index)} spec operations")
+    if via_helper:
+        print(via_helper_line(via_helper))
 
     if undeclared:
         print(f"\nUNDECLARED ({len(undeclared)}) — sent but the endpoint does not accept it:")
@@ -845,47 +941,46 @@ def cmd_returns(args) -> int:
                         _schema_label(_json_schema(op, "response", code)))
                     break
 
-    mismatched, renamed, untyped, n = [], [], [], 0
-    for path in files:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for mname, body in method_blocks(text, cfg["method_re"], cfg.get("boundary_re")):
-            if mname in cfg.get("skip", set()):
-                continue
-            call = block_call(body, cfg["verb_re"])
-            if not call or call not in want:
-                continue
-            declared = block_return(body, cfg)
-            if declared is None:
-                continue
-            n += 1
-            got, expect = normalise_type(declared, lang), want[call]
-            if expect in ("object", "none", "unknown", "?"):
-                continue          # the spec itself declares nothing to match
-            if got == expect or strip_generated_prefix(got) == expect:
-                continue
-            # Separate the two failure modes. A list where the API returns an
-            # envelope throws at deserialization; a type NAMED differently from
-            # its schema is only cosmetic, and the SDKs rename by convention —
-            # all four drop the spec's `Model` and `Api` affixes. Ranking those
-            # equally buried the one real finding under eleven harmless ones.
-            # A wholly untyped return (`JsonElement`, `unknown`, `JSONValue`)
-            # commits to no shape at all and deserializes anything, so it is a
-            # coverage warning, never a shape error.
-            if got == "?":
-                untyped.append((mname, call, expect, declared))
-            # Shape next. `list[dict[str, Any]]` IS a commitment to a list and is
-            # also untyped; testing untyped-ness first classified seclai-python's
-            # list_evaluation_criteria as a soft warning and reported the repo
-            # clean, when it is exactly as broken as the Go and JS ones.
-            elif got.startswith("array<") != expect.startswith("array<"):
-                mismatched.append((mname, call, expect, declared))
-            elif "?" in got:
-                untyped.append((mname, call, expect, declared))
-            else:
-                renamed.append((mname, call, expect, declared))
+    mismatched, renamed, untyped, n, via_helper = [], [], [], 0, 0
+    texts = [path.read_text(encoding="utf-8", errors="replace") for path in files]
+    for mname, body, call, _request_body, helper in request_blocks(texts, cfg):
+        if call not in want:
+            continue
+        declared = block_return(body, cfg)
+        if declared is None:
+            continue
+        n += 1
+        via_helper += helper is not None
+        got, expect = normalise_type(declared, lang), want[call]
+        if expect in ("object", "none", "unknown", "?"):
+            continue          # the spec itself declares nothing to match
+        if got == expect or strip_generated_prefix(got) == expect:
+            continue
+        # Separate the two failure modes. A list where the API returns an
+        # envelope throws at deserialization; a type NAMED differently from
+        # its schema is only cosmetic, and the SDKs rename by convention —
+        # all four drop the spec's `Model` and `Api` affixes. Ranking those
+        # equally buried the one real finding under eleven harmless ones.
+        # A wholly untyped return (`JsonElement`, `unknown`, `JSONValue`)
+        # commits to no shape at all and deserializes anything, so it is a
+        # coverage warning, never a shape error.
+        if got == "?":
+            untyped.append((mname, call, expect, declared))
+        # Shape next. `list[dict[str, Any]]` IS a commitment to a list and is
+        # also untyped; testing untyped-ness first classified seclai-python's
+        # list_evaluation_criteria as a soft warning and reported the repo
+        # clean, when it is exactly as broken as the Go and JS ones.
+        elif got.startswith("array<") != expect.startswith("array<"):
+            mismatched.append((mname, call, expect, declared))
+        elif "?" in got:
+            untyped.append((mname, call, expect, declared))
+        else:
+            renamed.append((mname, call, expect, declared))
 
     print(f"{repo.name} [{lang}] — {n} method(s) with both a declared return type "
           f"and a named response schema")
+    if via_helper:
+        print(via_helper_line(via_helper))
 
     if mismatched:
         print(f"\nSHAPE MISMATCH ({len(mismatched)}) — list vs object; this fails at deserialization:")

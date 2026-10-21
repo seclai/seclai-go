@@ -100,6 +100,15 @@ for those two SDKs will not drop as typing improves. Check the façade before
 concluding an endpoint is untyped. seclai-javascript needs no façade (`unknown`
 to a concrete type is source compatible) and does report zero.
 
+**`params` and `returns` follow one hop into a non-public helper, and no further.**
+A public method with no request of its own that calls a non-public method of the
+same client holding the verb and path literal (Go `c.thingsBody(`, C# `internal
+…ResponseAsync`, Python `self._x(`, JS `private`/`#x`) is audited as that request,
+with its own declared return type; both summaries then print how many methods
+were resolved that way, so a drop in that number is a narrower audit, not a
+cleaner SDK. A second hop, a helper that takes its verb or path as an argument,
+and a call from another class (the façade's `_client.X(`) are still not followed.
+
 **Dated versioning breaks the one-shape assumption.** Since `Seclai-Version`
 (2026-07-28) an operation can have two legal response bodies — a bare array by
 default, the canonical `{data, pagination}` envelope once the caller opts in —
