@@ -202,6 +202,38 @@ func TestClient_DownloadContentAttachment_WithheldIsAnError(t *testing.T) {
 	}
 }
 
+// The download methods map a 422 to *APIValidationError, as Do does.
+func TestClient_Download_ValidationErrorIsTyped(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 422, "application/json",
+		`{"detail":[{"loc":["path","attachment_id"],"msg":"bad id","type":"value_error"}]}`)
+
+	downloads := map[string]func() (*http.Response, error){
+		"DownloadContentAttachment": func() (*http.Response, error) {
+			return c.DownloadContentAttachment(context.Background(), "cv_1", "att_1")
+		},
+		"DownloadSourceExport": func() (*http.Response, error) {
+			return c.DownloadSourceExport(context.Background(), "src_1", "exp_1")
+		},
+		"DownloadAgentRunAttachment": func() (*http.Response, error) {
+			return c.DownloadAgentRunAttachment(context.Background(), "run_1", "att_1", "")
+		},
+	}
+	for name, download := range downloads {
+		resp, err := download()
+		if resp != nil {
+			t.Fatalf("%s: expected no response on 422", name)
+		}
+		var valErr *APIValidationError
+		if !errors.As(err, &valErr) || valErr.StatusCode != 422 {
+			t.Fatalf("%s: expected a 422 APIValidationError, got %v", name, err)
+		}
+		if valErr.ValidationError == nil || len(*valErr.ValidationError.Detail) != 1 {
+			t.Fatalf("%s: expected the decoded validation detail, got %+v", name, valErr.ValidationError)
+		}
+	}
+}
+
 // ── Email source rejections ─────────────────────────────────────────────────
 
 func TestClient_ListEmailSourceRejections(t *testing.T) {

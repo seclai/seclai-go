@@ -352,20 +352,25 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
-	text := strings.TrimSpace(string(raw))
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: text}
-		if resp.StatusCode == 422 {
-			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-				return nil, nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
-			}
-			return nil, nil, &APIValidationError{APIStatusError: statusErr}
-		}
-		return nil, nil, &statusErr
+		return nil, nil, apiError(resp.StatusCode, method, reqURL.String(), raw)
 	}
 	return raw, reqURL, nil
+}
+
+// apiError builds the error for a non-2xx response from its status and body:
+// an *APIValidationError for a 422, carrying the decoded validation detail
+// when the body has one, and an *APIStatusError otherwise.
+func apiError(statusCode int, method, reqURL string, raw []byte) error {
+	statusErr := APIStatusError{StatusCode: statusCode, Method: method, URL: reqURL, ResponseText: strings.TrimSpace(string(raw))}
+	if statusCode == http.StatusUnprocessableEntity {
+		var ve HTTPValidationError
+		if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
+			return &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
+		}
+		return &APIValidationError{APIStatusError: statusErr}
+	}
+	return &statusErr
 }
 
 // ── Identity ──────────────────────────────────────────────────────────────────
@@ -750,7 +755,8 @@ func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachme
 
 // doRaw issues a request without a body and returns the 2xx response
 // unread, for the download methods; the caller must close its body. A non-2xx
-// response is read, closed and returned as an *APIStatusError.
+// response is read, closed and returned as the same error [Client.Do] returns:
+// an *APIValidationError for a 422 and an *APIStatusError otherwise.
 func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[string]string) (*http.Response, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -773,8 +779,7 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		text := strings.TrimSpace(string(raw))
-		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: text}
+		return nil, apiError(resp.StatusCode, method, reqURL.String(), raw)
 	}
 	return resp, nil
 }
@@ -1063,7 +1068,12 @@ func (c *Client) GetNonManualEvaluationSummary(ctx context.Context, agentID stri
 //
 // Timeout behavior is controlled by ctx (for example, use context.WithTimeout). If ctx has no deadline,
 // a default 60s timeout is applied.
+//
+// body.IncludeReasoning is not sent: this method reads only the final run, so
+// reasoning events would be streamed only to be discarded while counting
+// against the timeout. Use [Client.RunStreamingAgent] to receive them.
 func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, body AgentRunStreamRequest) (*AgentRunResponse, error) {
+	body.IncludeReasoning = nil
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1100,16 +1110,7 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
-		text := strings.TrimSpace(string(raw))
-		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
-		if resp.StatusCode == 422 {
-			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
-			}
-			return nil, &APIValidationError{APIStatusError: statusErr}
-		}
-		return nil, &statusErr
+		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
 	}
 
 	reader := bufio.NewReader(resp.Body)
@@ -1255,18 +1256,7 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			raw, _ := io.ReadAll(resp.Body)
-			text := strings.TrimSpace(string(raw))
-			statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
-			if resp.StatusCode == 422 {
-				var ve HTTPValidationError
-				if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-					errCh <- &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
-					return
-				}
-				errCh <- &APIValidationError{APIStatusError: statusErr}
-				return
-			}
-			errCh <- &statusErr
+			errCh <- apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
 			return
 		}
 
@@ -1499,17 +1489,8 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
-	text := strings.TrimSpace(string(raw))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
-		if resp.StatusCode == 422 {
-			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
-			}
-			return nil, &APIValidationError{APIStatusError: statusErr}
-		}
-		return nil, &statusErr
+		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
 	}
 	return raw, nil
 }
@@ -1772,50 +1753,51 @@ func (c *Client) ListMemoryBanks(ctx context.Context, opts SortableListOptions) 
 	return &out, nil
 }
 
-// RetentionIndefinite is a RetentionDays value for [Client.CreateMemoryBank]
-// and [Client.UpdateMemoryBank] that keeps the bank's entries indefinitely.
-// CreateMemoryBank sends it as an explicit null retention_days, and
-// UpdateMemoryBank as 0, which is how each endpoint spells "no window". The
-// API requires a positive number of days, so the value cannot collide with
-// one.
-const RetentionIndefinite = -1
+// CreateMemoryBankOptions holds the settings of [Client.CreateMemoryBankWithOptions]
+// that [CreateMemoryBankBody] cannot express.
+type CreateMemoryBankOptions struct {
+	// RetainIndefinitely keeps the new bank's entries indefinitely on every API
+	// version. It sends an explicit null retention_days, which a nil
+	// RetentionDays cannot, since that is left out of the request. It cannot be
+	// combined with RetentionDays.
+	RetainIndefinitely bool
+}
 
-// CreateMemoryBank creates a new memory bank.
+// CreateMemoryBank creates a new memory bank. It is
+// [Client.CreateMemoryBankWithOptions] with no options.
 //
 // A nil RetentionDays is left out of the request, so the API's default
-// applies. From API version 2026-08-03 that is 90 days for a conversation bank
-// and indefinite for a general bank; earlier versions keep a conversation
-// bank's entries for 30 days. Set RetentionDays to a number of days to choose
-// a window, or to [RetentionIndefinite] to keep entries indefinitely on every
-// version.
+// applies. A general bank keeps its entries indefinitely on every version.
+// From API version 2026-08-03 a conversation bank keeps them for 90 days;
+// earlier versions keep them for 30 days, or for MaxAgeDays when that is
+// longer. Set RetentionDays to choose a window, or use
+// CreateMemoryBankWithOptions with RetainIndefinitely to keep entries
+// indefinitely.
 func (c *Client) CreateMemoryBank(ctx context.Context, body CreateMemoryBankBody) (*MemoryBankResponse, error) {
+	return c.CreateMemoryBankWithOptions(ctx, body, CreateMemoryBankOptions{})
+}
+
+// CreateMemoryBankWithOptions creates a new memory bank with the settings in
+// opts. It returns a [*ConfigurationError], without sending a request, when
+// opts.RetainIndefinitely is set together with body.RetentionDays.
+func (c *Client) CreateMemoryBankWithOptions(ctx context.Context, body CreateMemoryBankBody, opts CreateMemoryBankOptions) (*MemoryBankResponse, error) {
 	var payload any = body
-	if body.RetentionDays != nil && *body.RetentionDays == RetentionIndefinite {
-		fields, err := jsonObject(body)
-		if err != nil {
-			return nil, err
+	if opts.RetainIndefinitely {
+		if body.RetentionDays != nil {
+			return nil, &ConfigurationError{Message: "CreateMemoryBankWithOptions: set RetentionDays or RetainIndefinitely, not both"}
 		}
-		fields["retention_days"] = json.RawMessage("null")
-		payload = fields
+		// The outer RetentionDays shadows the embedded one and, having no
+		// omitempty and being nil, is always written as null.
+		payload = struct {
+			CreateMemoryBankBody
+			RetentionDays *int `json:"retention_days"`
+		}{CreateMemoryBankBody: body}
 	}
 	var out MemoryBankResponse
 	if err := c.Do(ctx, http.MethodPost, "/memory_banks", nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
-}
-
-// jsonObject marshals v, a request struct, to its top-level JSON fields.
-func jsonObject(v any) (map[string]json.RawMessage, error) {
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	fields := map[string]json.RawMessage{}
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil, err
-	}
-	return fields, nil
 }
 
 // GetMemoryBank retrieves a memory bank by ID.
@@ -1828,16 +1810,24 @@ func (c *Client) GetMemoryBank(ctx context.Context, memoryBankID string) (*Memor
 }
 
 // UpdateMemoryBank updates a memory bank. Only the fields set on body are
-// sent; a nil field leaves that setting unchanged. A RetentionDays of
-// [RetentionIndefinite] or 0 clears the retention window, so entries are kept
-// indefinitely; the client sends either as 0.
+// sent; a nil field leaves that setting unchanged. To remove the retention
+// window, use [Client.ClearMemoryBankRetention].
 func (c *Client) UpdateMemoryBank(ctx context.Context, memoryBankID string, body UpdateMemoryBankBody) (*MemoryBankResponse, error) {
-	if body.RetentionDays != nil && *body.RetentionDays == RetentionIndefinite {
-		zero := 0
-		body.RetentionDays = &zero
-	}
 	var out MemoryBankResponse
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/memory_banks/%s", url.PathEscape(memoryBankID)), nil, body, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ClearMemoryBankRetention removes a memory bank's retention window, so its
+// entries are kept indefinitely. It sends a retention_days of 0, which is how
+// the update endpoint spells "no window", and leaves every other setting
+// unchanged.
+func (c *Client) ClearMemoryBankRetention(ctx context.Context, memoryBankID string) (*MemoryBankResponse, error) {
+	var out MemoryBankResponse
+	payload := map[string]any{"retention_days": 0}
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/memory_banks/%s", url.PathEscape(memoryBankID)), nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

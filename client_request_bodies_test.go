@@ -278,18 +278,9 @@ func TestClient_CreateMemoryBank_Retention(t *testing.T) {
 	if _, err := c.CreateMemoryBank(ctx, CreateMemoryBankBody{Name: "m", Type: &conv}); err != nil {
 		t.Fatalf("CreateMemoryBank: %v", err)
 	}
+	rec.expect(t, http.MethodPost, "/memory_banks", "")
 	if string(rec.rawBody) != `{"name":"m","type":"conversation"}` {
 		t.Fatalf("expected retention_days omitted, got %s", rec.rawBody)
-	}
-
-	// RetentionIndefinite: an explicit null, the rest of the body unchanged.
-	rec = requestRecorder{}
-	indefinite := RetentionIndefinite
-	if _, err := c.CreateMemoryBank(ctx, CreateMemoryBankBody{Name: "m", Type: &conv, RetentionDays: &indefinite}); err != nil {
-		t.Fatalf("CreateMemoryBank: %v", err)
-	}
-	if string(rec.rawBody) != `{"name":"m","retention_days":null,"type":"conversation"}` {
-		t.Fatalf("expected an explicit null retention_days, got %s", rec.rawBody)
 	}
 
 	// A number of days is sent as is.
@@ -300,6 +291,44 @@ func TestClient_CreateMemoryBank_Retention(t *testing.T) {
 	}
 	if string(rec.rawBody) != `{"name":"m","retention_days":30,"type":"conversation"}` {
 		t.Fatalf("expected retention_days 30, got %s", rec.rawBody)
+	}
+}
+
+func TestClient_CreateMemoryBankWithOptions_RetainIndefinitely(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", `{}`)
+	ctx := context.Background()
+	conv := "conversation"
+	desc := "d"
+
+	// An explicit null, the rest of the body unchanged.
+	if _, err := c.CreateMemoryBankWithOptions(ctx, CreateMemoryBankBody{Name: "m", Type: &conv, Description: &desc}, CreateMemoryBankOptions{RetainIndefinitely: true}); err != nil {
+		t.Fatalf("CreateMemoryBankWithOptions: %v", err)
+	}
+	rec.expect(t, http.MethodPost, "/memory_banks", "")
+	if string(rec.rawBody) != `{"description":"d","name":"m","type":"conversation","retention_days":null}` {
+		t.Fatalf("expected an explicit null retention_days, got %s", rec.rawBody)
+	}
+
+	// Zero options behave like CreateMemoryBank.
+	rec = requestRecorder{}
+	if _, err := c.CreateMemoryBankWithOptions(ctx, CreateMemoryBankBody{Name: "m"}, CreateMemoryBankOptions{}); err != nil {
+		t.Fatalf("CreateMemoryBankWithOptions: %v", err)
+	}
+	if string(rec.rawBody) != `{"name":"m"}` {
+		t.Fatalf("expected retention_days omitted, got %s", rec.rawBody)
+	}
+
+	// RetainIndefinitely with RetentionDays is a contradiction, refused unsent.
+	rec = requestRecorder{}
+	days := 30
+	_, err := c.CreateMemoryBankWithOptions(ctx, CreateMemoryBankBody{Name: "m", RetentionDays: &days}, CreateMemoryBankOptions{RetainIndefinitely: true})
+	var cfgErr *ConfigurationError
+	if !errors.As(err, &cfgErr) {
+		t.Fatalf("expected a *ConfigurationError, got %v", err)
+	}
+	if rec.method != "" {
+		t.Fatalf("expected no request, got %s %s", rec.method, rec.path)
 	}
 }
 
@@ -316,27 +345,26 @@ func TestClient_UpdateMemoryBank_Retention(t *testing.T) {
 	}
 
 	rec = requestRecorder{}
-	zero := 0
-	if _, err := c.UpdateMemoryBank(ctx, "mb_1", UpdateMemoryBankBody{RetentionDays: &zero}); err != nil {
+	days := 14
+	if _, err := c.UpdateMemoryBank(ctx, "mb_1", UpdateMemoryBankBody{RetentionDays: &days}); err != nil {
 		t.Fatalf("UpdateMemoryBank: %v", err)
 	}
-	if string(rec.rawBody) != `{"retention_days":0}` {
-		t.Fatalf("expected retention_days 0, got %s", rec.rawBody)
+	if string(rec.rawBody) != `{"retention_days":14}` {
+		t.Fatalf("expected retention_days 14, got %s", rec.rawBody)
 	}
+}
 
-	// RetentionIndefinite is sent as 0, the update endpoint's "no window",
-	// without changing the caller's value.
-	rec = requestRecorder{}
-	indefinite := RetentionIndefinite
-	body := UpdateMemoryBankBody{RetentionDays: &indefinite}
-	if _, err := c.UpdateMemoryBank(ctx, "mb_1", body); err != nil {
-		t.Fatalf("UpdateMemoryBank: %v", err)
+func TestClient_ClearMemoryBankRetention(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", `{}`)
+
+	if _, err := c.ClearMemoryBankRetention(context.Background(), "mb_1"); err != nil {
+		t.Fatalf("ClearMemoryBankRetention: %v", err)
 	}
+	// 0 is the update endpoint's "no window"; a null there leaves it unchanged.
+	rec.expect(t, http.MethodPut, "/memory_banks/mb_1", "")
 	if string(rec.rawBody) != `{"retention_days":0}` {
 		t.Fatalf("expected retention_days 0, got %s", rec.rawBody)
-	}
-	if indefinite != RetentionIndefinite {
-		t.Fatalf("the caller's value was changed to %d", indefinite)
 	}
 }
 

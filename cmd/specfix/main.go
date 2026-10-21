@@ -205,7 +205,11 @@ func transformExclusiveBound(obj map[string]any, exclusiveKey, boundKey string) 
 // clears the retention window — so a request built from a struct must leave
 // out what the caller did not set. The few places that do need a literal null
 // send it explicitly from the client. Required properties keep the generator's
-// default, and schemas reached only from responses are left alone.
+// default, and schemas reached only from responses are left alone. A schema
+// shared by a request and a response, such as AcceptedAttachmentSlot, is
+// tagged too, so re-marshalling a fetched response drops its nil fields
+// instead of writing null; the API reads both the same for those fields, so
+// passing such a value back in a request is unaffected.
 //
 // Call it after fix, which turns the 3.1 null unions into nullable: true.
 func omitUnsetRequestFields(doc any) {

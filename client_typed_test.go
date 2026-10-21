@@ -77,6 +77,28 @@ func TestClient_RunStreamingAgentAndWait_Done(t *testing.T) {
 	}
 }
 
+// The wait helper reads only the final run, so it leaves include_reasoning
+// out rather than have the server stream reasoning events it would discard.
+func TestClient_RunStreamingAgentAndWait_DropsIncludeReasoning(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "text/event-stream",
+		"event: done\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"completed\"}\n\n")
+
+	input := "hi"
+	reasoning := true
+	body := AgentRunStreamRequest{Input: &input, IncludeReasoning: &reasoning}
+	if _, err := c.RunStreamingAgentAndWait(context.Background(), "agent_1", body); err != nil {
+		t.Fatalf("RunStreamingAgentAndWait: %v", err)
+	}
+	rec.expect(t, http.MethodPost, "/agents/agent_1/runs/stream", "")
+	if string(rec.rawBody) != `{"input":"hi"}` {
+		t.Fatalf("expected include_reasoning left out, got %s", rec.rawBody)
+	}
+	if body.IncludeReasoning == nil || !*body.IncludeReasoning {
+		t.Fatal("the caller's request was changed")
+	}
+}
+
 func TestClient_RunStreamingAgentAndWait_Timeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/agents/agent_1/runs/stream" {

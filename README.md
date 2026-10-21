@@ -230,7 +230,7 @@ client decodes:
 
 | Version | Constant | What it changes |
 | --- | --- | --- |
-| `2026-08-03` | `APIVersion20260803` | `CreateMemoryBank` rejects `max_age_days` with a 400, and an omitted `retention_days` resolves per bank type instead of to 30: 90 days for a conversation bank, indefinite for a general bank. `CreateMemoryBank` leaves a nil `RetentionDays` out, so this default applies; `RetentionIndefinite` keeps entries indefinitely on every version |
+| `2026-08-03` | `APIVersion20260803` | `CreateMemoryBank` rejects `max_age_days` with a 400, and an omitted `retention_days` resolves per bank type instead of to 30: 90 days for a conversation bank, indefinite for a general bank. `CreateMemoryBank` leaves a nil `RetentionDays` out, so this default applies; `CreateMemoryBankWithOptions` with `RetainIndefinitely` keeps entries indefinitely on every version |
 | `2026-08-21` | `APIVersion20260821` | `CreateSource` rejects an embedding dimension its embedder does not support with a 400 — `ListEmbeddingModels` reports the supported ones |
 | `2026-09-28` | `APIVersion20260928` | Agent-definition writes use the current file-list grammar: an omitted `attachments` keeps the stored list and `[]` means no files |
 | `2026-09-30` | `APIVersion20260930` | A run's and a step's `Output`, and a step's `Input`, are the text rather than a JSON manifest; files are in `Attachments` on every version |
@@ -360,7 +360,7 @@ _ = client.DeleteAgentRun(ctx, "run_id")
 
 The SDK provides two streaming patterns over the SSE `/runs/stream` endpoint.
 
-**Block until done** — returns the final `done` payload or returns an error on timeout:
+**Block until done** — returns the final `done` payload or returns an error on timeout. It reads only that payload, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events:
 
 ```go
 // If ctx has no deadline, the SDK applies a default timeout.
@@ -555,19 +555,21 @@ _ = client.DeleteMemoryBankSource(ctx, "mb_id")
 ```
 
 A nil `RetentionDays` on `CreateMemoryBank` is left out, so the API's default
-applies: from API version `2026-08-03`, 90 days for a conversation bank and
-indefinite for a general bank; earlier versions give a conversation bank 30
-days. Set `RetentionDays` to `RetentionIndefinite` to keep entries indefinitely
-on every version, on `CreateMemoryBank` or `UpdateMemoryBank`:
+applies. A general bank keeps its entries indefinitely on every version. From
+API version `2026-08-03` a conversation bank keeps them for 90 days; earlier
+versions keep them for 30 days, or for `MaxAgeDays` when that is longer. To
+keep a new bank's entries indefinitely on every version, call
+`CreateMemoryBankWithOptions` with `RetainIndefinitely`; to remove an existing
+bank's window, call `ClearMemoryBankRetention`:
 
 <!-- sdksync:check -->
 ```go
-keep := seclai.RetentionIndefinite
-if _, err := client.CreateMemoryBank(ctx, seclai.CreateMemoryBankBody{Name: "support", RetentionDays: &keep}); err != nil {
+opts := seclai.CreateMemoryBankOptions{RetainIndefinitely: true}
+if _, err := client.CreateMemoryBankWithOptions(ctx, seclai.CreateMemoryBankBody{Name: "support"}, opts); err != nil {
 	fmt.Println(err)
 	return
 }
-if _, err := client.UpdateMemoryBank(ctx, "mb_id", seclai.UpdateMemoryBankBody{RetentionDays: &keep}); err != nil {
+if _, err := client.ClearMemoryBankRetention(ctx, "mb_id"); err != nil {
 	fmt.Println(err)
 	return
 }
@@ -604,9 +606,9 @@ Every request body works this way: a nil optional field is left out rather
 than sent as `null`. The exceptions are documented on their methods: a nil
 `AcceptedAttachments` on `SetAcceptedAttachments` and a nil version on
 `UpdateAPIVersion` are sent as `null`. Where the API gives an explicit `null`
-a meaning of its own, a named method sends it: `ClearSourceRetention`,
-`ClearEvaluationCriteriaFields`, and `RetentionIndefinite` on
-`CreateMemoryBank`.
+a meaning of its own, a named method or option sends it: `ClearSourceRetention`,
+`ClearEvaluationCriteriaFields`, and `RetainIndefinitely` on
+`CreateMemoryBankWithOptions`.
 
 Indexing status of a source's content, keyed by the `content_version_id` the
 upload methods return:
