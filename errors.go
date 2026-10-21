@@ -53,6 +53,17 @@ func (e *APIValidationError) Error() string {
 	return (&e.APIStatusError).Error()
 }
 
+// As lets errors.As match an *APIValidationError as an *APIStatusError too, so
+// code that handles every non-2xx response through *APIStatusError also sees 422s.
+func (e *APIValidationError) As(target any) bool {
+	t, ok := target.(**APIStatusError)
+	if !ok || e == nil {
+		return false
+	}
+	*t = &e.APIStatusError
+	return true
+}
+
 // StreamingError indicates a failure during an SSE streaming operation.
 type StreamingError struct {
 	// Message describes what went wrong.

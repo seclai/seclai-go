@@ -202,9 +202,9 @@ func TestClient_DownloadContentAttachment_WithheldIsAnError(t *testing.T) {
 	}
 }
 
-// The download methods return *APIStatusError for every non-2xx, a 422
-// included, as released; *APIValidationError does not unwrap to it.
-func TestClient_Download_ValidationErrorIsStatusError(t *testing.T) {
+// A 422 from a download is an *APIValidationError carrying the decoded detail,
+// and still matches *APIStatusError, as it did when downloads returned only that.
+func TestClient_Download_ValidationError(t *testing.T) {
 	var rec requestRecorder
 	c := newRecordingServer(t, &rec, 422, "application/json",
 		`{"detail":[{"loc":["path","attachment_id"],"msg":"bad id","type":"value_error"}]}`)
@@ -225,10 +225,25 @@ func TestClient_Download_ValidationErrorIsStatusError(t *testing.T) {
 		if resp != nil {
 			t.Fatalf("%s: expected no response on 422", name)
 		}
+		var validErr *APIValidationError
+		if !errors.As(err, &validErr) || validErr.ValidationError == nil {
+			t.Fatalf("%s: expected an APIValidationError with detail, got %v", name, err)
+		}
 		var statusErr *APIStatusError
 		if !errors.As(err, &statusErr) || statusErr.StatusCode != 422 {
-			t.Fatalf("%s: expected a 422 APIStatusError, got %v", name, err)
+			t.Fatalf("%s: expected a 422 to match APIStatusError, got %v", name, err)
 		}
+	}
+}
+
+// A 422 from a Do-based method matches *APIStatusError as well.
+func TestClient_ValidationErrorMatchesStatusError(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 422, "application/json", `{"detail":[]}`)
+	_, err := c.GetMe(context.Background())
+	var statusErr *APIStatusError
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != 422 {
+		t.Fatalf("expected a 422 to match APIStatusError, got %v", err)
 	}
 }
 

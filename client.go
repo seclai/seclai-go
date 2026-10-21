@@ -778,7 +778,7 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw))}
+		return nil, apiError(resp.StatusCode, method, reqURL.String(), raw)
 	}
 	return resp, nil
 }

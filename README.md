@@ -1018,7 +1018,7 @@ if err != nil {
 | --- | --- |
 | `*ConfigurationError` | Missing API key, invalid base URL |
 | `*APIStatusError` | Non-2xx HTTP response |
-| `*APIValidationError` | HTTP 422 (embeds `APIStatusError`), except from the `Download*` methods, which return `*APIStatusError` for every non-2xx |
+| `*APIValidationError` | HTTP 422 (embeds `APIStatusError`, and also matches it with `errors.As`) |
 | `*StreamingError` | SSE stream ended unexpectedly |
 | `*UnexpectedResponseError` | A 2xx response that is not the list its method reads |
 
