@@ -1,6 +1,8 @@
 package seclai
 
 import (
+	"encoding/json"
+
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/seclai/seclai-go/generated"
@@ -28,13 +30,52 @@ type JsonValue = generated.JsonValue
 // File is the upload file type used by the generated client.
 type File = openapi_types.File
 
-// InsufficientCreditsResponse is the 402 envelope returned when an account has
-// exhausted its credits.
-type InsufficientCreditsResponse = generated.InsufficientCreditsResponse
+// InsufficientCreditsResponse is the 402 body sent when an account has exhausted
+// its credits: {"error": {"code", "message", "account_id"}}. Other 402s share the
+// shape with another Code, so check Error.Code is "insufficient_credits".
+type InsufficientCreditsResponse struct {
+	Error InsufficientCreditsDetail `json:"error"`
 
-// InsufficientCreditsDetail is the detail body of an [InsufficientCreditsResponse]
-// (error code, message, and account id).
-type InsufficientCreditsDetail = generated.InsufficientCreditsDetail
+	// Deprecated: the API never sends a "detail" key. Decoding copies Error here
+	// so code written against v1.7 reads the real body. Use Error.
+	Detail InsufficientCreditsDetail `json:"-"`
+}
+
+// UnmarshalJSON decodes the body and mirrors Error into the deprecated Detail.
+func (r *InsufficientCreditsResponse) UnmarshalJSON(b []byte) error {
+	var wire struct {
+		Error InsufficientCreditsDetail `json:"error"`
+	}
+	if err := json.Unmarshal(b, &wire); err != nil {
+		return err
+	}
+	*r = InsufficientCreditsResponse{Error: wire.Error, Detail: wire.Error}
+	return nil
+}
+
+// InsufficientCreditsDetail is the "error" object of an [InsufficientCreditsResponse].
+type InsufficientCreditsDetail struct {
+	// AccountId is the UUID of the account that ran out of credits.
+	AccountId string `json:"account_id"`
+	// Code is the stable machine-readable error code; "insufficient_credits" for this body.
+	Code string `json:"code"`
+	// Message is a human-readable explanation.
+	Message string `json:"message"`
+
+	// Deprecated: the code is sent as "code", never "error". Decoding copies Code
+	// here so code written against v1.7 reads it. Use Code.
+	Error string `json:"-"`
+}
+
+// UnmarshalJSON decodes the detail and mirrors Code into the deprecated Error.
+func (d *InsufficientCreditsDetail) UnmarshalJSON(b []byte) error {
+	var wire generated.InsufficientCreditsDetail
+	if err := json.Unmarshal(b, &wire); err != nil {
+		return err
+	}
+	*d = InsufficientCreditsDetail{AccountId: wire.AccountId, Code: wire.Code, Message: wire.Message, Error: wire.Code}
+	return nil
+}
 
 // ── Agents ──────────────────────────────────────────────────────────────────
 
@@ -355,12 +396,17 @@ type CompatibleRunListResponse = generated.CompatibleRunListResponse
 type TestDraftEvaluationRequest = generated.TestDraftEvaluationRequest
 
 // TestDraftEvaluationResponse is the response from testing a draft evaluation.
+//
+// Check Status before Score and Passed: an "error" result carries no verdict.
+// From API version 2026-10-21 its score and passed are null, which decode to 0
+// and false; before it they are 0.5 and false.
 type TestDraftEvaluationResponse = generated.TestDraftEvaluationResponse
 
 // EvaluationRunSummaryListResponse is a paginated list of evaluation run summaries.
 type EvaluationRunSummaryListResponse = generated.EvaluationRunSummaryListResponse
 
 // NonManualEvaluationSummaryResponse is a summary of non-manual (automated) evaluation results.
+// From API version 2026-10-21, results counted in Error are left out of Failed and of both rates.
 type NonManualEvaluationSummaryResponse = generated.SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse
 
 // NonManualEvaluationModeStatResponse is per-mode stats within a non-manual evaluation summary.

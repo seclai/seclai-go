@@ -149,7 +149,7 @@ baseline applies and responses keep their current shapes. Upgrading this module
 alone never changes the wire contract.
 
 Known versions are package constants (`APIVersion20260701` through
-`APIVersion20261019`, one per version in the table below, plus
+`APIVersion20261021`, one per version in the table below, plus
 `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
 this release was **not** built against makes `NewClient` fail: a newer version
 can reshape responses, and this client would decode them incorrectly rather than
@@ -225,8 +225,8 @@ not know, whether it arrives through `Options.APIVersion` or
   results: an empty or unknown `Seclai-Version` fails with a
   `*ConfigurationError` before it is sent.
 
-**Later versions.** Each is cumulative, and none changes a response shape this
-client decodes:
+**Later versions.** Each is cumulative. Only `2026-10-21` changes a response shape
+this client decodes; its row says how:
 
 | Version | Constant | What it changes |
 | --- | --- | --- |
@@ -240,6 +240,7 @@ client decodes:
 | `2026-10-16` | `APIVersion20261016` | An uploaded agent input file is `ready` at once and its text is not written into `input`; steps receive the file |
 | `2026-10-18` | `APIVersion20261018` | A source that follows no web pages, created on a text-only embedder without `document_images`, gets it turned on |
 | `2026-10-19` | `APIVersion20261019` | `CreateSource` rejects `polling_max_items` on a website, custom index or cloud drive source with a 400 |
+| `2026-10-21` | `APIVersion20261021` | `GetNonManualEvaluationSummary` leaves results whose evaluator returned no verdict out of `Failed`, `PassRate` and `FailureRate` (they are in `Error` on every version); a criteria summary's `AverageScore` averages only passed and failed results; `TestDraftEvaluation` sends a null score and verdict for an `error` result, which decode to 0 and false, rather than 0.5 and false |
 
 ## Typed responses
 
@@ -484,8 +485,12 @@ detail, _ := client.GetEvaluationCriteria(ctx, "criteria_id")
 _, _ = client.UpdateEvaluationCriteria(ctx, "criteria_id", seclai.UpdateEvaluationCriteriaRequest{})
 _ = client.DeleteEvaluationCriteria(ctx, "criteria_id")
 
-// Test a draft
-_, _ = client.TestDraftEvaluation(ctx, "agent_id", seclai.TestDraftEvaluationRequest{})
+// Test a draft. Status "error" means the evaluator returned no verdict: Score
+// and Passed are then 0 and false from 2026-10-21, and 0.5 and false before it.
+draft, _ := client.TestDraftEvaluation(ctx, "agent_id", seclai.TestDraftEvaluationRequest{})
+if draft != nil && draft.Status != "error" {
+	fmt.Println(draft.Score, draft.Passed)
+}
 
 // Results & summaries
 results, _ := client.ListEvaluationResults(ctx, "criteria_id", seclai.ListOptions{})

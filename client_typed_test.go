@@ -2569,6 +2569,7 @@ func TestAPIVersionConstants_TrackTheSpec(t *testing.T) {
 		APIVersion20260701, APIVersion20260727, APIVersion20260803, APIVersion20260821,
 		APIVersion20260928, APIVersion20260930, APIVersion20261003, APIVersion20261005,
 		APIVersion20261013, APIVersion20261016, APIVersion20261018, APIVersion20261019,
+		APIVersion20261021,
 	}
 	if strings.Join(KnownAPIVersions, ",") != strings.Join(known, ",") {
 		t.Fatalf("KnownAPIVersions %v does not list every constant %v", KnownAPIVersions, known)
@@ -2784,5 +2785,85 @@ func TestNewClient_OnlyOneVersionHeaderReachesTheWire(t *testing.T) {
 	}
 	if len(seen) != 1 {
 		t.Fatalf("expected exactly one Seclai-Version on the wire, got %v", seen)
+	}
+}
+
+func TestInsufficientCreditsResponse_DecodesWireShape(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_, _ = io.WriteString(w, `{"error":{"code":"insufficient_credits","message":"Out of credits.","account_id":"acct_1"}}`)
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = c.GetNonManualEvaluationSummary(context.Background(), "")
+	var statusErr *APIStatusError
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusPaymentRequired {
+		t.Fatalf("expected a 402 APIStatusError, got %v", err)
+	}
+	var body InsufficientCreditsResponse
+	if err := json.Unmarshal([]byte(statusErr.ResponseText), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := InsufficientCreditsDetail{AccountId: "acct_1", Code: "insufficient_credits", Message: "Out of credits.", Error: "insufficient_credits"}
+	if body.Error != want {
+		t.Fatalf("Error: got %+v, want %+v", body.Error, want)
+	}
+	if body.Detail != want {
+		t.Fatalf("deprecated Detail must mirror Error: got %+v", body.Detail)
+	}
+}
+
+func TestTestDraftEvaluation_ErrorStatusWithNullVerdictDecodesToZeroValues(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"error","score":null,"passed":null,"explanation":"evaluator timed out"}`)
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL, APIVersion: APIVersion20261021})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	out, err := c.TestDraftEvaluation(context.Background(), "agent_1", TestDraftEvaluationRequest{})
+	if err != nil {
+		t.Fatalf("TestDraftEvaluation: %v", err)
+	}
+	if out.Status != generated.EvaluationStatusError {
+		t.Fatalf("Status: got %q, want error", out.Status)
+	}
+	if out.Score != 0 || out.Passed {
+		t.Fatalf("null score/passed: got %v/%v, want 0/false", out.Score, out.Passed)
+	}
+	if out.Explanation == nil || *out.Explanation != "evaluator timed out" {
+		t.Fatalf("Explanation: got %v", out.Explanation)
+	}
+}
+
+func TestGetNonManualEvaluationSummary_DecodesErrorCounts(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"total":10,"passed":6,"failed":2,"error":2,"flagged":1,"pass_rate":0.75,"failure_rate":0.25,
+			"by_mode":[{"mode":"sample_and_flag","total":10,"passed":6,"failed":2,"error":2,"flagged":1,"pass_rate":0.75,"failure_rate":0.25}]}`)
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	out, err := c.GetNonManualEvaluationSummary(context.Background(), "")
+	if err != nil {
+		t.Fatalf("GetNonManualEvaluationSummary: %v", err)
+	}
+	if out.Error != 2 || out.Failed != 2 {
+		t.Fatalf("summary Error/Failed: got %d/%d, want 2/2", out.Error, out.Failed)
+	}
+	if len(out.ByMode) != 1 || out.ByMode[0].Error != 2 {
+		t.Fatalf("by_mode Error: got %+v", out.ByMode)
 	}
 }

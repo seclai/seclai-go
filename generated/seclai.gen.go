@@ -1584,7 +1584,7 @@ type EvaluationResultResponse struct {
 
 // EvaluationResultSummaryResponse Aggregated pass/fail/error counts and average score for a criteria.
 type EvaluationResultSummaryResponse struct {
-	// AverageScore Mean score across all evaluated results, or null if none.
+	// AverageScore Mean score of the final passed and failed results, or null if none. On /api before Seclai-Version 2026-10-21 it averages every final result's stored score, `error` included.
 	AverageScore *float32 `json:"average_score"`
 	Error        int      `json:"error"`
 	Failed       int      `json:"failed"`
@@ -1958,22 +1958,24 @@ type InlineTextUploadRequest struct {
 	Title *string `json:"title,omitempty"`
 }
 
-// InsufficientCreditsDetail “detail“ body for a 402 “insufficient_credits“ response.
+// InsufficientCreditsDetail “error“ body of a 402 “insufficient_credits“ response.
 type InsufficientCreditsDetail struct {
 	// AccountId UUID of the account that ran out of credits.
 	AccountId string `json:"account_id"`
 
-	// Error Stable machine-readable error code.
-	Error string `json:"error"`
+	// Code Stable machine-readable error code.
+	Code string `json:"code"`
 
 	// Message Human-readable explanation.
 	Message string `json:"message"`
 }
 
 // InsufficientCreditsResponse 402 envelope returned when the account has exhausted its credits.
+//
+// The wire shape “http_exception_handler“ and “insufficient_credits_exception_handler“ send.
 type InsufficientCreditsResponse struct {
-	// Detail ``detail`` body for a 402 ``insufficient_credits`` response.
-	Detail InsufficientCreditsDetail `json:"detail"`
+	// Error ``error`` body of a 402 ``insufficient_credits`` response.
+	Error InsufficientCreditsDetail `json:"error"`
 }
 
 // JsonValue defines model for JsonValue.
@@ -2802,6 +2804,9 @@ type TestDraftEvaluationResponse struct {
 	Explanation *string `json:"explanation"`
 	Passed      bool    `json:"passed"`
 	Score       float32 `json:"score"`
+
+	// Status Result status of a single evaluation run.
+	Status EvaluationStatus `json:"status"`
 }
 
 // UnlinkResourcesRequest defines model for UnlinkResourcesRequest.
@@ -3983,6 +3988,8 @@ type SchemasModelResponsesProviderGroupResponse struct {
 
 // SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse Per-mode rollup for evaluation activity.
 type SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse struct {
+	// Error Results whose evaluator returned no verdict.
+	Error       int     `json:"error"`
 	Failed      int     `json:"failed"`
 	FailureRate float32 `json:"failure_rate"`
 	Flagged     int     `json:"flagged"`
@@ -3994,13 +4001,16 @@ type SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse struct {
 
 // SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse Account-level summary for evaluations.
 type SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse struct {
-	ByMode      []SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse `json:"by_mode"`
-	Failed      int                                                            `json:"failed"`
-	FailureRate float32                                                        `json:"failure_rate"`
-	Flagged     int                                                            `json:"flagged"`
-	PassRate    float32                                                        `json:"pass_rate"`
-	Passed      int                                                            `json:"passed"`
-	Total       int                                                            `json:"total"`
+	ByMode []SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse `json:"by_mode"`
+
+	// Error Results whose evaluator returned no verdict.
+	Error       int     `json:"error"`
+	Failed      int     `json:"failed"`
+	FailureRate float32 `json:"failure_rate"`
+	Flagged     int     `json:"flagged"`
+	PassRate    float32 `json:"pass_rate"`
+	Passed      int     `json:"passed"`
+	Total       int     `json:"total"`
 }
 
 // SeclaiVersion defines model for Seclai-Version.

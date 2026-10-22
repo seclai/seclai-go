@@ -5188,7 +5188,7 @@
                 "type": "null"
               }
             ],
-            "description": "Mean score across all evaluated results, or null if none.",
+            "description": "Mean score of the final passed and failed results, or null if none. On /api before Seclai-Version 2026-10-21 it averages every final result's stored score, `error` included.",
             "title": "Average Score"
           },
           "error": {
@@ -6532,17 +6532,17 @@
         "type": "object"
       },
       "InsufficientCreditsDetail": {
-        "description": "``detail`` body for a 402 ``insufficient_credits`` response.",
+        "description": "``error`` body of a 402 ``insufficient_credits`` response.",
         "properties": {
           "account_id": {
             "description": "UUID of the account that ran out of credits.",
             "title": "Account Id",
             "type": "string"
           },
-          "error": {
+          "code": {
             "const": "insufficient_credits",
             "description": "Stable machine-readable error code.",
-            "title": "Error",
+            "title": "Code",
             "type": "string"
           },
           "message": {
@@ -6552,7 +6552,7 @@
           }
         },
         "required": [
-          "error",
+          "code",
           "message",
           "account_id"
         ],
@@ -6560,14 +6560,14 @@
         "type": "object"
       },
       "InsufficientCreditsResponse": {
-        "description": "402 envelope returned when the account has exhausted its credits.",
+        "description": "402 envelope returned when the account has exhausted its credits.\n\nThe wire shape ``http_exception_handler`` and ``insufficient_credits_exception_handler`` send.",
         "properties": {
-          "detail": {
+          "error": {
             "$ref": "#/components/schemas/InsufficientCreditsDetail"
           }
         },
         "required": [
-          "detail"
+          "error"
         ],
         "title": "InsufficientCreditsResponse",
         "type": "object"
@@ -9145,9 +9145,14 @@
           "score": {
             "title": "Score",
             "type": "number"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EvaluationStatus",
+            "description": "`passed`, `failed`, or `error` when the evaluator returned no verdict."
           }
         },
         "required": [
+          "status",
           "score",
           "passed",
           "explanation"
@@ -13450,6 +13455,11 @@
       "schemas__v1__agent_evaluations__NonManualEvaluationModeStatResponse": {
         "description": "Per-mode rollup for evaluation activity.",
         "properties": {
+          "error": {
+            "description": "Results whose evaluator returned no verdict.",
+            "title": "Error",
+            "type": "integer"
+          },
           "failed": {
             "title": "Failed",
             "type": "integer"
@@ -13484,6 +13494,7 @@
           "total",
           "passed",
           "failed",
+          "error",
           "flagged",
           "pass_rate",
           "failure_rate"
@@ -13500,6 +13511,11 @@
             },
             "title": "By Mode",
             "type": "array"
+          },
+          "error": {
+            "description": "Results whose evaluator returned no verdict.",
+            "title": "Error",
+            "type": "integer"
           },
           "failed": {
             "title": "Failed",
@@ -13530,6 +13546,7 @@
           "total",
           "passed",
           "failed",
+          "error",
           "flagged",
           "pass_rate",
           "failure_rate",
@@ -14681,7 +14698,7 @@
     },
     "/agents/evaluation-criteria/{criteria_id}/summary": {
       "get": {
-        "description": "Get an aggregated summary of evaluation results for a criteria.\n\nReturns total, passed, failed, error, and flagged counts alongside the\naverage score, giving a quick overview of how the criteria is performing.",
+        "description": "Get an aggregated summary of evaluation results for a criteria.\n\nReturns total, passed, failed, error, and flagged counts alongside the\naverage score, giving a quick overview of how the criteria is performing.\nWith ``2026-10-21`` or later, ``average_score`` averages only passed and failed\nresults; earlier versions average every stored score, ``error`` included.",
         "operationId": "get_evaluation_summary_api_agents_evaluation_criteria__criteria_id__summary_get",
         "parameters": [
           {
@@ -14748,7 +14765,7 @@
     },
     "/agents/evaluation-results/non-manual-summary": {
       "get": {
-        "description": "Get an evaluation summary for API key clients.\n\nReturns aggregated pass/fail/flagged counts and pass rates for each evaluation mode (eval_and_retry, sample_and_flag).\n\nThe ``agent_id`` scoping parameter is part of the ``2026-07-27`` changeset\n(opt in via the ``Seclai-Version`` header). Clients on the legacy baseline\nalways receive the account-wide rollup; ``agent_id`` is ignored for them so\nthe endpoint's behavior is frozen. With ``2026-07-27`` or later, the summary\nis scoped to ``agent_id`` when supplied (and returns 404 if it doesn't exist).",
+        "description": "Get an evaluation summary for API key clients.\n\nReturns aggregated pass/fail/flagged counts and pass rates for each evaluation mode (eval_and_retry, sample_and_flag).\n\nWith ``2026-10-21`` or later, ``error`` results (the evaluator returned no\nverdict) are left out of ``failed``, and the rates are over passed and\nfailed results. Earlier versions count them in ``failed`` and rate over\nevery result. ``error`` is returned on every version.\n\nThe ``agent_id`` scoping parameter is part of the ``2026-07-27`` changeset\n(opt in via the ``Seclai-Version`` header). Clients on the legacy baseline\nalways receive the account-wide rollup; ``agent_id`` is ignored for them so\nthe endpoint's behavior is frozen. With ``2026-07-27`` or later, the summary\nis scoped to ``agent_id`` when supplied (and returns 404 if it doesn't exist).",
         "operationId": "get_non_manual_evaluation_summary_api_agents_evaluation_results_non_manual_summary_get",
         "parameters": [
           {
@@ -16530,7 +16547,7 @@
     },
     "/agents/{agent_id}/evaluation-criteria/test-draft": {
       "post": {
-        "description": "Run an ephemeral evaluation against provided step output without persisting results.\n\nUse this to interactively test evaluation prompts and expectation\nconfigurations while editing criteria.  The evaluation is a billed LLM\ncall; only its result goes unrecorded.",
+        "description": "Run an ephemeral evaluation against provided step output without persisting results.\n\nUse this to interactively test evaluation prompts and expectation\nconfigurations while editing criteria.  The evaluation is a billed LLM\ncall; only its result goes unrecorded.\n\n``status`` is ``error`` when the evaluator returned no verdict. With\n``Seclai-Version: 2026-10-21`` or later, ``score`` and ``passed`` are then\n``null``; earlier versions return ``score`` 0.5 and ``passed`` false.",
         "operationId": "test_draft_evaluation_api_agents__agent_id__evaluation_criteria_test_draft_post",
         "parameters": [
           {
@@ -28005,8 +28022,9 @@
       "2026-10-13",
       "2026-10-16",
       "2026-10-18",
-      "2026-10-19"
+      "2026-10-19",
+      "2026-10-21"
     ],
-    "latest": "2026-10-19"
+    "latest": "2026-10-21"
   }
 }
