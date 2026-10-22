@@ -33,6 +33,7 @@ func main() {
 	}
 
 	fix(doc)
+	omitUnsetRequestFields(doc)
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "specfix: mkdir: %v\n", err)
@@ -192,4 +193,111 @@ func transformExclusiveBound(obj map[string]any, exclusiveKey, boundKey string) 
 	}
 	obj[boundKey] = num
 	obj[exclusiveKey] = true
+}
+
+// omitUnsetRequestFields marks every optional, nullable property of a JSON
+// request-body schema with x-omitempty, so that oapi-codegen tags the field
+// `json:",omitempty"`.
+//
+// oapi-codegen leaves omitempty off nullable properties so that a nil pointer
+// can be sent as null. The API, though, reads an explicit null differently
+// from an omitted field in places — a null retention_days on UpdateSource
+// clears the retention window — so a request built from a struct must leave
+// out what the caller did not set. The few places that do need a literal null
+// send it explicitly from the client. Required properties keep the generator's
+// default, and schemas reached only from responses are left alone. A schema
+// shared by a request and a response, such as AcceptedAttachmentSlot, is
+// tagged too, so re-marshalling a fetched response drops its nil fields
+// instead of writing null; the API reads both the same for those fields, so
+// passing such a value back in a request is unaffected.
+//
+// Call it after fix, which turns the 3.1 null unions into nullable: true.
+func omitUnsetRequestFields(doc any) {
+	root, ok := doc.(map[string]any)
+	if !ok {
+		return
+	}
+	var schemas map[string]any
+	if comps, ok := root["components"].(map[string]any); ok {
+		schemas, _ = comps["schemas"].(map[string]any)
+	}
+	visited := map[string]bool{}
+	var walk func(node any)
+	walk = func(node any) {
+		switch v := node.(type) {
+		case map[string]any:
+			if ref, ok := v["$ref"].(string); ok {
+				const prefix = "#/components/schemas/"
+				if len(ref) > len(prefix) && ref[:len(prefix)] == prefix {
+					name := ref[len(prefix):]
+					if !visited[name] {
+						visited[name] = true
+						if s, ok := schemas[name]; ok {
+							walk(s)
+						}
+					}
+				}
+			}
+			if props, ok := v["properties"].(map[string]any); ok {
+				required := map[string]bool{}
+				if req, ok := v["required"].([]any); ok {
+					for _, r := range req {
+						if name, ok := r.(string); ok {
+							required[name] = true
+						}
+					}
+				}
+				for name, p := range props {
+					pm, ok := p.(map[string]any)
+					if !ok {
+						continue
+					}
+					if nullable, _ := pm["nullable"].(bool); nullable && !required[name] {
+						if _, set := pm["x-omitempty"]; !set {
+							pm["x-omitempty"] = true
+						}
+					}
+					walk(pm)
+				}
+			}
+			for _, key := range []string{"items", "additionalProperties"} {
+				if child, ok := v[key]; ok {
+					walk(child)
+				}
+			}
+			for _, key := range []string{"allOf", "anyOf", "oneOf"} {
+				if arr, ok := v[key].([]any); ok {
+					for _, child := range arr {
+						walk(child)
+					}
+				}
+			}
+		case []any:
+			for _, child := range v {
+				walk(child)
+			}
+		}
+	}
+
+	paths, _ := root["paths"].(map[string]any)
+	for _, item := range paths {
+		ops, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, op := range ops {
+			opm, ok := op.(map[string]any)
+			if !ok {
+				continue
+			}
+			rb, ok := opm["requestBody"].(map[string]any)
+			if !ok {
+				continue
+			}
+			content, _ := rb["content"].(map[string]any)
+			if media, ok := content["application/json"].(map[string]any); ok {
+				walk(media["schema"])
+			}
+		}
+	}
 }

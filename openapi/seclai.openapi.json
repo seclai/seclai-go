@@ -23,6 +23,99 @@
       }
     },
     "schemas": {
+      "AcceptedAttachmentSlot": {
+        "additionalProperties": false,
+        "properties": {
+          "content_types": {
+            "description": "Accepted types, e.g. ``application/pdf`` or ``image/*``; empty accepts any type.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Content Types",
+            "type": "array"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown to people.",
+            "title": "Label"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Most files a run may include; empty is no limit.",
+            "title": "Max"
+          },
+          "min": {
+            "default": 0,
+            "description": "Fewest files a run must include; fewer refuses the run, except on an email trigger set to run anyway, which lists the shortfall.",
+            "title": "Min",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Lowercase letters, digits and underscores, starting with a letter. Steps reference the files as ``{{agent.attachments.<name>}}``.",
+            "title": "Name",
+            "type": "string"
+          },
+          "name_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Filename glob a file must also match, ignoring case.",
+            "title": "Name Pattern"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AcceptedAttachmentSlot",
+        "type": "object"
+      },
+      "AcceptedAttachmentsResponse": {
+        "properties": {
+          "accepted_attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptedAttachmentSlot"
+            },
+            "title": "Accepted Attachments",
+            "type": "array"
+          },
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "agent_id",
+          "accepted_attachments"
+        ],
+        "title": "AcceptedAttachmentsResponse",
+        "type": "object"
+      },
       "AddConversationTurnRequest": {
         "properties": {
           "actions_taken": {
@@ -89,14 +182,22 @@
         "type": "object"
       },
       "AgentAttachmentRefsApiResponse": {
-        "description": "Static attachment-reference contract for an agent.\n\nMirrors the MCP ``get_agent_attachment_references`` tool: returns\nwhat files (if any) an agent's templates expect on a run so API\nconsumers can stage uploads correctly before calling\n``POST /agents/{id}/runs``.",
+        "description": "The input attachments an agent's trigger declares.\n\nMirrors the MCP ``get_agent_attachment_references`` tool, so API\nconsumers can stage uploads that fit before calling\n``POST /agents/{id}/runs``.",
         "properties": {
+          "accepted_attachments": {
+            "description": "The attachments the agent's trigger declares. A run's files are each assigned to one; a file none accepts, or an attachment with fewer files than its ``min``, rejects the run with HTTP 400. Steps reference one as ``{{agent.attachments.<name>}}``.",
+            "items": {
+              "$ref": "#/components/schemas/AcceptedAttachmentSlot"
+            },
+            "title": "Accepted Attachments",
+            "type": "array"
+          },
           "agent": {
             "$ref": "#/components/schemas/AttachmentRefsSourceApiSummary",
-            "description": "Aggregated selector summary across all consumer steps. ``exact_names`` entries must each appear in the upload batch; ``indexes_max+1`` is the minimum file count; every ``patterns`` glob must match at least one upload."
+            "description": "Aggregated summary of the agent-file references in the steps. Informational: which files a run accepts is ``accepted_attachments``."
           },
           "requires_uploads": {
-            "description": "When ``false`` the agent's definition does NOT reference any uploaded attachments \u2014 ``POST /agents/{id}/upload-input`` will reject with HTTP 400. When ``true`` the ``agent`` block lists the specific selectors a run-time batch must satisfy.",
+            "description": "When ``false`` the agent takes no files through the API \u2014 it has no ``dynamic_input`` trigger, or that trigger declares no attachments \u2014 and ``POST /agents/{id}/upload-input`` will reject with HTTP 400. When ``true`` ``accepted_attachments`` lists what a run's files must fit.",
             "title": "Requires Uploads",
             "type": "boolean"
           }
@@ -569,7 +670,7 @@
                 "type": "null"
               }
             ],
-            "description": "ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` \u2014 use that field to attach multiple files. May be combined with ``input``: the prompt text leads and the file's extracted text follows under a ``# {filename}`` heading.\n\n**Attachment visibility:** a step only sees the upload when its template references the input \u2014 via ``{{input}}`` / ``{{agent.input}}`` / ``{{step.<id>.input|output}}`` (implicit, all attachments) or the ``{{attachments[\u2026]}}`` family (explicit narrowing \u2014 e.g. ``{{attachments[0]}}``, ``{{attachments[*.pdf]}}``).\n\n**Per-batch validation:** every selector the agent's definition declares must be satisfied or the run is rejected with HTTP 400. Exact-name selectors require that filename to be present; indexed selectors require at least N+1 files; glob patterns require at least one matching filename.",
+            "description": "ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` \u2014 use that field to attach multiple files. May be combined with ``input``: the prompt text leads and the file follows under a ``# {filename}`` heading (before ``Seclai-Version: 2026-10-16``, followed by its extracted text).\n\n**Which steps receive it:** a step that sends or stores files takes the files its ``attachments`` field selects. An LLM step (``prompt_call``, ``extract_data``, ``evaluate_step``) takes the files its ``attachments`` field names, or else the files its plain-text templates reference: ``{{agent.attachments.<name>}}`` for one attachment the trigger declares, or ``{{agent.input}}`` for every upload unless a template also names an agent attachment.\n\n**Per-batch validation:** the batch must fit the trigger's ``accepted_attachments`` \u2014 every file fits one declared attachment and each attachment gets at least its ``min`` files \u2014 or the run is rejected with HTTP 400.",
             "title": "Input Upload Id"
           },
           "input_upload_ids": {
@@ -586,7 +687,7 @@
                 "type": "null"
               }
             ],
-            "description": "IDs of multiple previously uploaded files. Each upload's extracted text is concatenated under a heading; each upload's binary is surfaced as a separate ``MediaAttachment`` so multi-modal prompt steps reason over all files at once. Steps narrow visibility via ``{{attachments[\u2026]}}`` selectors (by index, filename, or fnmatch glob). The batch must satisfy every selector the agent declares \u2014 exact names, indexed references (length must exceed the highest index), and glob patterns (each pattern needs at least one match). Mismatches return HTTP 400 with the unmet requirements listed.  Mutually exclusive with ``input_upload_id`` (two spellings of the same batch), but may be combined with ``input`` \u2014 the prompt text leads and the per-file sections follow, so \"a photo plus a sentence about it\" needs no synthetic text upload. Max 20 uploads per run.",
+            "description": "IDs of multiple previously uploaded files. Each upload gets a heading in ``input`` (before ``Seclai-Version: 2026-10-16``, followed by its extracted text); each upload reaches steps as a separate file (before ``Seclai-Version: 2026-10-16``, a text upload in the open ``files`` attachment is written into ``input`` instead). Steps choose files as described under ``input_upload_id``. The batch must fit the trigger's ``accepted_attachments``; a mismatch returns HTTP 400 listing what does not fit.  Mutually exclusive with ``input_upload_id`` (two spellings of the same batch), but may be combined with ``input`` \u2014 the prompt text leads and the per-file sections follow, so \"a photo plus a sentence about it\" needs no synthetic text upload. Max 20 uploads per run.",
             "title": "Input Upload Ids"
           },
           "metadata": {
@@ -620,7 +721,7 @@
                 "type": "null"
               }
             ],
-            "description": "Re-run this agent reusing a prior run's uploaded input files. The files are re-resolved server-side from the source run (which must belong to this account and agent) \u2014 you do not re-upload them. Combine with ``input`` to change the text while keeping the files. A fresh upload batch (``input_upload_id(s)``) takes precedence and disables replay. Binaries swept by retention fall back to their extracted text.",
+            "description": "Re-run this agent reusing a prior run's uploaded input files. The files are re-resolved server-side from the source run (which must belong to this account and agent) \u2014 you do not re-upload them. Combine with ``input`` to change the text while keeping the files. A fresh upload batch (``input_upload_id(s)``) takes precedence and disables replay. Binaries swept by retention fall back to their extracted text. Files the trigger's ``accepted_attachments`` no longer accepts are left out.",
             "title": "Replay Of Run Id"
           }
         },
@@ -747,7 +848,7 @@
                 "type": "null"
               }
             ],
-            "description": "The run's output text; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30` an output that has files is instead the manifest JSON `{schema, text, attachments: [{storage_key, mime, name, label, bytes}]}`; `bytes` is absent on runs made before that version shipped.",
+            "description": "The run's output text; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30` an output that has files is instead the manifest JSON `{schema, text, attachments: [{storage_key, mime, name, label, bytes}]}`; `bytes` can be `null` on runs made before that version shipped.",
             "title": "Output"
           },
           "output_content_type": {
@@ -813,7 +914,7 @@
                 "type": "null"
               }
             ],
-            "description": "When this run's trace content was deleted under the account's agent-trace retention window.  Non-null means `input`, `output` and every step's and tool call's I/O are null **by design** and will never be available again \u2014 the run aged out, it did not fail.  Branch on this rather than on a null `output`: a run that genuinely produced nothing looks identical.  Status, timing and credits remain accurate.",
+            "description": "When this run's trace content was deleted under the account's agent-trace retention window.  Non-null means `input`, `output` and every step's and tool call's I/O are null **by design** and will never be available again \u2014 the run aged out, it did not fail.  A tool call's `error` may be null as well, so a failed tool call can report its status without a message.  Branch on this rather than on a null `output`: a run that genuinely produced nothing looks identical.  Status, timing and credits remain accurate.",
             "title": "Trace Purged At"
           },
           "wait_ms": {
@@ -963,7 +1064,7 @@
                 "type": "null"
               }
             ],
-            "description": "Authoring problems the step ran into, whether or not it then failed, such as a file name selector that matched none of its source's files.",
+            "description": "Problems the step ran into, whether or not it then failed, such as a file name selector that matched none of its source's files, or a model that returned no answer.",
             "title": "Warnings"
           }
         },
@@ -984,6 +1085,12 @@
       },
       "AgentRunStreamRequest": {
         "properties": {
+          "include_reasoning": {
+            "default": false,
+            "description": "Receive `stream_reasoning` events carrying the model's reasoning while it thinks. They are sent only for a `streaming_result` step whose author enabled `show_reasoning`, and never when a governance policy redacts that step.",
+            "title": "Include Reasoning",
+            "type": "boolean"
+          },
           "input": {
             "anyOf": [
               {
@@ -1006,7 +1113,7 @@
                 "type": "null"
               }
             ],
-            "description": "ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` \u2014 use that field to attach multiple files. May be combined with ``input``. Subject to the same per-batch attachment-selector validation as the non-streaming endpoint.",
+            "description": "ID of a previously uploaded file (via POST /{agent_id}/upload-input) to use as the run input for dynamic-input triggers. Mutually exclusive with ``input_upload_ids`` \u2014 use that field to attach multiple files. May be combined with ``input``. Must fit the trigger's ``accepted_attachments``, as on the non-streaming endpoint.",
             "title": "Input Upload Id"
           },
           "input_upload_ids": {
@@ -1023,7 +1130,7 @@
                 "type": "null"
               }
             ],
-            "description": "IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including per-batch selector validation (exact names, indexed references, and glob patterns must all be satisfied or the run is rejected with HTTP 400) and combining the batch with ``input`` prompt text. Max 20.",
+            "description": "IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including fitting the trigger's ``accepted_attachments`` (else HTTP 400) and combining the batch with ``input`` prompt text. Max 20.",
             "title": "Input Upload Ids"
           },
           "metadata": {
@@ -1051,7 +1158,7 @@
                 "type": "null"
               }
             ],
-            "description": "Re-run reusing a prior run's uploaded input files (re-resolved server-side from the source run, which must belong to this account and agent). A fresh upload batch takes precedence.",
+            "description": "Re-run reusing a prior run's uploaded input files (re-resolved server-side from the source run, which must belong to this account and agent). A fresh upload batch takes precedence. Files the trigger's ``accepted_attachments`` no longer accepts are left out.",
             "title": "Replay Of Run Id"
           }
         },
@@ -1318,6 +1425,18 @@
             ],
             "description": "Sampling configuration for sample_and_flag mode.",
             "title": "Sampling Config"
+          },
+          "trigger_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ID of the agent's trigger, for the `/agents/{agent_id}/triggers/{trigger_id}/\u2026` endpoints such as `accepted-attachments` and `email-config`.",
+            "title": "Trigger Id"
           },
           "trigger_type": {
             "anyOf": [
@@ -2910,6 +3029,90 @@
         "title": "CompatibleRunResponse",
         "type": "object"
       },
+      "ContentAttachmentResponse": {
+        "description": "A file attached to a content item.",
+        "properties": {
+          "content_type": {
+            "description": "MIME type of the attached file.",
+            "title": "Content Type",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When the file was first attached.",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "description": "The attachment's id, which the single-attachment endpoints take.",
+            "title": "Id",
+            "type": "string"
+          },
+          "indexed": {
+            "description": "Whether indexing the file for search was asked for.",
+            "title": "Indexed",
+            "type": "boolean"
+          },
+          "indexing_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the file was not indexed, when `indexing_status` is `failed`.",
+            "title": "Indexing Error"
+          },
+          "indexing_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`pending`, `completed` or `failed`; null when indexing was not asked for. Search finds the file only when `completed`.",
+            "title": "Indexing Status"
+          },
+          "key": {
+            "description": "The attachment's key, unique within the item.",
+            "title": "Key",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "description": "What is known about the file beyond its bytes. An image extracted from a PDF carries its `page_number`, and `page_render: true` when it is a render of the whole page. An image or video from a web page carries `source_url` (the address it was fetched from), `position` (its place among the media the page listed, from 0) and, when the page gave one, `alt_text`. Empty for most files. A retrieval metadata filter matches these keys, except `alt_text`, which is indexed as the attachment's text.",
+            "title": "Metadata",
+            "type": "object"
+          },
+          "size_bytes": {
+            "description": "Size of the attached file in bytes.",
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "updated_at": {
+            "description": "When the attachment last changed.",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "content_type",
+          "size_bytes",
+          "indexed",
+          "indexing_status",
+          "indexing_error",
+          "created_at",
+          "updated_at",
+          "metadata"
+        ],
+        "title": "ContentAttachmentResponse",
+        "type": "object"
+      },
       "ContentEmbeddingResponse": {
         "description": "Response model for content embedding.",
         "properties": {
@@ -3560,6 +3763,66 @@
             "description": "Chunk size for content processing.",
             "title": "Chunk Size"
           },
+          "cloud_drive_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for a cloud_drive source, and ignored on any other: the id of a connected drive, from GET /cloud-drives.",
+            "title": "Cloud Drive Connection Id"
+          },
+          "cloud_drive_content_types": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: comma-separated MIME types a file must have to be indexed. Omit for no filter.",
+            "title": "Cloud Drive Content Types"
+          },
+          "cloud_drive_folder_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: the folder to index, as a path inside the drive. Omit to index the connected drive's own folder.",
+            "title": "Cloud Drive Folder Path"
+          },
+          "cloud_drive_max_file_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: files larger than this many megabytes are skipped. Omit for no limit of the source's own.",
+            "title": "Cloud Drive Max File Mb"
+          },
+          "cloud_drive_path_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: a glob a file's path must match to be indexed, such as `**/*.pdf` or `/reports/*`. Omit for no filter.",
+            "title": "Cloud Drive Path Pattern"
+          },
           "content_filter": {
             "anyOf": [
               {
@@ -3585,6 +3848,33 @@
             "description": "Embedding dimensions override.",
             "title": "Dimensions"
           },
+          "document_images": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the images inside PDF, DOCX, PPTX and XLSX files are attached to the item and indexed; on a text-only embedder, by the text in each image. Applies to documents added after it changes. Defaults to true; below Seclai-Version 2026-10-18 it defaults to false on a text-only embedder. On a website or RSS source it is ignored: `media_types` decides.",
+            "title": "Document Images"
+          },
+          "email_allowed_senders": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for an email source, and only valid there: the senders whose mail is stored. Each entry is a full address (news@example.com) or a bare domain (example.com), which also matches its sub-domains. Matched against the message's From address, which must pass DMARC.",
+            "title": "Email Allowed Senders"
+          },
           "embedding_model": {
             "anyOf": [
               {
@@ -3596,6 +3886,21 @@
             ],
             "description": "Embedding model override \u2014 a `model_type` from `GET /models/embedders`, which also reports each embedder's `supported_input_media`. Defaults to the platform embedder (`default_model_type` on that endpoint) when omitted. Indexing images or video requires an embedder that lists that modality.",
             "title": "Embedding Model"
+          },
+          "feed_attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Kinds of file listed beside a feed item's content to attach to the item and index, on an RSS source. Subset of ['enclosures', 'item_image', 'media_rss']; any other value is refused. None are attached unless chosen.",
+            "title": "Feed Attachments"
           },
           "index_mode": {
             "anyOf": [
@@ -3620,7 +3925,7 @@
                 "type": "null"
               }
             ],
-            "description": "Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored (see `supported_input_media` on GET /models/embedders); unsupported values are dropped. Omit / [] for text-only.",
+            "description": "Media kinds in a web page's main content to attach to the page's item and index, on a website or RSS source. Subset of ['images', 'video']. From `Seclai-Version: 2026-10-13` any other value, and any kind on another source type, is refused with a 400; older versions drop an unknown value and store the rest. A kind the source's embedder cannot index is stored and not indexed (see `supported_input_media` on GET /models/embedders). 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files. Applies to pages and documents added after it is set.",
             "title": "Media Types"
           },
           "name": {
@@ -3664,7 +3969,7 @@
                 "type": "null"
               }
             ],
-            "description": "Max items per poll.",
+            "description": "The most new feed items a scheduled poll takes. Read for RSS feeds only: from Seclai-Version 2026-10-19 any other source type rejects it with 400. Earlier versions store it there. An email source rejects it at every version.",
             "title": "Polling Max Items"
           },
           "retention": {
@@ -3681,7 +3986,7 @@
             "title": "Retention"
           },
           "source_type": {
-            "description": "Source type: rss, website, or custom_index. The legacy value 'file_uploads' is accepted as an alias for custom_index.",
+            "description": "Source type: rss_feed, website, custom_index, cloud_drive or email. The legacy value 'file_uploads' is accepted as an alias for custom_index.",
             "title": "Source Type",
             "type": "string"
           },
@@ -4161,6 +4466,105 @@
         "title": "EmailDomainsListResponse",
         "type": "object"
       },
+      "EmailSourceRejectionListResponse": {
+        "description": "A page of mail an email content source refused.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EmailSourceRejectionResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationResponse"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "EmailSourceRejectionListResponse",
+        "type": "object"
+      },
+      "EmailSourceRejectionResponse": {
+        "description": "Mail an email content source refused: who sent it and why, never what\nit said.",
+        "properties": {
+          "auth_verdicts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The SPF, DKIM and DMARC verdicts reported for the message.",
+            "title": "Auth Verdicts",
+            "type": "object"
+          },
+          "authenticated": {
+            "description": "Whether the message passed DMARC, which is what authenticates its From address. Adding an unauthenticated sender to the allowed senders does not let its mail in.",
+            "title": "Authenticated",
+            "type": "boolean"
+          },
+          "created_at": {
+            "description": "When the mail was refused.",
+            "title": "Created At",
+            "type": "string"
+          },
+          "from_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The address in the message's From line, which the source's allowed senders are matched against. Null when no single From address could be read from the message unambiguously.",
+            "title": "From Address"
+          },
+          "id": {
+            "description": "Unique identifier of the refusal.",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why it was refused: sender_not_allowed, unauthenticated_sender, unreadable_from, sender_blocked, spam, virus, unsafe_content, rate_limited, account_not_chargeable or empty_message; or, for a message the source received before, what became of the earlier one: repeat_stored, repeat_held, repeat_deleted or repeat_in_progress.",
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipient": {
+            "description": "The source address it was sent to.",
+            "title": "Recipient",
+            "type": "string"
+          },
+          "sender": {
+            "description": "The envelope sender. For bulk mail this is the delivery provider's bounce address, not the From address.",
+            "title": "Sender",
+            "type": "string"
+          },
+          "sender_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "IP address the mail came from.",
+            "title": "Sender Ip"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "recipient",
+          "sender",
+          "sender_ip",
+          "reason",
+          "authenticated"
+        ],
+        "title": "EmailSourceRejectionResponse",
+        "type": "object"
+      },
       "EmailTriggerConfigResponse": {
         "description": "An EMAIL_RECEIVED trigger's resolved address(es) and config.",
         "properties": {
@@ -4214,6 +4618,11 @@
           "email_require_sender_auth": {
             "default": true,
             "title": "Email Require Sender Auth",
+            "type": "boolean"
+          },
+          "email_run_on_attachment_mismatch": {
+            "default": false,
+            "title": "Email Run On Attachment Mismatch",
             "type": "boolean"
           },
           "trigger_id": {
@@ -4779,7 +5188,7 @@
                 "type": "null"
               }
             ],
-            "description": "Mean score across all evaluated results, or null if none.",
+            "description": "Mean score of the final passed and failed results, or null if none. On /api before Seclai-Version 2026-10-21 it averages every final result's stored score, `error` included.",
             "title": "Average Score"
           },
           "error": {
@@ -5491,7 +5900,7 @@
                 "type": "null"
               }
             ],
-            "description": "Suggested agent-level configuration, if any.",
+            "description": "Suggested agent-level configuration, if any. For an email_received agent it may carry `email_run_on_attachment_mismatch`, which the caller applies through the trigger's email-config endpoint. For a dynamic_input or email_received agent it may carry `accepted_attachments`, which the caller passes with the steps to `PUT /agents/{agent_id}/definition` so both save together.",
             "title": "Agent Config"
           },
           "conversation_id": {
@@ -6123,17 +6532,17 @@
         "type": "object"
       },
       "InsufficientCreditsDetail": {
-        "description": "``detail`` body for a 402 ``insufficient_credits`` response.",
+        "description": "``error`` body of a 402 ``insufficient_credits`` response.",
         "properties": {
           "account_id": {
             "description": "UUID of the account that ran out of credits.",
             "title": "Account Id",
             "type": "string"
           },
-          "error": {
+          "code": {
             "const": "insufficient_credits",
             "description": "Stable machine-readable error code.",
-            "title": "Error",
+            "title": "Code",
             "type": "string"
           },
           "message": {
@@ -6143,7 +6552,7 @@
           }
         },
         "required": [
-          "error",
+          "code",
           "message",
           "account_id"
         ],
@@ -6151,14 +6560,14 @@
         "type": "object"
       },
       "InsufficientCreditsResponse": {
-        "description": "402 envelope returned when the account has exhausted its credits.",
+        "description": "402 envelope returned when the account has exhausted its credits.\n\nThe wire shape ``http_exception_handler`` and ``insufficient_credits_exception_handler`` send.",
         "properties": {
-          "detail": {
+          "error": {
             "$ref": "#/components/schemas/InsufficientCreditsDetail"
           }
         },
         "required": [
-          "detail"
+          "error"
         ],
         "title": "InsufficientCreditsResponse",
         "type": "object"
@@ -7405,6 +7814,30 @@
         "title": "ServiceUnavailableError",
         "type": "object"
       },
+      "SetAcceptedAttachmentsRequest": {
+        "properties": {
+          "accepted_attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AcceptedAttachmentSlot"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The input attachments the trigger accepts; ``null`` accepts any files (one attachment named ``files``). Only ``dynamic_input`` and ``email_received`` triggers take files.",
+            "title": "Accepted Attachments"
+          }
+        },
+        "required": [
+          "accepted_attachments"
+        ],
+        "title": "SetAcceptedAttachmentsRequest",
+        "type": "object"
+      },
       "SetAutoBlockModeRequest": {
         "description": "Set the account's governance auto-block mode (shared REST request).",
         "properties": {
@@ -7417,6 +7850,62 @@
           "mode"
         ],
         "title": "SetAutoBlockModeRequest",
+        "type": "object"
+      },
+      "SkippedAttachmentReason": {
+        "enum": [
+          "displayed_in_body",
+          "over_cap",
+          "no_filename",
+          "undecodable"
+        ],
+        "title": "SkippedAttachmentReason",
+        "type": "string"
+      },
+      "SkippedAttachmentResponse": {
+        "description": "A part of an email that was not stored as an attachment.",
+        "properties": {
+          "content_type": {
+            "description": "The part's declared media type.",
+            "title": "Content Type",
+            "type": "string"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The file name the part is listed under; null when it had none.",
+            "title": "Filename"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/SkippedAttachmentReason",
+            "description": "Why the part was not stored."
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decoded size in bytes.",
+            "title": "Size Bytes"
+          }
+        },
+        "required": [
+          "filename",
+          "content_type",
+          "size_bytes",
+          "reason"
+        ],
+        "title": "SkippedAttachmentResponse",
         "type": "object"
       },
       "SolutionSourceConnectionResponse": {
@@ -7642,7 +8131,7 @@
           },
           "extracted_media_capped": {
             "default": false,
-            "description": "True when extraction stopped with media still unread, so the item references more media than was indexed and media search will not match anything past the cut. Two causes: a web page that ran out of the budget for fetching remote assets, or a container that could not be read to the end (a truncated or hostile archive). An uploaded document that reads cleanly is never capped, however much media it holds \u2014 there is no limit on that.",
+            "description": "True when extraction stopped with media still unread, so the item references more media than was attached and media search will not match anything past the cut. The cause is a web page that ran out of the budget for fetching remote assets or listed more media than is recorded, or a web page or document that could not be read to the end.",
             "title": "Extracted Media Capped",
             "type": "boolean"
           },
@@ -7655,7 +8144,7 @@
                 "type": "null"
               }
             ],
-            "description": "Number of embedded images / videos extracted from inside this item and indexed as their own chunks. There is no limit on this \u2014 a document contributes as many as it holds. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container, or found nothing. Treat null as 'unknown', never as zero.",
+            "description": "Number of images / videos in this web page's main content, or of images inside this PDF or Office document, that were attached to the item on this source; a file over the per-file size limit, listed as a failed attachment, is not counted. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container or this source's settings, or found nothing. Treat null as 'unknown', never as zero.",
             "title": "Extracted Media Count"
           },
           "extracted_media_limit": {
@@ -7667,8 +8156,14 @@
                 "type": "null"
               }
             ],
-            "description": "The bound that was reached, when extracted_media_capped is true and the stop was a bound \u2014 a number of fetch attempts, or a number of seconds. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.",
+            "description": "The bound that was reached, when extracted_media_capped is true and the stop was a bound \u2014 a number of fetch attempts, of seconds, of bytes, or of media listed. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.",
             "title": "Extracted Media Limit"
+          },
+          "held_for_review": {
+            "default": false,
+            "description": "An ENFORCE governance policy blocked this item at import. It is held for review and is not retrievable: resolving its blocking evaluations releases it into the source, and it is purged when the hold window ends.",
+            "title": "Held For Review",
+            "type": "boolean"
           },
           "indexed_at": {
             "anyOf": [
@@ -8002,6 +8497,66 @@
             "description": "Chunk size for content processing.",
             "title": "Chunk Size"
           },
+          "cloud_drive_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: the id of the connected drive it indexes. Null for every other source type.",
+            "title": "Cloud Drive Connection Id"
+          },
+          "cloud_drive_content_types": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: the comma-separated MIME types a file must have to be indexed. Null when there is no filter.",
+            "title": "Cloud Drive Content Types"
+          },
+          "cloud_drive_folder_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: the folder it indexes. Null when it indexes the connected drive's own folder.",
+            "title": "Cloud Drive Folder Path"
+          },
+          "cloud_drive_max_file_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: the size in megabytes above which a file is skipped. Null when the source sets no limit of its own.",
+            "title": "Cloud Drive Max File Mb"
+          },
+          "cloud_drive_path_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: the glob a file's path must match to be indexed. Null when there is none.",
+            "title": "Cloud Drive Path Pattern"
+          },
           "content_count": {
             "default": 0,
             "description": "Number of content items associated with the source connection.",
@@ -8030,6 +8585,39 @@
             "description": "Dimensions of the embedding model.",
             "title": "Dimensions"
           },
+          "document_images": {
+            "default": true,
+            "description": "Whether the images inside PDF, DOCX, PPTX and XLSX files are attached to the item and indexed; on a source that follows no web pages and has a text-only embedder, by the text in each image. Applies to documents added after it changes. On a website or RSS source it reports whether `media_types` holds 'images', and the images are attached only when the source's embedder indexes images.",
+            "title": "Document Images",
+            "type": "boolean"
+          },
+          "email_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For an email source: the address to send mail to. Null for every other source type.",
+            "title": "Email Address"
+          },
+          "email_allowed_senders": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For an email source: the addresses and domains whose mail is stored. Null for every other source type.",
+            "title": "Email Allowed Senders"
+          },
           "embedding_model": {
             "anyOf": [
               {
@@ -8053,6 +8641,14 @@
             ],
             "description": "Type of the embedding model.",
             "title": "Embedding Model Type"
+          },
+          "feed_attachments": {
+            "description": "Kinds of file listed beside a feed item's content that an RSS source attaches to the item and indexes (subset of ['enclosures', 'item_image', 'media_rss']).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Feed Attachments",
+            "type": "array"
           },
           "free_retention_days": {
             "anyOf": [
@@ -8089,7 +8685,7 @@
             "description": "Index mode for custom_index sources: fast_and_cheap, balanced, slow_and_thorough, or custom."
           },
           "media_types": {
-            "description": "Media kinds extracted from indexed content and embedded as multi-modal KB chunks (subset of ['images', 'video']). Empty = text-only.",
+            "description": "Media kinds in a web page's main content that are attached to the page's item and indexed (subset of ['images', 'video']). On a website or RSS source 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files.",
             "items": {
               "type": "string"
             },
@@ -8146,7 +8742,7 @@
                 "type": "null"
               }
             ],
-            "description": "Maximum items to poll for the source connection.",
+            "description": "The most new feed items a scheduled poll takes. Read for RSS feeds only.",
             "title": "Polling Max Items"
           },
           "pulled_at": {
@@ -8549,9 +9145,14 @@
           "score": {
             "title": "Score",
             "type": "number"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EvaluationStatus",
+            "description": "`passed`, `failed`, or `error` when the evaluator returned no verdict."
           }
         },
         "required": [
+          "status",
           "score",
           "passed",
           "explanation"
@@ -8593,6 +9194,21 @@
       },
       "UpdateAgentDefinitionRequest": {
         "properties": {
+          "accepted_attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AcceptedAttachmentSlot"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When given, declared on the main branch's file-taking triggers in the same save, so the steps may read its slots as `{{agent.attachments.<slot>}}`; omitted, the triggers keep theirs.",
+            "title": "Accepted Attachments"
+          },
           "definition": {
             "additionalProperties": true,
             "description": "The full agent definition (name, description, tags, steps). Steps form a tree workflow. Each step has a `step_type`, `id`, `name`, and type-specific config. Content enrichment steps (write_metadata, write_content_attachment, load_content_attachment, load_content) require content-triggered agents.",
@@ -9033,6 +9649,96 @@
       "UpdateSourceBody": {
         "description": "Request body for updating a content source.",
         "properties": {
+          "cloud_drive_content_types": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: comma-separated MIME types a file must have to be indexed. Send an empty string to clear it; omit to leave it unchanged.",
+            "title": "Cloud Drive Content Types"
+          },
+          "cloud_drive_folder_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: the folder to index, as a path inside the drive. Send an empty string to index the connected drive's own folder; omit to leave it unchanged.",
+            "title": "Cloud Drive Folder Path"
+          },
+          "cloud_drive_max_file_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: files larger than this many megabytes are skipped. Send 0 to clear the source's own limit; omit to leave it unchanged.",
+            "title": "Cloud Drive Max File Mb"
+          },
+          "cloud_drive_path_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a cloud_drive source: a glob a file's path must match to be indexed, such as `**/*.pdf` or `/reports/*`. Send an empty string to clear it; omit to leave it unchanged.",
+            "title": "Cloud Drive Path Pattern"
+          },
+          "document_images": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the images inside PDF, DOCX, PPTX and XLSX files are attached to the item and indexed; on a text-only embedder, by the text in each image. Applies to documents added after it changes. Omit the field to leave it unchanged. On a website or RSS source it is ignored: `media_types` decides.",
+            "title": "Document Images"
+          },
+          "email_allowed_senders": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For an email source: replaces the allowed senders. Each entry is a full address or a bare domain. The list cannot be emptied. Omit to leave it unchanged.",
+            "title": "Email Allowed Senders"
+          },
+          "feed_attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Kinds of file listed beside a feed item's content to attach to the item and index, on an RSS source. Subset of ['enclosures', 'item_image', 'media_rss']; any other value is refused. [] attaches none. Applies to items added after it changes. Omit the field to leave it unchanged.",
+            "title": "Feed Attachments"
+          },
           "media_types": {
             "anyOf": [
               {
@@ -9045,7 +9751,7 @@
                 "type": "null"
               }
             ],
-            "description": "Media kinds to extract from indexed content and embed as multi-modal KB chunks. Subset of ['images', 'video']. Only kinds the source's embedder can index are honored (see `supported_input_media` on GET /models/embedders); unsupported values are dropped. [] disables media extraction (text-only).",
+            "description": "Media kinds in a web page's main content to attach to the page's item and index, on a website or RSS source. Subset of ['images', 'video']. From `Seclai-Version: 2026-10-13` any other value, and any kind on another source type, is refused with a 400; older versions drop an unknown value and store the rest. A kind the source's embedder cannot index is stored and not indexed (see `supported_input_media` on GET /models/embedders). [] attaches no media from web pages. 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files. Applies to pages and documents added after it changes.",
             "title": "Media Types"
           },
           "name": {
@@ -9582,6 +10288,21 @@
       },
       "routers__api__agents__CreateAgentRequest": {
         "properties": {
+          "accepted_attachments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AcceptedAttachmentSlot"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The input attachments the trigger accepts. Omitted, the ``agent_definition`` trigger's declaration is kept when the export carries one and both trigger types take files; otherwise a dynamic_input or email_received trigger accepts any files (one attachment named ``files``), and any other trigger none.",
+            "title": "Accepted Attachments"
+          },
           "agent_definition": {
             "anyOf": [
               {
@@ -9745,6 +10466,18 @@
             ],
             "description": "When true (default for new triggers), the envelope sender must pass SPF or DMARC even on an open inbox (no allowlist); unauthenticated, spoofable mail is rejected. Set false to accept fully unauthenticated mail on an open inbox.",
             "title": "Require Sender Auth"
+          },
+          "run_on_attachment_mismatch": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When true (default false), an email whose attachments don't fit what the agent expects still runs: files the agent can't take are left out and the problems are listed in the `email_attachment_issues` run metadata. When false, the run fails.",
+            "title": "Run On Attachment Mismatch"
           }
         },
         "title": "SetEmailTriggerConfigRequest",
@@ -10384,6 +11117,152 @@
         "title": "UpdateOrganizationAlertPreferenceRequest",
         "type": "object"
       },
+      "routers__api__contents__ContentAttachmentDetailResponse": {
+        "description": "One attached file, with the text indexed from it.",
+        "properties": {
+          "content_type": {
+            "description": "MIME type of the attached file.",
+            "title": "Content Type",
+            "type": "string"
+          },
+          "created_at": {
+            "description": "When the file was first attached.",
+            "title": "Created At",
+            "type": "string"
+          },
+          "file_withheld": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the file's bytes are not served, or null when they are: `blocked_by_governance_policy`, `redacted_by_governance_policy` (any text below is the redacted text), or `pending_screening`.",
+            "title": "File Withheld"
+          },
+          "id": {
+            "description": "The attachment's id, which the single-attachment endpoints take.",
+            "title": "Id",
+            "type": "string"
+          },
+          "indexed": {
+            "description": "Whether indexing the file for search was asked for.",
+            "title": "Indexed",
+            "type": "boolean"
+          },
+          "indexing_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the file was not indexed, when `indexing_status` is `failed`.",
+            "title": "Indexing Error"
+          },
+          "indexing_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`pending`, `completed` or `failed`; null when indexing was not asked for. Search finds the file only when `completed`.",
+            "title": "Indexing Status"
+          },
+          "key": {
+            "description": "The attachment's key, unique within the item.",
+            "title": "Key",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "description": "What is known about the file beyond its bytes. An image extracted from a PDF carries its `page_number`, and `page_render: true` when it is a render of the whole page. An image or video from a web page carries `source_url` (the address it was fetched from), `position` (its place among the media the page listed, from 0) and, when the page gave one, `alt_text`. Empty for most files. A retrieval metadata filter matches these keys, except `alt_text`, which is indexed as the attachment's text.",
+            "title": "Metadata",
+            "type": "object"
+          },
+          "size_bytes": {
+            "description": "Size of the attached file in bytes.",
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "text_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The requested range of the text the file is indexed by; null when the file has no completed index or was indexed without text.",
+            "title": "Text Content"
+          },
+          "text_content_end": {
+            "title": "Text Content End",
+            "type": "integer"
+          },
+          "text_content_start": {
+            "title": "Text Content Start",
+            "type": "integer"
+          },
+          "text_content_total_length": {
+            "title": "Text Content Total Length",
+            "type": "integer"
+          },
+          "updated_at": {
+            "description": "When the attachment last changed.",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "content_type",
+          "size_bytes",
+          "indexed",
+          "indexing_status",
+          "indexing_error",
+          "created_at",
+          "updated_at",
+          "metadata",
+          "file_withheld",
+          "text_content",
+          "text_content_start",
+          "text_content_end",
+          "text_content_total_length"
+        ],
+        "title": "ContentAttachmentDetailResponse",
+        "type": "object"
+      },
+      "routers__api__contents__ContentAttachmentsListResponse": {
+        "description": "Response model for a content item's attachments.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ContentAttachmentResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationResponse"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "ContentAttachmentsListResponse",
+        "type": "object"
+      },
       "routers__api__contents__ContentDetailResponse": {
         "description": "Response model for content detail.",
         "properties": {
@@ -10469,7 +11348,7 @@
           },
           "extracted_media_capped": {
             "default": false,
-            "description": "True when extraction stopped with media still unread, so the item references more media than was indexed and media search will not match anything past the cut. Two causes: a web page that ran out of the budget for fetching remote assets, or a container that could not be read to the end (a truncated or hostile archive). An uploaded document that reads cleanly is never capped, however much media it holds \u2014 there is no limit on that.",
+            "description": "True when extraction stopped with media still unread, so the item references more media than was attached and media search will not match anything past the cut. The cause is a web page that ran out of the budget for fetching remote assets or listed more media than is recorded, or a web page or document that could not be read to the end.",
             "title": "Extracted Media Capped",
             "type": "boolean"
           },
@@ -10482,7 +11361,7 @@
                 "type": "null"
               }
             ],
-            "description": "Number of embedded images / videos extracted from inside this item and indexed as their own chunks. There is no limit on this \u2014 a document contributes as many as it holds. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container, or found nothing. Treat null as 'unknown', never as zero.",
+            "description": "Number of images / videos in this web page's main content, or of images inside this PDF or Office document, that were attached to the item on this source; a file over the per-file size limit, listed as a failed attachment, is not counted. Null when there is no media record for the item: the extraction pass has not run, does not apply to this container or this source's settings, or found nothing. Treat null as 'unknown', never as zero.",
             "title": "Extracted Media Count"
           },
           "extracted_media_limit": {
@@ -10494,7 +11373,7 @@
                 "type": "null"
               }
             ],
-            "description": "The bound that was reached, when extracted_media_capped is true and the stop was a bound \u2014 a number of fetch attempts, or a number of seconds. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.",
+            "description": "The bound that was reached, when extracted_media_capped is true and the stop was a bound \u2014 a number of fetch attempts, of seconds, of bytes, or of media listed. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.",
             "title": "Extracted Media Limit"
           },
           "id": {
@@ -10536,6 +11415,14 @@
             "description": "Timestamp when the content was pulled.",
             "title": "Pulled At",
             "type": "string"
+          },
+          "skipped_attachments": {
+            "description": "Parts of an email delivered to an email content source that were not stored as attachments of this item, each with the reason: displayed_in_body (an image the message body shows, such as a signature logo), over_cap (beyond the per-message attachment limit), no_filename, or undecodable. size_bytes is null for a part that was never decoded. Empty for every other item.",
+            "items": {
+              "$ref": "#/components/schemas/SkippedAttachmentResponse"
+            },
+            "title": "Skipped Attachments",
+            "type": "array"
           },
           "source_connection_content_version_id": {
             "description": "ID of the source connection content version.",
@@ -12024,7 +12911,7 @@
                 "type": "null"
               }
             ],
-            "description": "Set when the file is non-text but the source's embedder is text-only \u2014 indexing will rely on OCR / transcription and may produce a FAILED row if no text can be extracted.",
+            "description": "Set when a file that is not text is indexed from its extracted text alone rather than embedded whole: the item is FAILED if no text can be extracted. Says so when the images inside a document are attached to the item and indexed as well.",
             "title": "Embedder Warning"
           },
           "filename": {
@@ -12568,6 +13455,11 @@
       "schemas__v1__agent_evaluations__NonManualEvaluationModeStatResponse": {
         "description": "Per-mode rollup for evaluation activity.",
         "properties": {
+          "error": {
+            "description": "Results whose evaluator returned no verdict.",
+            "title": "Error",
+            "type": "integer"
+          },
           "failed": {
             "title": "Failed",
             "type": "integer"
@@ -12602,6 +13494,7 @@
           "total",
           "passed",
           "failed",
+          "error",
           "flagged",
           "pass_rate",
           "failure_rate"
@@ -12618,6 +13511,11 @@
             },
             "title": "By Mode",
             "type": "array"
+          },
+          "error": {
+            "description": "Results whose evaluator returned no verdict.",
+            "title": "Error",
+            "type": "integer"
           },
           "failed": {
             "title": "Failed",
@@ -12648,6 +13546,7 @@
           "total",
           "passed",
           "failed",
+          "error",
           "flagged",
           "pass_rate",
           "failure_rate",
@@ -12764,7 +13663,7 @@
         ]
       },
       "post": {
-        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n- `email_received`: a virtual email inbox; runs when mail arrives at the agent's address. Configure the alias/allowlist with `PUT /agents/{agent_id}/triggers/{trigger_id}/email-config`.\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
+        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n- `email_received`: a virtual email inbox; runs when mail arrives at the agent's address. Configure the alias/allowlist with `PUT /agents/{agent_id}/triggers/{trigger_id}/email-config`, using the `trigger_id` this response returns.\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
         "operationId": "create_agent_api_agents_post",
         "parameters": [
           {
@@ -13799,7 +14698,7 @@
     },
     "/agents/evaluation-criteria/{criteria_id}/summary": {
       "get": {
-        "description": "Get an aggregated summary of evaluation results for a criteria.\n\nReturns total, passed, failed, error, and flagged counts alongside the\naverage score, giving a quick overview of how the criteria is performing.",
+        "description": "Get an aggregated summary of evaluation results for a criteria.\n\nReturns total, passed, failed, error, and flagged counts alongside the\naverage score, giving a quick overview of how the criteria is performing.\nWith ``2026-10-21`` or later, ``average_score`` averages only passed and failed\nresults; earlier versions average every stored score, ``error`` included.",
         "operationId": "get_evaluation_summary_api_agents_evaluation_criteria__criteria_id__summary_get",
         "parameters": [
           {
@@ -13866,7 +14765,7 @@
     },
     "/agents/evaluation-results/non-manual-summary": {
       "get": {
-        "description": "Get an evaluation summary for API key clients.\n\nReturns aggregated pass/fail/flagged counts and pass rates for each evaluation mode (eval_and_retry, sample_and_flag).\n\nThe ``agent_id`` scoping parameter is part of the ``2026-07-27`` changeset\n(opt in via the ``Seclai-Version`` header). Clients on the legacy baseline\nalways receive the account-wide rollup; ``agent_id`` is ignored for them so\nthe endpoint's behavior is frozen. With ``2026-07-27`` or later, the summary\nis scoped to ``agent_id`` when supplied (and returns 404 if it doesn't exist).",
+        "description": "Get an evaluation summary for API key clients.\n\nReturns aggregated pass/fail/flagged counts and pass rates for each evaluation mode (eval_and_retry, sample_and_flag).\n\nWith ``2026-10-21`` or later, ``error`` results (the evaluator returned no\nverdict) are left out of ``failed``, and the rates are over passed and\nfailed results. Earlier versions count them in ``failed`` and rate over\nevery result. ``error`` is returned on every version.\n\nThe ``agent_id`` scoping parameter is part of the ``2026-07-27`` changeset\n(opt in via the ``Seclai-Version`` header). Clients on the legacy baseline\nalways receive the account-wide rollup; ``agent_id`` is ignored for them so\nthe endpoint's behavior is frozen. With ``2026-07-27`` or later, the summary\nis scoped to ``agent_id`` when supplied (and returns 404 if it doesn't exist).",
         "operationId": "get_non_manual_evaluation_summary_api_agents_evaluation_results_non_manual_summary_get",
         "parameters": [
           {
@@ -15065,7 +15964,7 @@
     },
     "/agents/{agent_id}/attachment-references": {
       "get": {
-        "description": "Return the static attachment-reference contract for an agent \u2014 what files the agent's definition expects on a run.\n\nCall this BEFORE staging uploads so you know whether the agent accepts files at all (``requires_uploads``), and which specific filenames/indexes/patterns the templates reference. Mismatched batches are rejected at run time with HTTP 400.",
+        "description": "Return the input attachments the agent's dynamic_input trigger declares \u2014 the files a run may carry.\n\nCall this BEFORE staging uploads so you know whether the agent accepts files at all (``requires_uploads``), and which attachments its trigger declares (``accepted_attachments``). Batches that do not fit them are rejected at run time with HTTP 400.",
         "operationId": "api_get_agent_attachment_references_api_agents__agent_id__attachment_references_get",
         "parameters": [
           {
@@ -15648,7 +16547,7 @@
     },
     "/agents/{agent_id}/evaluation-criteria/test-draft": {
       "post": {
-        "description": "Run an ephemeral evaluation against provided step output without persisting results.\n\nUse this to interactively test evaluation prompts and expectation\nconfigurations while editing criteria.  The evaluation is a billed LLM\ncall; only its result goes unrecorded.",
+        "description": "Run an ephemeral evaluation against provided step output without persisting results.\n\nUse this to interactively test evaluation prompts and expectation\nconfigurations while editing criteria.  The evaluation is a billed LLM\ncall; only its result goes unrecorded.\n\n``status`` is ``error`` when the evaluator returned no verdict. With\n``Seclai-Version: 2026-10-21`` or later, ``score`` and ``passed`` are then\n``null``; earlier versions return ``score`` 0.5 and ``passed`` false.",
         "operationId": "test_draft_evaluation_api_agents__agent_id__evaluation_criteria_test_draft_post",
         "parameters": [
           {
@@ -16308,7 +17207,7 @@
         ]
       },
       "post": {
-        "description": "Start an agent run.\n\nAn *agent* is an automated workflow that can monitor content from your sources, process it with AI, and trigger actions. This endpoint creates a new run and returns a `run_id` you can poll to retrieve status and output.\n\nWhen to use:\n- Use this endpoint for request/response style integrations where polling is acceptable.\n- Use `POST /agents/{agent_id}/runs/stream` if you need real-time progress via SSE.\n\nKey fields:\n- `input`: text input for agents with a `dynamic_input` trigger.\n- `input_upload_id` / `input_upload_ids`: reference one or more files previously uploaded via `POST /agents/{agent_id}/upload-input`. Send them **with** `input` to pair prompt text with the files (the text leads, each file's extracted text follows); only the two upload fields are mutually exclusive with each other.\n- `priority`: set true for latency-sensitive, user-facing work. For agents with a `streaming_result` step, set `priority=true` to enable real-time token streaming; otherwise the run still proceeds, but without live token streaming.\n- `metadata`: a JSON object that becomes available to agent steps for string substitution.\n\nAfter starting:\n- Poll `GET /agents/runs/{run_id}` until `status` is `completed` or `failed`.\n- Use `include_step_outputs=true` to include per-step outputs, timing, and credits.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
+        "description": "Start an agent run.\n\nAn *agent* is an automated workflow that can monitor content from your sources, process it with AI, and trigger actions. This endpoint creates a new run and returns a `run_id` you can poll to retrieve status and output.\n\nWhen to use:\n- Use this endpoint for request/response style integrations where polling is acceptable.\n- Use `POST /agents/{agent_id}/runs/stream` if you need real-time progress via SSE.\n\nKey fields:\n- `input`: text input for agents with a `dynamic_input` trigger.\n- `input_upload_id` / `input_upload_ids`: reference one or more files previously uploaded via `POST /agents/{agent_id}/upload-input`. Send them **with** `input` to pair prompt text with the files (the text leads, each file follows under its heading); only the two upload fields are mutually exclusive with each other.\n- `priority`: set true for latency-sensitive, user-facing work. For agents with a `streaming_result` step, set `priority=true` to enable real-time token streaming; otherwise the run still proceeds, but without live token streaming.\n- `metadata`: a JSON object that becomes available to agent steps for string substitution.\n\nAfter starting:\n- Poll `GET /agents/runs/{run_id}` until `status` is `completed` or `failed`.\n- Use `include_step_outputs=true` to include per-step outputs, timing, and credits.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "run_agent_api_agents__agent_id__runs_post",
         "parameters": [
           {
@@ -16395,7 +17294,7 @@
     },
     "/agents/{agent_id}/runs/stream": {
       "post": {
-        "description": "Start a **priority** agent run and stream run events using Server-Sent Events (SSE).\n\nThis is the best option for interactive UIs where you want progress updates as the run executes.\n\nHow it works:\n- The first `init` event contains an `AgentRunResponse` snapshot, including the `run_id`.\n- Subsequent events are forwarded from the run event stream (status changes, step events, etc).\n- If the agent contains a `streaming_result` step, `stream_token` events deliver individual LLM tokens (with a `token` field) and a `stream_end` event signals completion.\n- The final `done` event contains the terminal snapshot (including `output` and `credits` when available).\n\nInput options (for `dynamic_input` triggers):\n- `input`: text input passed directly.\n- `input_upload_id` / `input_upload_ids`: reference one or more files uploaded via `POST /agents/{agent_id}/upload-input`. Combine either with `input` to send prompt text alongside the files; only the two upload fields are mutually exclusive with each other.\n\nClient guidance:\n- Keep the connection open and handle keepalive comments.\n- On `timeout` or `error`, the payload includes `run_id` so clients can resume by polling `GET /agents/runs/{run_id}`.\n- `stream_token` events carry the model's raw output. When the agent pairs `streaming_result` with a sibling `extract_content`/`display_result` branch, that branch's `display_result` takes precedence over the stream, so the `done` snapshot's `output` is the validated payload and the tokens are a progress channel \u2014 render tokens live, but read the result from `done`. Check `done.status` first: the streamed text is already the run's output when the stream ends, so a run that FAILED its validation step still carries that raw text in `output`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
+        "description": "Start a **priority** agent run and stream run events using Server-Sent Events (SSE).\n\nThis is the best option for interactive UIs where you want progress updates as the run executes.\n\nHow it works:\n- The first `init` event contains an `AgentRunResponse` snapshot, including the `run_id`.\n- Subsequent events are forwarded from the run event stream (status changes, step events, etc).\n- If the agent contains a `streaming_result` step, `stream_token` events deliver individual LLM tokens (with a `token` field) and a `stream_end` event signals completion.\n- With `include_reasoning=true`, `stream_reasoning` events (with a `text` field) carry the model's reasoning while it thinks, when the `streaming_result` step's author enabled `show_reasoning`. Reasoning is never part of `output`.\n- The final `done` event contains the terminal snapshot (including `output` and `credits` when available).\n\nInput options (for `dynamic_input` triggers):\n- `input`: text input passed directly.\n- `input_upload_id` / `input_upload_ids`: reference one or more files uploaded via `POST /agents/{agent_id}/upload-input`. Combine either with `input` to send prompt text alongside the files; only the two upload fields are mutually exclusive with each other.\n\nClient guidance:\n- Keep the connection open and handle keepalive comments.\n- On `timeout` or `error`, the payload includes `run_id` so clients can resume by polling `GET /agents/runs/{run_id}`.\n- `stream_token` events carry the model's raw output. When the agent pairs `streaming_result` with a sibling `extract_content`/`display_result` branch, that branch's `display_result` takes precedence over the stream, so the `done` snapshot's `output` is the validated payload and the tokens are a progress channel \u2014 render tokens live, but read the result from `done`. Check `done.status` first: the streamed text is already the run's output when the stream ends, so a run that FAILED its validation step still carries that raw text in `output`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "run_streaming_agent_api_agents__agent_id__runs_stream_post",
         "parameters": [
           {
@@ -16587,9 +17486,95 @@
         ]
       }
     },
+    "/agents/{agent_id}/triggers/{trigger_id}/accepted-attachments": {
+      "put": {
+        "description": "Replace the input attachments a trigger accepts. A run's files are each assigned to one declared attachment before any step runs; steps reference one as ``{{agent.attachments.<name>}}``. Rejected with HTTP 400 when the agent references an attachment the new declaration leaves out. `trigger_id` is the one `GET /agents/{agent_id}` returns.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; the trigger must belong to an agent in the key's account.",
+        "operationId": "set_accepted_attachments_api_api_agents__agent_id__triggers__trigger_id__accepted_attachments_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "trigger_id",
+            "required": true,
+            "schema": {
+              "title": "Trigger Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAcceptedAttachmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedAttachmentsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            },
+            "description": "A dependency is unavailable. `database_unavailable` is temporary (for example routine maintenance) and carries a `Retry-After` header, after which the request can be retried unchanged. `vector_store_unavailable` means the vector store backing an embeddings operation is not configured; it carries no `Retry-After` because it does not clear without an operator.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying. Sent only with `database_unavailable`.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Declare the input attachments a trigger accepts",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/agents/{agent_id}/triggers/{trigger_id}/email-config": {
       "put": {
-        "description": "Set the custom alias, sender allowlist, and inbound-handling flags (`ignore_auto_generated`, `require_sender_auth`, `queue_on_quota`) on an agent's EMAIL_RECEIVED trigger, and return its computed email address(es). Omitted fields are left unchanged.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; the trigger must belong to an agent in the key's account.",
+        "description": "Set the custom alias, sender allowlist, and inbound-handling flags (`ignore_auto_generated`, `require_sender_auth`, `queue_on_quota`, `run_on_attachment_mismatch`) on an agent's EMAIL_RECEIVED trigger, and return its computed email address(es). `trigger_id` is the one `GET /agents/{agent_id}` returns. Omitted fields are left unchanged.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; the trigger must belong to an agent in the key's account.",
         "operationId": "set_email_trigger_config_api_api_agents__agent_id__triggers__trigger_id__email_config_put",
         "parameters": [
           {
@@ -16675,7 +17660,7 @@
     },
     "/agents/{agent_id}/upload-input": {
       "post": {
-        "description": "Upload a file to use as input for a `dynamic_input` agent run.\n\nSupports the same file types as content source uploads: text, PDF, DOCX, audio, video, images, etc.  Text and document files are processed synchronously; audio/video are submitted for asynchronous transcription.\n\n**Size limit:** 200 MB per file.\n\n**Supported extensions:** txt, html, md, csv, xml, json, pdf, msg, docx, doc, pptx, ppt, xlsx, xls, zip, epub, png, jpg, gif, bmp, tiff, webp, mp3, wav, m4a, flac, ogg, mp4, mov, avi.\n\nAfter uploading, poll `GET /agents/{agent_id}/input-uploads/{upload_id}` until `status` is `ready`, then pass `input_upload_id` to `POST /agents/{agent_id}/runs`.\n\n**Multi-modal routing:** non-text uploads (image, audio, video, PDF) are surfaced natively to multi-modal-capable prompt steps; text-only models fall back to the OCR / transcript text counterpart.  Audio originals are preserved past transcription so audio-capable models (Gemini 2.5/3, GPT-5 audio) read them directly; the agent-input-binary janitor sweeps originals once they pass your account's agent-trace retention (the agent-traces source's retention period; free default 7 days).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
+        "description": "Upload a file to use as input for a `dynamic_input` agent run. Any other agent rejects the upload with HTTP 400.\n\n**Size limit:** 200 MB per file.\n\nFrom `Seclai-Version: 2026-10-16` a file of any type is accepted and is `ready` at once: pass `input_upload_id` to `POST /agents/{agent_id}/runs`. Each step receives the file itself when its model reads that type, and otherwise its text (OCR, extraction or transcript), made once for the steps that need it; a type nothing reads or converts is passed on as a file only. `input` carries a `# filename` heading per file.\n\nEarlier versions accept only these extensions: avi, bmp, csv, docx, epub, flac, gif, html, jpg, json, m4a, markdown, md, mov, mp3, mp4, msg, ogg, pdf, png, ppt, pptx, svg, tiff, txt, wav, webp, xls, xlsx, xml, zip. They write each file's text into `input`, so poll `GET /agents/{agent_id}/input-uploads/{upload_id}` until `status` is `ready` before running.\n\nThe agent-input-binary janitor sweeps originals once they pass your account's agent-trace retention (the agent-traces source's retention period; free default 7 days).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
         "operationId": "api_upload_agent_input_api_agents__agent_id__upload_input_post",
         "parameters": [
           {
@@ -19259,6 +20244,415 @@
         ]
       }
     },
+    "/contents/{source_connection_content_version}/attachments": {
+      "get": {
+        "description": "List the files attached to a content item, with pagination.\n\nAn agent's `write_content_attachment` step attaches a file, and an email content source attaches the files sent with a message. An RSS source attaches the kinds of feed file chosen in its `feed_attachments`. The images and video in a web page's main content are attached on a source with media indexing on. The images inside a PDF, DOCX, PPTX or XLSX item or attachment are attached too, on a source that indexes document images. Each entry says whether the file is indexed for search and, when indexing failed, why.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access attachments of content belonging to your account.",
+        "operationId": "list_content_attachments_api_contents__source_connection_content_version__attachments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_content_version",
+            "required": true,
+            "schema": {
+              "title": "Source Connection Content Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/routers__api__contents__ContentAttachmentsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            },
+            "description": "A dependency is unavailable. `database_unavailable` is temporary (for example routine maintenance) and carries a `Retry-After` header, after which the request can be retried unchanged. `vector_store_unavailable` means the vector store backing an embeddings operation is not configured; it carries no `Retry-After` because it does not clear without an operator.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying. Sent only with `database_unavailable`.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List content attachments",
+        "tags": [
+          "contents"
+        ]
+      }
+    },
+    "/contents/{source_connection_content_version}/attachments/{attachment_id}": {
+      "get": {
+        "description": "Get one file attached to a content item: its indexing status and reason, its metadata, and the text it is indexed by.\n\n`attachment_id` is the `id` of an entry in the item's attachment list. Use `start` and `end` to page through long text. A file that was not indexed has no text.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access attachments of content belonging to your account.",
+        "operationId": "get_content_attachment_api_contents__source_connection_content_version__attachments__attachment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_content_version",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Connection Content Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Start",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "default": 5000,
+              "minimum": 0,
+              "title": "End",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/routers__api__contents__ContentAttachmentDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "402": {
+            "description": "The account has no credits left (`error.code` is `insufficient_credits`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            },
+            "description": "A dependency is unavailable. `database_unavailable` is temporary (for example routine maintenance) and carries a `Retry-After` header, after which the request can be retried unchanged. `vector_store_unavailable` means the vector store backing an embeddings operation is not configured; it carries no `Retry-After` because it does not clear without an operator.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying. Sent only with `database_unavailable`.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get a content attachment",
+        "tags": [
+          "contents"
+        ]
+      }
+    },
+    "/contents/{source_connection_content_version}/attachments/{attachment_id}/embeddings": {
+      "get": {
+        "description": "List the embeddings (chunk vectors) an attached file is indexed by, with pagination. The list is empty for a file that has no completed index.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access attachments of content belonging to your account.",
+        "operationId": "list_content_attachment_embeddings_api_contents__source_connection_content_version__attachments__attachment_id__embeddings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_content_version",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Connection Content Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/routers__api__contents__ContentEmbeddingsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "402": {
+            "description": "The account has no credits left (`error.code` is `insufficient_credits`)."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            },
+            "description": "A dependency is unavailable. `database_unavailable` is temporary (for example routine maintenance) and carries a `Retry-After` header, after which the request can be retried unchanged. `vector_store_unavailable` means the vector store backing an embeddings operation is not configured; it carries no `Retry-After` because it does not clear without an operator.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying. Sent only with `database_unavailable`.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a content attachment's embeddings",
+        "tags": [
+          "contents"
+        ]
+      }
+    },
+    "/contents/{source_connection_content_version}/attachments/{attachment_id}/file": {
+      "get": {
+        "description": "Download an attached file's bytes.\n\nImages, audio, video, PDF and plain text are served with their own type; an SVG that cannot be sanitized, and anything else, is served as `application/octet-stream`.\n\nAnswers 403 when the file is withheld: a governance policy blocked or redacted it, or it arrived from outside and is still being indexed. The attachment's `file_withheld` field says which before you ask.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access attachments of content belonging to your account.",
+        "operationId": "get_content_attachment_file_api_contents__source_connection_content_version__attachments__attachment_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_content_version",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Connection Content Version",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "audio/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "video/*": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The file's bytes."
+          },
+          "402": {
+            "description": "The account has no credits left (`error.code` is `insufficient_credits`)."
+          },
+          "403": {
+            "description": "The file is withheld; `error.code` says why."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            },
+            "description": "A dependency is unavailable. `database_unavailable` is temporary (for example routine maintenance) and carries a `Retry-After` header, after which the request can be retried unchanged. `vector_store_unavailable` means the vector store backing an embeddings operation is not configured; it carries no `Retry-After` because it does not clear without an operator.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying. Sent only with `database_unavailable`.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Download a content attachment",
+        "tags": [
+          "contents"
+        ]
+      }
+    },
     "/contents/{source_connection_content_version}/embeddings": {
       "get": {
         "description": "List the embeddings (chunk vectors) for a content item, with pagination.\n\nEmbeddings are used for semantic search and retrieval in knowledge base workflows. This endpoint is primarily useful for debugging chunking, indexing, and vector contents.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access embeddings for content belonging to your account.",
@@ -19348,7 +20742,7 @@
     },
     "/contents/{source_connection_content_version}/upload": {
       "post": {
-        "description": "Upload a new file and replace the content backing an existing `SourceConnectionContentVersion`.\n\nThis behaves like a source file upload, but it targets an existing content version ID. This is useful when you want to correct or update an uploaded document while keeping references stable.\n\n**Maximum file size:** 209715200 bytes, except `image/svg+xml` at 5242880 bytes (SVG is sanitized before it is stored).\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/svg+xml`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- A key bound to a user must belong to an owner or administrator of the account; a viewer's key is refused with 403 `permission_denied`. Account-scoped keys carry no user and are unaffected.\n- The replacement is indexed in the background. This `SourceConnectionContentVersion` ID keeps working, and reads return the previous content until indexing finishes; poll `list_source_content_status` to follow it. The returned `content_version_id` is the new version.\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only replace content belonging to your account.",
+        "description": "Upload a new file and replace the content backing an existing `SourceConnectionContentVersion`.\n\nThis behaves like a source file upload, but it targets an existing content version ID. This is useful when you want to correct or update an uploaded document while keeping references stable.\n\n**Maximum file size:** 209715200 bytes, except `image/svg+xml` at 5242880 bytes (SVG is sanitized before it is stored).\n\n**Supported MIME types:**\n- `application/atom+xml`\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/rss+xml`\n- `application/rtf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/x-ipynb+json`\n- `application/xhtml+xml`\n- `application/xml`\n- `application/zip`\n- `audio/aac`\n- `audio/amr`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/opus`\n- `audio/wav`\n- `audio/webm`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/svg+xml`\n- `image/tiff`\n- `image/webp`\n- `message/rfc822`\n- `text/calendar`\n- `text/csv`\n- `text/html`\n- `text/javascript`\n- `text/markdown`\n- `text/plain`\n- `text/tab-separated-values`\n- `text/vcard`\n- `text/vtt`\n- `text/x-c`\n- `text/x-c++`\n- `text/x-csharp`\n- `text/x-go`\n- `text/x-ini`\n- `text/x-java`\n- `text/x-log`\n- `text/x-markdown`\n- `text/x-php`\n- `text/x-python`\n- `text/x-ruby`\n- `text/x-rust`\n- `text/x-shellscript`\n- `text/x-sql`\n- `text/x-subrip`\n- `text/x-tex`\n- `text/x-toml`\n- `text/x-typescript`\n- `text/xml`\n- `text/yaml`\n- `video/3gpp`\n- `video/mp2t`\n- `video/mp4`\n- `video/mpeg`\n- `video/quicktime`\n- `video/webm`\n- `video/x-matroska`\n- `video/x-msvideo`\n\nNotes:\n- A key bound to a user must belong to an owner or administrator of the account; a viewer's key is refused with 403 `permission_denied`. Account-scoped keys carry no user and are unaffected.\n- The replacement is indexed in the background. This `SourceConnectionContentVersion` ID keeps working, and reads return the previous content until indexing finishes; poll `list_source_content_status` to follow it. The returned `content_version_id` is the new version.\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only replace content belonging to your account.",
         "operationId": "upload_file_to_content_api_contents__source_connection_content_version__upload_post",
         "parameters": [
           {
@@ -22312,7 +23706,7 @@
     },
     "/models/embedders": {
       "get": {
-        "description": "List the embedding models a source can be created with.\n\nEach entry carries the `model_type` to pass as `embedding_model` when creating a source, the `dimensions` it supports, and \u2014 most importantly for multi-modal indexing \u2014 `supported_input_media`: the modalities that embedder can actually index. A source only honours a `media_types` entry its embedder lists here; unsupported kinds are dropped at save time with an `embedder_warning`, so check this before choosing an embedder for a knowledge base of images or video.\n\nText-only embedders report `supported_input_media` as null. Pricing is reported as `credits` (per ~1,000 English words of text) plus `per_modality_rates` for the non-text modalities a multi-modal embedder bills differently.\n\nAn embedder whose credit rate has not been published yet is omitted, so you are never offered one that cannot be billed.\n\nOptional query parameters:\n- `supports_input_media`: keep only embedders that can index this modality (`text`/`image`/`video`/`audio` or a full MIME)\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The catalog is global reference data, identical for every account.",
+        "description": "List the embedding models a source can be created with.\n\nEach entry carries the `model_type` to pass as `embedding_model` when creating a source, the `dimensions` it supports, and \u2014 most importantly for multi-modal indexing \u2014 `supported_input_media`: the modalities that embedder can actually index. A source only honours a `media_types` entry its embedder lists here; a kind it does not list is stored and not indexed, so check this before choosing an embedder for a knowledge base of images or video.\n\nText-only embedders report `supported_input_media` as null. Pricing is reported as `credits` (per ~1,000 English words of text) plus `per_modality_rates` for the non-text modalities a multi-modal embedder bills differently.\n\nAn embedder whose credit rate has not been published yet is omitted, so you are never offered one that cannot be billed.\n\nOptional query parameters:\n- `supports_input_media`: keep only embedders that can index this modality (`text`/`image`/`video`/`audio` or a full MIME)\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The catalog is global reference data, identical for every account.",
         "operationId": "list_embedding_models_api_models_embedders_get",
         "parameters": [
           {
@@ -22766,7 +24160,7 @@
     },
     "/models/playground/experiments/{experiment_id}/cancel": {
       "post": {
-        "description": "Cancel a running or pending model playground experiment.\n\nSignals running model calls to abort and marks the experiment as canceled.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The experiment must belong to the caller's account and, when the credential is bound to a user, to that user; otherwise 404.",
+        "description": "Cancel a running or pending model playground experiment.\n\nMarks the experiment as canceled. An experiment that has not started never runs. One that is running starts no further model calls, and records each model it did not call with the error `Canceled`. A model call or evaluation already in progress is not interrupted by the cancel: it continues and is billed, and its result is recorded on the canceled experiment. Canceling may therefore not shorten the run or reduce its cost.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. The experiment must belong to the caller's account and, when the credential is bound to a user, to that user; otherwise 404.",
         "operationId": "cancel_experiment_endpoint_api_models_playground_experiments__experiment_id__cancel_post",
         "parameters": [
           {
@@ -24818,7 +26212,7 @@
         ]
       },
       "post": {
-        "description": "Create a new content source.\n\nSource types: `rss`, `website`, `custom_index`.\n\nFor RSS and website sources, provide the URL. For custom index sources, the URL is created automatically.\n\nFor custom_index sources, you can optionally specify an `index_mode`: `fast_and_cheap` (default), `balanced`, `slow_and_thorough`, or `custom`. The legacy `file_uploads` source type is accepted as an alias for `custom_index` with `index_mode=fast_and_cheap`.",
+        "description": "Create a new content source.\n\nSource types: `rss_feed`, `website`, `custom_index`, `cloud_drive`, `email`.\n\nFor RSS and website sources, provide the URL. For custom index sources, the URL is created automatically.\n\nAn `email` source takes no URL and requires `email_allowed_senders`; the response's `email_address` is where to send mail.\n\nA `cloud_drive` source takes no URL and requires `cloud_drive_connection_id`, the id of a drive connected in the app (`GET /cloud-drives` lists them).\n\nFor custom_index sources, you can optionally specify an `index_mode`: `fast_and_cheap` (default), `balanced`, `slow_and_thorough`, or `custom`. The legacy `file_uploads` source type is accepted as an alias for `custom_index` with `index_mode=fast_and_cheap`.",
         "operationId": "create_source_api_sources_post",
         "parameters": [
           {
@@ -25014,7 +26408,7 @@
         ]
       },
       "post": {
-        "description": "Upload a small text payload to a content source (no multipart/form-data required).\n\n**Maximum payload size:** 8192 bytes (UTF-8).\n\n**Supported content types:**\n- `application/json`\n- `application/xml`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n\nNotes:\n- A key bound to a user must belong to an owner or administrator of the account; a viewer's key is refused with 403 `permission_denied`. Account-scoped keys carry no user and are unaffected.\n- Use this endpoint for small text payloads; larger files should use `/upload`.\n- `title` is merged into `metadata.title` when not already present.\n\nTracking indexing progress:\n- **Which id you get back depends on `status`, and they are not interchangeable:**\n  - `uploaded` \u2014 a new item. `content_version_id` is set and `source_connection_content_version_id` is `null`. Indexing continues in the background after this call returns.\n  - `duplicate` \u2014 this exact file is already on the source, so nothing was created and nothing is being indexed. `content_version_id` is `null` and `source_connection_content_version_id` is the existing, already-indexed item: pass it straight to `GET /contents/{id}`. There is nothing to poll.\n- For an `uploaded` item, poll `GET /sources/{id}/contents/{content_version_id}` with the returned `content_version_id`, or `GET /sources/{id}/contents?content_version_id=\u2026&content_version_id=\u2026` for a whole batch, to follow each item through to `completed` or `failed`.\n- On those status endpoints `source_connection_content_version_id` stays `null` until the item finishes indexing; that is the id `GET /contents/{id}` takes.",
+        "description": "Upload a small text payload to a content source (no multipart/form-data required).\n\n**Maximum payload size:** 8192 bytes (UTF-8).\n\n**Supported content types:**\n- `application/json`\n- `application/xml`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n\nNotes:\n- A key bound to a user must belong to an owner or administrator of the account; a viewer's key is refused with 403 `permission_denied`. Account-scoped keys carry no user and are unaffected.\n- Use this endpoint for small text payloads; larger files should use `/upload`.\n- `title` is merged into `metadata.title` when not already present.\n\nTracking indexing progress:\n- **Which id you get back depends on `status`, and they are not interchangeable:**\n  - `uploaded` \u2014 a new item. `content_version_id` is set and `source_connection_content_version_id` is `null`. Indexing continues in the background after this call returns.\n  - `duplicate` \u2014 this exact file is already on the source, so nothing was created and nothing is being indexed. `content_version_id` is `null` and `source_connection_content_version_id` is the existing, already-indexed item: pass it straight to `GET /contents/{id}`. There is nothing to poll.\n- For an `uploaded` item, poll `GET /sources/{id}/contents/{content_version_id}` with the returned `content_version_id`, or `GET /sources/{id}/contents?content_version_id=\u2026&content_version_id=\u2026` for a whole batch, to follow each item through to `completed` or `failed`.\n- On those status endpoints `source_connection_content_version_id` stays `null` until the item finishes indexing; that is the id `GET /contents/{id}` takes.\n- An item that reports `held_for_review: true` was blocked by an Enforce governance policy. It is not in the source and its id stays `null` unless a reviewer releases it, so stop polling.",
         "operationId": "upload_inline_text_to_source_api_sources__source_connection_id__post",
         "parameters": [
           {
@@ -25171,7 +26565,7 @@
     },
     "/sources/{source_connection_id}/contents": {
       "get": {
-        "description": "List every content item this source has attempted to index, with the status of each.\n\nUnlike the source's `content_count`, which only counts finished items, this listing includes items that are still processing and items that failed \u2014 so a bulk upload can report per-item progress and point at the specific items that did not make it.\n\nCorrelating with an upload:\n- Each item is keyed by `content_version_id`, which is what the upload endpoints return. Pass those ids as repeated `content_version_id` query parameters to poll exactly the items you uploaded.\n- `source_connection_content_version_id` is `null` until an item finishes indexing; once set, it is the id `GET /contents/{id}` takes.\n- `content_status` reaches `completed` on success and `failed` on error, with the reason in `error`. The intermediate values are `pending`, `fetching`, `transcribing`, `scanning`, and `indexing`.\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/title/status) and `order` (asc/desc). `created_at` sorts on when the item was uploaded or pulled.\n- Filtering: `status` and repeatable `content_version_id`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only list content for sources belonging to your account.",
+        "description": "List every content item this source has attempted to index, with the status of each.\n\nUnlike the source's `content_count`, which only counts finished items, this listing includes items that are still processing and items that failed \u2014 so a bulk upload can report per-item progress and point at the specific items that did not make it.\n\nCorrelating with an upload:\n- Each item is keyed by `content_version_id`, which is what the upload endpoints return. Pass those ids as repeated `content_version_id` query parameters to poll exactly the items you uploaded.\n- `source_connection_content_version_id` is `null` until an item finishes indexing; once set, it is the id `GET /contents/{id}` takes.\n- `content_status` reaches `completed` on success and `failed` on error, with the reason in `error`. The intermediate values are `pending`, `fetching`, `transcribing`, `scanning`, and `indexing`.\n- An item an Enforce governance policy blocked at import is held for review: `held_for_review` is `true` and `source_connection_content_version_id` stays `null` until a reviewer releases it. With `Seclai-Version: 2026-10-05` or later it reports `completed`; earlier versions report it as `failed` with the hold as the `error`. The `status` filter matches the item under `completed` on every version.\n\nParameters:\n- Pagination: `page` and `limit`.\n- Sorting: `sort` (created_at/title/status) and `order` (asc/desc). `created_at` sorts on when the item was uploaded or pulled.\n- Filtering: `status` and repeatable `content_version_id`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only list content for sources belonging to your account.",
         "operationId": "list_source_contents_api_sources__source_connection_id__contents_get",
         "parameters": [
           {
@@ -25331,7 +26725,7 @@
     },
     "/sources/{source_connection_id}/contents/{content_version_id}": {
       "get": {
-        "description": "Get the indexing status of a single content item, addressed by the `content_version_id` the upload endpoints return.\n\nUse this to follow one uploaded file through indexing. To follow many at once, use `GET /sources/{id}/contents` with repeated `content_version_id` parameters instead of polling this endpoint per item.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access content belonging to your account.",
+        "description": "Get the indexing status of a single content item, addressed by the `content_version_id` the upload endpoints return.\n\nUse this to follow one uploaded file through indexing. To follow many at once, use `GET /sources/{id}/contents` with repeated `content_version_id` parameters instead of polling this endpoint per item.\n\nAn item held for review by an Enforce governance policy reports `held_for_review: true`. With `Seclai-Version: 2026-10-05` or later its `content_status` is `completed`; earlier versions report `failed` with the hold as the `error`.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only access content belonging to your account.",
         "operationId": "get_source_content_status_endpoint_api_sources__source_connection_id__contents__content_version_id__get",
         "parameters": [
           {
@@ -25402,6 +26796,101 @@
           }
         },
         "summary": "Get one content item's indexing status",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/sources/{source_connection_id}/email-rejections": {
+      "get": {
+        "description": "List mail that an email content source refused, newest first. Each entry says who sent the message and why it was refused, never its subject or body. A message refused as `unsafe_content` also has a prompt-scan record, which keeps the scanned text.\n\nTo accept a refused sender, add its `from_address` or that address's domain to the source's `email_allowed_senders`. That only helps when `authenticated` is true. A `repeat_*` reason marks a message the source received before; allowing its sender does not store it.\n\nRequires an account owner or administrator: a key or token bound to another member gets 403. Returns 404 for a source that is not an email source.",
+        "operationId": "list_email_source_rejections_api_api_sources__source_connection_id__email_rejections_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page number.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number.",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Items per page.",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSourceRejectionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            },
+            "description": "A dependency is unavailable. `database_unavailable` is temporary (for example routine maintenance) and carries a `Retry-After` header, after which the request can be retried unchanged. `vector_store_unavailable` means the vector store backing an embeddings operation is not configured; it carries no `Retry-After` because it does not clear without an operator.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying. Sent only with `database_unavailable`.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List mail an email source refused",
         "tags": [
           "sources"
         ]
@@ -26187,7 +27676,7 @@
     },
     "/sources/{source_connection_id}/upload": {
       "post": {
-        "description": "Upload a file to a content source.\n\n**Maximum file size:** 209715200 bytes, except `image/svg+xml` at 5242880 bytes (SVG is sanitized before it is stored).\n\n**Supported MIME types:**\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/xml`\n- `application/zip`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/wav`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/svg+xml`\n- `image/tiff`\n- `image/webp`\n- `text/csv`\n- `text/html`\n- `text/markdown`\n- `text/plain`\n- `text/x-markdown`\n- `text/xml`\n- `video/mp4`\n- `video/quicktime`\n- `video/x-msvideo`\n\nNotes:\n- A key bound to a user must belong to an owner or administrator of the account; a viewer's key is refused with 403 `permission_denied`. Account-scoped keys carry no user and are unaffected.\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"author\":\"Ada\",\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nResponse:\n- `status` is `uploaded` for a new upload, or `duplicate` when the same file already exists for this source.\n\nTracking indexing progress:\n- **Which id you get back depends on `status`, and they are not interchangeable:**\n  - `uploaded` \u2014 a new item. `content_version_id` is set and `source_connection_content_version_id` is `null`. Indexing continues in the background after this call returns.\n  - `duplicate` \u2014 this exact file is already on the source, so nothing was created and nothing is being indexed. `content_version_id` is `null` and `source_connection_content_version_id` is the existing, already-indexed item: pass it straight to `GET /contents/{id}`. There is nothing to poll.\n- For an `uploaded` item, poll `GET /sources/{id}/contents/{content_version_id}` with the returned `content_version_id`, or `GET /sources/{id}/contents?content_version_id=\u2026&content_version_id=\u2026` for a whole batch, to follow each item through to `completed` or `failed`.\n- On those status endpoints `source_connection_content_version_id` stays `null` until the item finishes indexing; that is the id `GET /contents/{id}` takes.",
+        "description": "Upload a file to a content source.\n\n**Maximum file size:** 209715200 bytes, except `image/svg+xml` at 5242880 bytes (SVG is sanitized before it is stored).\n\n**Supported MIME types:**\n- `application/atom+xml`\n- `application/epub+zip`\n- `application/json`\n- `application/pdf`\n- `application/rss+xml`\n- `application/rtf`\n- `application/vnd.ms-excel`\n- `application/vnd.ms-outlook`\n- `application/vnd.ms-powerpoint`\n- `application/vnd.openxmlformats-officedocument.presentationml.presentation`\n- `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`\n- `application/vnd.openxmlformats-officedocument.wordprocessingml.document`\n- `application/x-ipynb+json`\n- `application/xhtml+xml`\n- `application/xml`\n- `application/zip`\n- `audio/aac`\n- `audio/amr`\n- `audio/flac`\n- `audio/mp4`\n- `audio/mpeg`\n- `audio/ogg`\n- `audio/opus`\n- `audio/wav`\n- `audio/webm`\n- `image/bmp`\n- `image/gif`\n- `image/jpeg`\n- `image/png`\n- `image/svg+xml`\n- `image/tiff`\n- `image/webp`\n- `message/rfc822`\n- `text/calendar`\n- `text/csv`\n- `text/html`\n- `text/javascript`\n- `text/markdown`\n- `text/plain`\n- `text/tab-separated-values`\n- `text/vcard`\n- `text/vtt`\n- `text/x-c`\n- `text/x-c++`\n- `text/x-csharp`\n- `text/x-go`\n- `text/x-ini`\n- `text/x-java`\n- `text/x-log`\n- `text/x-markdown`\n- `text/x-php`\n- `text/x-python`\n- `text/x-ruby`\n- `text/x-rust`\n- `text/x-shellscript`\n- `text/x-sql`\n- `text/x-subrip`\n- `text/x-tex`\n- `text/x-toml`\n- `text/x-typescript`\n- `text/xml`\n- `text/yaml`\n- `video/3gpp`\n- `video/mp2t`\n- `video/mp4`\n- `video/mpeg`\n- `video/quicktime`\n- `video/webm`\n- `video/x-matroska`\n- `video/x-msvideo`\n\nNotes:\n- A key bound to a user must belong to an owner or administrator of the account; a viewer's key is refused with 403 `permission_denied`. Account-scoped keys carry no user and are unaffected.\n- If the uploaded file's content type is `application/octet-stream`, the server attempts to infer the type from the file extension.\n- Use `metadata` to attach an arbitrary JSON object of metadata (for example `metadata={\"author\":\"Ada\",\"category\":\"docs\"}`).\n- `title` is a convenience field and is merged into the metadata as `metadata.title` (it does not override an existing `metadata.title`).\n- For backwards compatibility, you can also pass form fields named `metadata_<key>` (for example `metadata_author=...`). These override keys from `metadata`.\n\nResponse:\n- `status` is `uploaded` for a new upload, or `duplicate` when the same file already exists for this source.\n\nTracking indexing progress:\n- **Which id you get back depends on `status`, and they are not interchangeable:**\n  - `uploaded` \u2014 a new item. `content_version_id` is set and `source_connection_content_version_id` is `null`. Indexing continues in the background after this call returns.\n  - `duplicate` \u2014 this exact file is already on the source, so nothing was created and nothing is being indexed. `content_version_id` is `null` and `source_connection_content_version_id` is the existing, already-indexed item: pass it straight to `GET /contents/{id}`. There is nothing to poll.\n- For an `uploaded` item, poll `GET /sources/{id}/contents/{content_version_id}` with the returned `content_version_id`, or `GET /sources/{id}/contents?content_version_id=\u2026&content_version_id=\u2026` for a whole batch, to follow each item through to `completed` or `failed`.\n- On those status endpoints `source_connection_content_version_id` stays `null` until the item finishes indexing; that is the id `GET /contents/{id}` takes.\n- An item that reports `held_for_review: true` was blocked by an Enforce governance policy. It is not in the source and its id stays `null` unless a reviewer releases it, so stop polling.",
         "operationId": "upload_file_to_source_api_sources__source_connection_id__upload_post",
         "parameters": [
           {
@@ -26267,7 +27756,7 @@
     },
     "/v2/agent-runs/{run_id}/attachments/{attachment_id}": {
       "get": {
-        "description": "Streams the bytes of an attachment emitted by a step in the given agent run.  ``attachment_id`` is the ``id`` of an entry in the run's or a step's ``attachments``, or the URL-safe-base64-encoded storage key, which webhook and email links carry.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- The calling account must own ``run_id``; lookup failures (missing run, cross-account run, soft-deleted agent, a run whose trace was purged, a file not in the run) all collapse to a single 404 to prevent cross-tenant existence enumeration.\n\nMIME handling:\n- Inline-safe MIMEs (image/*, audio/*, video/*, application/pdf, text/plain, application/vnd.seclai.manifest+json) are served with their declared type.\n- Everything else is served as ``application/octet-stream`` with an attachment disposition to prevent stored-XSS.",
+        "description": "Streams the bytes of a file of the given agent run: one a step emitted, or one the run started with.  ``attachment_id`` is the ``id`` of an entry in the run's or a step's ``attachments``, or the URL-safe-base64-encoded storage key, which webhook and email links carry.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- The calling account must own ``run_id``; lookup failures (missing run, cross-account run, soft-deleted agent, a run whose trace was purged, a file not in the run) all collapse to a single 404 to prevent cross-tenant existence enumeration.\n\nMIME handling:\n- Inline-safe MIMEs (image/*, audio/*, video/*, application/pdf, text/plain, application/vnd.seclai.manifest+json) are served with their declared type.\n- Everything else is served as ``application/octet-stream`` with an attachment disposition to prevent stored-XSS.",
         "operationId": "serve_agent_run_attachment_api_v2_agent_runs__run_id__attachments__attachment_id__get",
         "parameters": [
           {
@@ -26528,8 +28017,14 @@
       "2026-08-21",
       "2026-09-28",
       "2026-09-30",
-      "2026-10-03"
+      "2026-10-03",
+      "2026-10-05",
+      "2026-10-13",
+      "2026-10-16",
+      "2026-10-18",
+      "2026-10-19",
+      "2026-10-21"
     ],
-    "latest": "2026-10-03"
+    "latest": "2026-10-21"
   }
 }

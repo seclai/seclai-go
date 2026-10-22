@@ -184,3 +184,51 @@ func TestFix_LeavesExclusiveBoundBoolAlone(t *testing.T) {
 		t.Fatalf("expected minimum to remain 0, got %v", ex["minimum"])
 	}
 }
+
+func TestOmitUnsetRequestFields_MarksOptionalNullableRequestProperties(t *testing.T) {
+	input := []byte(`{
+		"openapi": "3.1.0",
+		"paths": {
+			"/x": {"put": {"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/Req"}}}}}}
+		},
+		"components": {"schemas": {
+			"Req": {
+				"required": ["must"],
+				"properties": {
+					"must": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+					"maybe": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+					"plain": {"type": "string"},
+					"nested": {"items": {"$ref": "#/components/schemas/Inner"}, "type": "array"}
+				}
+			},
+			"Inner": {"properties": {"opt": {"anyOf": [{"type": "integer"}, {"type": "null"}]}}},
+			"Resp": {"properties": {"opt": {"anyOf": [{"type": "integer"}, {"type": "null"}]}}}
+		}}
+	}`)
+	var doc any
+	if err := json.Unmarshal(input, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	fix(doc)
+	omitUnsetRequestFields(doc)
+
+	schemas := doc.(map[string]any)["components"].(map[string]any)["schemas"].(map[string]any)
+	prop := func(schema, name string) map[string]any {
+		return schemas[schema].(map[string]any)["properties"].(map[string]any)[name].(map[string]any)
+	}
+	if prop("Req", "maybe")["x-omitempty"] != true {
+		t.Fatalf("optional nullable request property not marked")
+	}
+	if _, ok := prop("Req", "must")["x-omitempty"]; ok {
+		t.Fatalf("required property must keep its null")
+	}
+	if _, ok := prop("Req", "plain")["x-omitempty"]; ok {
+		t.Fatalf("non-nullable property needs no mark")
+	}
+	if prop("Inner", "opt")["x-omitempty"] != true {
+		t.Fatalf("nested request schema not marked")
+	}
+	if _, ok := prop("Resp", "opt")["x-omitempty"]; ok {
+		t.Fatalf("response-only schema must be left alone")
+	}
+}

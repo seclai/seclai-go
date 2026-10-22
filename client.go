@@ -352,20 +352,25 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
-	text := strings.TrimSpace(string(raw))
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: text}
-		if resp.StatusCode == 422 {
-			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-				return nil, nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
-			}
-			return nil, nil, &APIValidationError{APIStatusError: statusErr}
-		}
-		return nil, nil, &statusErr
+		return nil, nil, apiError(resp.StatusCode, method, reqURL.String(), raw)
 	}
 	return raw, reqURL, nil
+}
+
+// apiError builds the error for a non-2xx response from its status and body:
+// an *APIValidationError for a 422, carrying the decoded validation detail
+// when the body has one, and an *APIStatusError otherwise.
+func apiError(statusCode int, method, reqURL string, raw []byte) error {
+	statusErr := APIStatusError{StatusCode: statusCode, Method: method, URL: reqURL, ResponseText: strings.TrimSpace(string(raw))}
+	if statusCode == http.StatusUnprocessableEntity {
+		var ve HTTPValidationError
+		if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
+			return &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
+		}
+		return &APIValidationError{APIStatusError: statusErr}
+	}
+	return &statusErr
 }
 
 // ── Identity ──────────────────────────────────────────────────────────────────
@@ -403,8 +408,12 @@ func (c *Client) GetAPIVersion(ctx context.Context) (*ApiVersionResponse, error)
 // rather than the pin just written.
 func (c *Client) UpdateAPIVersion(ctx context.Context, version *string) (*ApiVersionResponse, error) {
 	var out ApiVersionResponse
-	// A literal null clears the pin, so the field is always marshalled.
-	body := UpdateApiVersionRequest{Version: version}
+	// A literal null clears the pin. The generated struct omits a nil Version,
+	// so the null is written explicitly.
+	var body any = UpdateApiVersionRequest{Version: version}
+	if version == nil {
+		body = map[string]any{"version": nil}
+	}
 	if err := c.Do(ctx, http.MethodPut, "/version", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
@@ -667,7 +676,14 @@ func (c *Client) CancelAgentRun(ctx context.Context, runID string) (*AgentRunRes
 
 // ── Agent Input Uploads ─────────────────────────────────────────────────────
 
-// UploadAgentInput uploads an input file for an agent run.
+// UploadAgentInput uploads an input file for a dynamic_input agent's run; any
+// other agent rejects it with a 400. Pass the UploadId as the run's
+// InputUploadId. Files are limited to 200 MB.
+//
+// From API version 2026-10-16 a file of any type is accepted and is ready at
+// once. Earlier versions accept only the document, image, audio and video
+// types the API lists, and write the file's text into the run's input, so poll
+// [Client.GetAgentInputUploadStatus] until Status is "ready" before running.
 func (c *Client) UploadAgentInput(ctx context.Context, agentID string, req UploadFileRequest) (*UploadAgentInputApiResponse, error) {
 	resp, err := c.doUpload(ctx, fmt.Sprintf("/agents/%s/upload-input", url.PathEscape(agentID)), req)
 	if err != nil {
@@ -680,7 +696,8 @@ func (c *Client) UploadAgentInput(ctx context.Context, agentID string, req Uploa
 	return &out, nil
 }
 
-// GetAgentInputUploadStatus checks the status of an input upload.
+// GetAgentInputUploadStatus checks the status of an input upload. From API
+// version 2026-10-16 an upload is ready at once and need not be polled.
 func (c *Client) GetAgentInputUploadStatus(ctx context.Context, agentID, uploadID string) (*UploadAgentInputApiResponse, error) {
 	var out UploadAgentInputApiResponse
 	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/input-uploads/%s", url.PathEscape(agentID), url.PathEscape(uploadID)), nil, nil, nil, &out); err != nil {
@@ -704,6 +721,23 @@ func (c *Client) GetAgentAttachmentReferences(ctx context.Context, agentID strin
 	return &out, nil
 }
 
+// SetAcceptedAttachments replaces the input attachments an agent's trigger
+// accepts. A run's files are each assigned to one declared attachment before
+// any step runs, and steps reference one as {{agent.attachments.<name>}}.
+//
+// triggerID is the TriggerId that [Client.GetAgent] returns. A nil
+// AcceptedAttachments is sent as null and accepts any files, as one attachment
+// named "files"; only dynamic_input and email_received triggers take files.
+// The API answers 400 when the agent references an attachment the new
+// declaration leaves out.
+func (c *Client) SetAcceptedAttachments(ctx context.Context, agentID, triggerID string, body SetAcceptedAttachmentsRequest) (*AcceptedAttachmentsResponse, error) {
+	var out AcceptedAttachmentsResponse
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/accepted-attachments", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, body, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // DownloadAgentRunAttachment downloads a file attachment emitted by a step in an
 // agent run. Returns the raw HTTP response so the caller can stream the body. The
 // caller must close the response body.
@@ -712,15 +746,24 @@ func (c *Client) GetAgentAttachmentReferences(ctx context.Context, agentID strin
 // surfaced in run output manifests and webhook/email payloads). downloadName is an
 // optional filename hint for the download disposition; pass "" to omit it.
 func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachmentID, downloadName string) (*http.Response, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	var query map[string]string
 	if downloadName != "" {
 		query = map[string]string{"download_name": downloadName}
 	}
-	reqURL := c.buildURL(fmt.Sprintf("/v2/agent-runs/%s/attachments/%s", url.PathEscape(runID), url.PathEscape(attachmentID)), query)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/v2/agent-runs/%s/attachments/%s", url.PathEscape(runID), url.PathEscape(attachmentID)), query)
+}
+
+// doRaw issues a request without a body and returns the 2xx response
+// unread, for the download methods; the caller must close its body. A non-2xx
+// response is read, closed and returned as an *APIStatusError, a 422 included.
+// Keep it that way: v1.7.x shipped that type for download 422s, and callers
+// type-assert on it, so returning *APIValidationError here is a breaking change.
+func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[string]string) (*http.Response, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	reqURL := c.buildURL(apiPath, query)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -737,8 +780,7 @@ func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachme
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		text := strings.TrimSpace(string(raw))
-		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodGet, URL: reqURL.String(), ResponseText: text}
+		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw))}
 	}
 	return resp, nil
 }
@@ -876,6 +918,56 @@ func (c *Client) UpdateEvaluationCriteria(ctx context.Context, criteriaID string
 	return &out, nil
 }
 
+// EvaluationCriteriaField names a setting of an evaluation criteria that
+// [Client.ClearEvaluationCriteriaFields] can clear.
+type EvaluationCriteriaField string
+
+const (
+	// EvaluationCriteriaDescription clears the criteria's description.
+	EvaluationCriteriaDescription EvaluationCriteriaField = "description"
+	// EvaluationCriteriaEvaluationPrompt clears the criteria's evaluation prompt.
+	EvaluationCriteriaEvaluationPrompt EvaluationCriteriaField = "evaluation_prompt"
+	// EvaluationCriteriaExpectationConfig clears the criteria's expectation config.
+	EvaluationCriteriaExpectationConfig EvaluationCriteriaField = "expectation_config"
+	// EvaluationCriteriaEvaluationTier removes the criteria's pinned tier, so it
+	// falls back to the agent's default evaluation tier.
+	EvaluationCriteriaEvaluationTier EvaluationCriteriaField = "evaluation_tier"
+)
+
+// ClearEvaluationCriteriaFields clears the named settings of an evaluation
+// criteria and leaves every other setting unchanged. It sends the fields as
+// explicit nulls, which [Client.UpdateEvaluationCriteria] cannot, since it
+// leaves a nil field out of the body:
+//
+//   - [EvaluationCriteriaDescription] removes the description.
+//   - [EvaluationCriteriaEvaluationPrompt] removes the evaluation prompt.
+//   - [EvaluationCriteriaExpectationConfig] removes the expectation config.
+//   - [EvaluationCriteriaEvaluationTier] removes a pinned tier, so the
+//     criteria uses the agent's default evaluation tier again. This is the
+//     only way to undo a tier set with UpdateEvaluationCriteria.
+//
+// It returns a [*ConfigurationError], without sending a request, when no
+// field is given or a field is not one of these constants.
+func (c *Client) ClearEvaluationCriteriaFields(ctx context.Context, criteriaID string, fields ...EvaluationCriteriaField) (*EvaluationCriteriaResponse, error) {
+	if len(fields) == 0 {
+		return nil, &ConfigurationError{Message: "ClearEvaluationCriteriaFields needs at least one field to clear"}
+	}
+	payload := make(map[string]any, len(fields))
+	for _, f := range fields {
+		switch f {
+		case EvaluationCriteriaDescription, EvaluationCriteriaEvaluationPrompt, EvaluationCriteriaExpectationConfig, EvaluationCriteriaEvaluationTier:
+			payload[string(f)] = nil
+		default:
+			return nil, &ConfigurationError{Message: fmt.Sprintf("ClearEvaluationCriteriaFields cannot clear %q; use one of the EvaluationCriteriaField constants", string(f))}
+		}
+	}
+	var out EvaluationCriteriaResponse
+	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/agents/evaluation-criteria/%s", url.PathEscape(criteriaID)), nil, payload, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // DeleteEvaluationCriteria deletes evaluation criteria.
 func (c *Client) DeleteEvaluationCriteria(ctx context.Context, criteriaID string) error {
 	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/evaluation-criteria/%s", url.PathEscape(criteriaID)), nil, nil, nil, nil)
@@ -977,7 +1069,12 @@ func (c *Client) GetNonManualEvaluationSummary(ctx context.Context, agentID stri
 //
 // Timeout behavior is controlled by ctx (for example, use context.WithTimeout). If ctx has no deadline,
 // a default 60s timeout is applied.
+//
+// body.IncludeReasoning is not sent: this method reads only the final run, so
+// reasoning events would be streamed only to be discarded while counting
+// against the timeout. Use [Client.RunStreamingAgent] to receive them.
 func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, body AgentRunStreamRequest) (*AgentRunResponse, error) {
+	body.IncludeReasoning = nil
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1014,16 +1111,7 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
-		text := strings.TrimSpace(string(raw))
-		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
-		if resp.StatusCode == 422 {
-			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
-			}
-			return nil, &APIValidationError{APIStatusError: statusErr}
-		}
-		return nil, &statusErr
+		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
 	}
 
 	reader := bufio.NewReader(resp.Body)
@@ -1169,18 +1257,7 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			raw, _ := io.ReadAll(resp.Body)
-			text := strings.TrimSpace(string(raw))
-			statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
-			if resp.StatusCode == 422 {
-				var ve HTTPValidationError
-				if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-					errCh <- &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
-					return
-				}
-				errCh <- &APIValidationError{APIStatusError: statusErr}
-				return
-			}
-			errCh <- &statusErr
+			errCh <- apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
 			return
 		}
 
@@ -1413,17 +1490,8 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 	defer resp.Body.Close()
 
 	raw, _ := io.ReadAll(resp.Body)
-	text := strings.TrimSpace(string(raw))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		statusErr := APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodPost, URL: reqURL.String(), ResponseText: text}
-		if resp.StatusCode == 422 {
-			var ve HTTPValidationError
-			if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
-				return nil, &APIValidationError{APIStatusError: statusErr, ValidationError: &ve}
-			}
-			return nil, &APIValidationError{APIStatusError: statusErr}
-		}
-		return nil, &statusErr
+		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
 	}
 	return raw, nil
 }
@@ -1479,29 +1547,8 @@ func (c *Client) UploadFileToContent(ctx context.Context, contentVersionID strin
 // its zero value: a pointer to "" clears the alias, a pointer to an empty slice
 // clears the allowlist.
 func (c *Client) SetEmailTriggerConfig(ctx context.Context, agentID string, triggerID string, body RoutersApiAgentsSetEmailTriggerConfigRequest) (*EmailTriggerConfigResponse, error) {
-	// The generated struct carries no omitempty tags, so marshalling it directly
-	// would send an explicit null for every unset field — and the API treats null
-	// as "clear this field". Send only what the caller actually set, so a
-	// zero-value request is a no-op rather than a destructive reset.
-	payload := map[string]any{}
-	if body.Alias != nil {
-		payload["alias"] = body.Alias
-	}
-	if body.AllowedSenders != nil {
-		payload["allowed_senders"] = body.AllowedSenders
-	}
-	if body.IgnoreAutoGenerated != nil {
-		payload["ignore_auto_generated"] = body.IgnoreAutoGenerated
-	}
-	if body.QueueOnQuota != nil {
-		payload["queue_on_quota"] = body.QueueOnQuota
-	}
-	if body.RequireSenderAuth != nil {
-		payload["require_sender_auth"] = body.RequireSenderAuth
-	}
-
 	var out EmailTriggerConfigResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/email-config", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, payload, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/email-config", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1707,10 +1754,48 @@ func (c *Client) ListMemoryBanks(ctx context.Context, opts SortableListOptions) 
 	return &out, nil
 }
 
-// CreateMemoryBank creates a new memory bank.
+// CreateMemoryBankOptions holds the settings of [Client.CreateMemoryBankWithOptions]
+// that [CreateMemoryBankBody] cannot express.
+type CreateMemoryBankOptions struct {
+	// RetainIndefinitely keeps the new bank's entries indefinitely on every API
+	// version. It sends an explicit null retention_days, which a nil
+	// RetentionDays cannot, since that is left out of the request. It cannot be
+	// combined with RetentionDays.
+	RetainIndefinitely bool
+}
+
+// CreateMemoryBank creates a new memory bank. It is
+// [Client.CreateMemoryBankWithOptions] with no options.
+//
+// A nil RetentionDays is left out of the request, so the API's default
+// applies. A general bank keeps its entries indefinitely on every version.
+// From API version 2026-08-03 a conversation bank keeps them for 90 days;
+// earlier versions keep them for 30 days, or for MaxAgeDays when that is
+// longer. Set RetentionDays to choose a window, or use
+// CreateMemoryBankWithOptions with RetainIndefinitely to keep entries
+// indefinitely.
 func (c *Client) CreateMemoryBank(ctx context.Context, body CreateMemoryBankBody) (*MemoryBankResponse, error) {
+	return c.CreateMemoryBankWithOptions(ctx, body, CreateMemoryBankOptions{})
+}
+
+// CreateMemoryBankWithOptions creates a new memory bank with the settings in
+// opts. It returns a [*ConfigurationError], without sending a request, when
+// opts.RetainIndefinitely is set together with body.RetentionDays.
+func (c *Client) CreateMemoryBankWithOptions(ctx context.Context, body CreateMemoryBankBody, opts CreateMemoryBankOptions) (*MemoryBankResponse, error) {
+	var payload any = body
+	if opts.RetainIndefinitely {
+		if body.RetentionDays != nil {
+			return nil, &ConfigurationError{Message: "CreateMemoryBankWithOptions: set RetentionDays or RetainIndefinitely, not both"}
+		}
+		// The outer RetentionDays shadows the embedded one and, having no
+		// omitempty and being nil, is always written as null.
+		payload = struct {
+			CreateMemoryBankBody
+			RetentionDays *int `json:"retention_days"`
+		}{CreateMemoryBankBody: body}
+	}
 	var out MemoryBankResponse
-	if err := c.Do(ctx, http.MethodPost, "/memory_banks", nil, body, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodPost, "/memory_banks", nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1725,13 +1810,24 @@ func (c *Client) GetMemoryBank(ctx context.Context, memoryBankID string) (*Memor
 	return &out, nil
 }
 
-// UpdateMemoryBank updates a memory bank.
+// UpdateMemoryBank updates a memory bank. Only the fields set on body are
+// sent; a nil field leaves that setting unchanged. To remove the retention
+// window, use [Client.ClearMemoryBankRetention].
 func (c *Client) UpdateMemoryBank(ctx context.Context, memoryBankID string, body UpdateMemoryBankBody) (*MemoryBankResponse, error) {
 	var out MemoryBankResponse
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/memory_banks/%s", url.PathEscape(memoryBankID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ClearMemoryBankRetention removes a memory bank's retention window, so its
+// entries are kept indefinitely. It sends a retention_days of 0, which is how
+// the update endpoint spells "no window", and leaves every other setting
+// unchanged.
+func (c *Client) ClearMemoryBankRetention(ctx context.Context, memoryBankID string) (*MemoryBankResponse, error) {
+	zero := 0
+	return c.UpdateMemoryBank(ctx, memoryBankID, UpdateMemoryBankBody{RetentionDays: &zero})
 }
 
 // DeleteMemoryBank deletes a memory bank.
@@ -1867,10 +1963,24 @@ func (c *Client) GetSource(ctx context.Context, sourceID string) (*SourceRespons
 	return &out, nil
 }
 
-// UpdateSource updates a source.
+// UpdateSource updates a source. Only the fields set on body are sent; a nil
+// field leaves that setting unchanged. To clear the retention window, use
+// ClearSourceRetention.
 func (c *Client) UpdateSource(ctx context.Context, sourceID string, body UpdateSourceBody) (*SourceResponse, error) {
 	var out SourceResponse
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, body, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ClearSourceRetention removes a source's retention window, so its content is
+// kept indefinitely. It sends an explicit null retention_days and leaves every
+// other setting unchanged.
+func (c *Client) ClearSourceRetention(ctx context.Context, sourceID string) (*SourceResponse, error) {
+	var out SourceResponse
+	payload := map[string]any{"retention_days": nil}
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1927,31 +2037,7 @@ func (c *Client) DeleteSourceExport(ctx context.Context, sourceID, exportID stri
 // DownloadSourceExport downloads a source export. Returns the raw HTTP response
 // so the caller can stream the body. The caller must close the response body.
 func (c *Client) DownloadSourceExport(ctx context.Context, sourceID, exportID string) (*http.Response, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	reqURL := c.buildURL(fmt.Sprintf("/sources/%s/exports/%s/download", url.PathEscape(sourceID), url.PathEscape(exportID)), nil)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	for k, v := range c.defaultHeaders {
-		req.Header.Set(k, v)
-	}
-	if err := c.applyAuth(ctx, req); err != nil {
-		return nil, err
-	}
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		text := strings.TrimSpace(string(raw))
-		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: http.MethodGet, URL: reqURL.String(), ResponseText: text}
-	}
-	return resp, nil
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports/%s/download", url.PathEscape(sourceID), url.PathEscape(exportID)), nil)
 }
 
 // EstimateSourceExport estimates the cost/size of a source export.
@@ -2073,6 +2159,23 @@ func (c *Client) GetSourceContentStatus(ctx context.Context, sourceID, contentVe
 	return &out, nil
 }
 
+// ListEmailSourceRejections lists mail an email content source refused, newest
+// first. Each entry says who sent the message and why it was refused, never its
+// subject or body. To accept a refused sender, add its FromAddress or that
+// address's domain to the source's EmailAllowedSenders — which only helps when
+// Authenticated is true.
+//
+// Requires an account owner or administrator (403 otherwise); the API answers
+// 404 for a source that is not an email source. The response is the
+// {data, pagination} envelope on every API version.
+func (c *Client) ListEmailSourceRejections(ctx context.Context, sourceID string, opts ListOptions) (*EmailSourceRejectionListResponse, error) {
+	var out EmailSourceRejectionListResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/email-rejections", url.PathEscape(sourceID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ── Content ─────────────────────────────────────────────────────────────────
 
 // GetContentDetail fetches content detail.
@@ -2112,6 +2215,77 @@ func (c *Client) ListContentEmbeddings(ctx context.Context, contentVersionID str
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ListContentAttachments lists the files attached to a content item: those an
+// agent's write_content_attachment step attached, the files sent with an email,
+// the feed files an RSS source keeps, a web page's media and the images inside
+// documents. Each entry says whether the file is indexed and, when indexing
+// failed, why. The response is the {data, pagination} envelope on every API
+// version.
+func (c *Client) ListContentAttachments(ctx context.Context, contentVersionID string, opts ListOptions) (*ContentAttachmentsListResponse, error) {
+	var out ContentAttachmentsListResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments", url.PathEscape(contentVersionID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ContentAttachmentOptions controls the text range [Client.GetContentAttachment]
+// returns. A nil field omits the parameter and the API applies its default.
+type ContentAttachmentOptions struct {
+	// Start is the offset of the first character of text returned (default 0).
+	Start *int
+	// End is the offset after the last character returned (default 5000).
+	// A pointer to 0 returns no text, for a fetch of the metadata alone.
+	End *int
+}
+
+// GetContentAttachment fetches one file attached to a content item: its
+// indexing status and reason, its metadata, and the text it is indexed by.
+// attachmentID is the Id of an entry from [Client.ListContentAttachments].
+// opts.Start and opts.End page through long text. A file that was not indexed
+// has no text.
+//
+// Unlike [Client.GetContentDetail], whose int arguments omit a zero, a pointer
+// to 0 is sent as is. The API answers 402 (an [*APIStatusError]) when the
+// account has no credits left.
+func (c *Client) GetContentAttachment(ctx context.Context, contentVersionID, attachmentID string, opts ContentAttachmentOptions) (*ContentAttachmentDetailResponse, error) {
+	q := map[string]string{}
+	if opts.Start != nil {
+		q["start"] = fmt.Sprintf("%d", *opts.Start)
+	}
+	if opts.End != nil {
+		q["end"] = fmt.Sprintf("%d", *opts.End)
+	}
+	var out ContentAttachmentDetailResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), q, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListContentAttachmentEmbeddings lists the embeddings (chunk vectors) an
+// attached file is indexed by. The list is empty for a file with no completed
+// index. The API answers 402 (an [*APIStatusError]) when the account has no
+// credits left.
+func (c *Client) ListContentAttachmentEmbeddings(ctx context.Context, contentVersionID, attachmentID string, opts ListOptions) (*ContentEmbeddingsListResponse, error) {
+	var out ContentEmbeddingsListResponse
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/embeddings", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DownloadContentAttachment downloads an attached file's bytes. Returns the raw
+// HTTP response so the caller can stream the body; the caller must close it.
+//
+// The API answers 403 (an [*APIStatusError]) when the file is withheld: a
+// governance policy blocked or redacted it, or it arrived from outside and is
+// still being indexed. The attachment's FileWithheld field says which. It
+// answers 402 when the account has no credits left.
+func (c *Client) DownloadContentAttachment(ctx context.Context, contentVersionID, attachmentID string) (*http.Response, error) {
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/file", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), nil)
 }
 
 // ── Solutions ───────────────────────────────────────────────────────────────
@@ -2948,17 +3122,8 @@ func (c *Client) GetCloudDrive(ctx context.Context, connectionID string) (*Cloud
 // UpdateCloudDrive changes a cloud-drive connection's name and/or folder path.
 // A nil field is left unchanged.
 func (c *Client) UpdateCloudDrive(ctx context.Context, connectionID string, body CloudDriveUpdateRequest) (*CloudDriveResponse, error) {
-	// The generated struct has no omitempty, so marshalling it directly would
-	// send an explicit null for each unset field.
-	payload := map[string]any{}
-	if body.Name != nil {
-		payload["name"] = body.Name
-	}
-	if body.FolderPath != nil {
-		payload["folder_path"] = body.FolderPath
-	}
 	var out CloudDriveResponse
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/cloud-drives/%s", url.PathEscape(connectionID)), nil, payload, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/cloud-drives/%s", url.PathEscape(connectionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -149,7 +149,7 @@ baseline applies and responses keep their current shapes. Upgrading this module
 alone never changes the wire contract.
 
 Known versions are package constants (`APIVersion20260701` through
-`APIVersion20261003`, one per version in the table below, plus
+`APIVersion20261021`, one per version in the table below, plus
 `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
 this release was **not** built against makes `NewClient` fail: a newer version
 can reshape responses, and this client would decode them incorrectly rather than
@@ -225,16 +225,22 @@ not know, whether it arrives through `Options.APIVersion` or
   results: an empty or unknown `Seclai-Version` fails with a
   `*ConfigurationError` before it is sent.
 
-**Later versions.** Each is cumulative, and none changes a response shape this
-client decodes:
+**Later versions.** Each is cumulative. Only `2026-10-21` changes a response shape
+this client decodes; its row says how:
 
 | Version | Constant | What it changes |
 | --- | --- | --- |
-| `2026-08-03` | `APIVersion20260803` | `CreateMemoryBank` rejects `max_age_days` with a 400, and an omitted `retention_days` resolves per bank type instead of to 30 |
+| `2026-08-03` | `APIVersion20260803` | `CreateMemoryBank` rejects `max_age_days` with a 400, and an omitted `retention_days` resolves per bank type instead of to 30: 90 days for a conversation bank, indefinite for a general bank. `CreateMemoryBank` leaves a nil `RetentionDays` out, so this default applies; `CreateMemoryBankWithOptions` with `RetainIndefinitely` keeps entries indefinitely on every version |
 | `2026-08-21` | `APIVersion20260821` | `CreateSource` rejects an embedding dimension its embedder does not support with a 400 — `ListEmbeddingModels` reports the supported ones |
 | `2026-09-28` | `APIVersion20260928` | Agent-definition writes use the current file-list grammar: an omitted `attachments` keeps the stored list and `[]` means no files |
 | `2026-09-30` | `APIVersion20260930` | A run's and a step's `Output`, and a step's `Input`, are the text rather than a JSON manifest; files are in `Attachments` on every version |
 | `2026-10-03` | `APIVersion20261003` | A new LLM step written without `attachments` takes its parent's files, and a new retrieval step's matched media are its files |
+| `2026-10-05` | `APIVersion20261005` | A source item an enforcing governance policy holds at import is `completed` with `HeldForReview` set, rather than `failed` with the hold as its error |
+| `2026-10-13` | `APIVersion20261013` | `CreateSource` and `UpdateSource` reject an unknown `media_types` kind, and any kind on a source that is not a website or RSS feed, with a 400 |
+| `2026-10-16` | `APIVersion20261016` | An uploaded agent input file is `ready` at once and its text is not written into `input`; steps receive the file |
+| `2026-10-18` | `APIVersion20261018` | A source that follows no web pages, created on a text-only embedder without `document_images`, gets it turned on |
+| `2026-10-19` | `APIVersion20261019` | `CreateSource` rejects `polling_max_items` on a website, custom index or cloud drive source with a 400 |
+| `2026-10-21` | `APIVersion20261021` | `GetNonManualEvaluationSummary` leaves results whose evaluator returned no verdict out of `Failed`, `PassRate` and `FailureRate` (they are in `Error` on every version); a criteria summary's `AverageScore` averages only passed and failed results; `TestDraftEvaluation` sends a null score and verdict for an `error` result, which decode to 0 and false, rather than 0.5 and false |
 
 ## Typed responses
 
@@ -355,7 +361,7 @@ _ = client.DeleteAgentRun(ctx, "run_id")
 
 The SDK provides two streaming patterns over the SSE `/runs/stream` endpoint.
 
-**Block until done** — returns the final `done` payload or returns an error on timeout:
+**Block until done** — returns the final `done` payload or returns an error on timeout. It reads only that payload, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events:
 
 ```go
 // If ctx has no deadline, the SDK applies a default timeout.
@@ -399,11 +405,48 @@ refs, _ := client.GetAgentAttachmentReferences(ctx, "agent_id")
 // refs.RequiresUploads reports whether the agent accepts files; refs.Agent lists
 // the exact names / indexes / glob patterns a run-time upload batch must satisfy.
 
+// Only a dynamic_input agent takes uploads; any other answers 400.
 upload, _ := client.UploadAgentInput(ctx, "agent_id", seclai.UploadFileRequest{
 	File: data, FileName: "input.pdf",
 })
+// Before API version 2026-10-16, poll until the upload's status is "ready"
+// before running. From 2026-10-16 an upload is ready at once.
 status, _ := client.GetAgentInputUploadStatus(ctx, "agent_id", upload.UploadId)
 ```
+
+### Accepted attachments
+
+Declare the named input attachments a trigger accepts. Each file in a run is
+assigned to one of them before any step runs, and steps read one as
+`{{agent.attachments.<name>}}`. The trigger id is the `TriggerId` that
+`GetAgent` returns.
+
+<!-- sdksync:check -->
+```go
+pdf := []string{"application/pdf"}
+one := 1
+slots := []seclai.AcceptedAttachmentSlot{{Name: "invoice", ContentTypes: &pdf, Min: &one, Max: &one}}
+accepted, err := client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id",
+	seclai.SetAcceptedAttachmentsRequest{AcceptedAttachments: &slots})
+if err != nil {
+	// A 400 means the agent still references an attachment this leaves out.
+	fmt.Println(err)
+	return
+}
+for _, slot := range accepted.AcceptedAttachments {
+	fmt.Println(slot.Name)
+}
+
+// A nil declaration is sent as null: the trigger accepts any files, as one
+// attachment named "files".
+if _, err := client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id", seclai.SetAcceptedAttachmentsRequest{}); err != nil {
+	fmt.Println(err)
+	return
+}
+```
+
+`CreateAgentRequest` and `UpdateAgentDefinitionRequest` take the same
+`AcceptedAttachments` to declare them in the same call.
 
 ### Agent run attachments
 
@@ -442,8 +485,12 @@ detail, _ := client.GetEvaluationCriteria(ctx, "criteria_id")
 _, _ = client.UpdateEvaluationCriteria(ctx, "criteria_id", seclai.UpdateEvaluationCriteriaRequest{})
 _ = client.DeleteEvaluationCriteria(ctx, "criteria_id")
 
-// Test a draft
-_, _ = client.TestDraftEvaluation(ctx, "agent_id", seclai.TestDraftEvaluationRequest{})
+// Test a draft. Status "error" means the evaluator returned no verdict: Score
+// and Passed are then 0 and false from 2026-10-21, and 0.5 and false before it.
+draft, _ := client.TestDraftEvaluation(ctx, "agent_id", seclai.TestDraftEvaluationRequest{})
+if draft != nil && draft.Status != "error" {
+	fmt.Println(draft.Score, draft.Passed)
+}
 
 // Results & summaries
 results, _ := client.ListEvaluationResults(ctx, "criteria_id", seclai.ListOptions{})
@@ -454,6 +501,22 @@ _, _ = client.CreateEvaluationResult(ctx, "criteria_id", seclai.CreateEvaluation
 runResults, _ := client.ListRunEvaluationResults(ctx, "agent_id", "run_id", seclai.ListOptions{})
 nonManual, _ := client.GetNonManualEvaluationSummary(ctx, "agent_id")
 compatible, _ := client.ListCompatibleRuns(ctx, "criteria_id", seclai.ListOptions{})
+```
+
+`UpdateEvaluationCriteria` sends only the fields you set. To clear a
+description, evaluation prompt or expectation config, or to remove a pinned
+tier so the criteria falls back to the agent's default tier, name the fields
+with `ClearEvaluationCriteriaFields`:
+
+<!-- sdksync:check -->
+```go
+if _, err := client.ClearEvaluationCriteriaFields(ctx, "criteria_id",
+	seclai.EvaluationCriteriaEvaluationTier,
+	seclai.EvaluationCriteriaDescription,
+); err != nil {
+	fmt.Println(err)
+	return
+}
 ```
 
 ### Knowledge bases
@@ -496,6 +559,27 @@ _, _ = client.AcceptMemoryBankAiSuggestion(ctx, "conversation_id", seclai.Memory
 _ = client.DeleteMemoryBankSource(ctx, "mb_id")
 ```
 
+A nil `RetentionDays` on `CreateMemoryBank` is left out, so the API's default
+applies. A general bank keeps its entries indefinitely on every version. From
+API version `2026-08-03` a conversation bank keeps them for 90 days; earlier
+versions keep them for 30 days, or for `MaxAgeDays` when that is longer. To
+keep a new bank's entries indefinitely on every version, call
+`CreateMemoryBankWithOptions` with `RetainIndefinitely`; to remove an existing
+bank's window, call `ClearMemoryBankRetention`:
+
+<!-- sdksync:check -->
+```go
+opts := seclai.CreateMemoryBankOptions{RetainIndefinitely: true}
+if _, err := client.CreateMemoryBankWithOptions(ctx, seclai.CreateMemoryBankBody{Name: "support"}, opts); err != nil {
+	fmt.Println(err)
+	return
+}
+if _, err := client.ClearMemoryBankRetention(ctx, "mb_id"); err != nil {
+	fmt.Println(err)
+	return
+}
+```
+
 ### Sources
 
 ```go
@@ -505,6 +589,31 @@ fetched, _ := client.GetSource(ctx, "source_id")
 _, _ = client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{})
 _ = client.DeleteSource(ctx, "source_id")
 ```
+
+`UpdateSource` sends only the fields you set; a nil field is left unchanged.
+To remove the retention window, so content is kept indefinitely, call
+`ClearSourceRetention`:
+
+<!-- sdksync:check -->
+```go
+days := 90
+if _, err := client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{RetentionDays: &days}); err != nil {
+	fmt.Println(err)
+	return
+}
+if _, err := client.ClearSourceRetention(ctx, "source_id"); err != nil {
+	fmt.Println(err)
+	return
+}
+```
+
+Every request body works this way: a nil optional field is left out rather
+than sent as `null`. The exceptions are documented on their methods: a nil
+`AcceptedAttachments` on `SetAcceptedAttachments` and a nil version on
+`UpdateAPIVersion` are sent as `null`. Where the API gives an explicit `null`
+a meaning of its own, a named method or option sends it: `ClearSourceRetention`,
+`ClearEvaluationCriteriaFields`, and `RetainIndefinitely` on
+`CreateMemoryBankWithOptions`.
 
 Indexing status of a source's content, keyed by the `content_version_id` the
 upload methods return:
@@ -526,6 +635,20 @@ fmt.Println(batch.Pagination.Total)
 
 one, _ := client.GetSourceContentStatus(ctx, "source_id", "cv_1")
 fmt.Println(one.ContentStatus)
+```
+
+Mail an email source refused, newest first — who sent it and why, never its
+content. Adding an authenticated sender's address or domain to the source's
+`EmailAllowedSenders` lets its mail in:
+
+<!-- sdksync:check -->
+```go
+rejected, _ := client.ListEmailSourceRejections(ctx, "source_id", seclai.ListOptions{Limit: 50})
+for _, r := range rejected.Data {
+	if r.FromAddress != nil && r.Authenticated {
+		fmt.Println(*r.FromAddress, r.Reason)
+	}
+}
 ```
 
 ### Cloud drives
@@ -618,6 +741,39 @@ _, _ = client.ReplaceContentWithInlineText(ctx, "content_id", seclai.InlineTextR
 })
 ```
 
+Files attached to a content item — an email's attachments, an RSS item's feed
+files, a web page's media, the images inside a document, or files an agent
+attached:
+
+<!-- sdksync:check -->
+```go
+attachments, _ := client.ListContentAttachments(ctx, "content_id", seclai.ListOptions{})
+for _, a := range attachments.Data {
+	fmt.Println(a.Id, a.ContentType, a.Indexed)
+}
+
+// Indexed text, paged with Start and End (nil keeps the API defaults of 0 and
+// 5000; an End of 0 fetches the metadata alone), and embeddings
+end := 2000
+att, err := client.GetContentAttachment(ctx, "content_id", "attachment_id",
+	seclai.ContentAttachmentOptions{End: &end})
+if err != nil {
+	fmt.Println(err) // a 402 means the account has no credits left
+	return
+}
+if att.FileWithheld != nil {
+	fmt.Println("withheld:", *att.FileWithheld) // downloading it answers 403
+}
+attEmbeddings, _ := client.ListContentAttachmentEmbeddings(ctx, "content_id", "attachment_id", seclai.ListOptions{})
+fmt.Println(attEmbeddings.Pagination.Total)
+
+// The file itself; the caller closes the body.
+file, err := client.DownloadContentAttachment(ctx, "content_id", "attachment_id")
+if err == nil {
+	defer file.Body.Close()
+}
+```
+
 ### Solutions
 
 ```go
@@ -698,7 +854,7 @@ cfg, _ := client.SetEmailTriggerConfig(ctx, "agent_id", "trigger_id",
         Alias:             &alias,
         AllowedSenders:    &senders,
         RequireSenderAuth: &requireAuth,
-        // IgnoreAutoGenerated and QueueOnQuota left nil — unchanged.
+        // IgnoreAutoGenerated, QueueOnQuota and RunOnAttachmentMismatch left nil — unchanged.
     })
 fmt.Println(cfg.EmailAddresses)
 
@@ -867,7 +1023,7 @@ if err != nil {
 | --- | --- |
 | `*ConfigurationError` | Missing API key, invalid base URL |
 | `*APIStatusError` | Non-2xx HTTP response |
-| `*APIValidationError` | HTTP 422 (embeds `APIStatusError`) |
+| `*APIValidationError` | HTTP 422 (embeds `APIStatusError`), except from the `Download*` methods, which return `*APIStatusError` for every non-2xx |
 | `*StreamingError` | SSE stream ended unexpectedly |
 | `*UnexpectedResponseError` | A 2xx response that is not the list its method reads |
 
