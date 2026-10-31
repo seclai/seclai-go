@@ -160,8 +160,10 @@ export type AddEmailDomainInput = Pick<AddEmailDomainRequest, "kind" | "value"> 
 
 See `AddEmailDomainInput` and `CreateExperimentInput` in `src/types.ts`.
 
-**Compile the doc examples.** `npm run typecheck` covers `src/` and `tests/`, not
-README or changelog snippets. Paste any example you write into a scratch `.ts`
+**Compile the doc examples.** `npm run typecheck` covers `src/` only — its
+`tsconfig.json` includes `src/**/*.ts`, and vitest strips types without checking
+them, so `tests/` is not type-checked either — let alone README or changelog
+snippets. Paste any example you write into a scratch `.ts`
 that imports from `../src/index` and compile it — that is how the
 `delegated`-is-required bug above was found, after the snippet had already shipped
 in a PR.
