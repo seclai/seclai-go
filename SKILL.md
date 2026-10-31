@@ -74,7 +74,20 @@ and swallowed the helpers below it), and `Search` was reported as never sending 
 required `q` (the extractor read `q["k"] =` but not the map literal that sets it).
 Four of six Go findings were artefacts. Since both were fixed, all four SDKs report
 the *same* three findings — independently-written clients agreeing is the signal
-that the check is reading them correctly.
+that the check is reading them correctly. Twice more since: JavaScript's shorthand
+`query: { download }` was read as sending nothing, and Go's `sortableListQuery`
+was unknown to the extractor, so four endpoints were reported as never sending
+page/limit/sort/order.
+
+How keys are read, so a finding can be checked against it:
+
+- **JavaScript** query literals are read member by member: `a: x`, `"a": x` and
+  the shorthand `a` are keys. A `...spread` or `[computed]` key makes the site
+  UNPARSED, never clean.
+- **Go** package-level functions returning `map[string]string` (`listQuery`,
+  `sortableListQuery`) are query builders. Their keys are read from their own
+  bodies, including builders they call, so `listQuery` is credited with
+  page/limit only. A builder whose body cannot be read makes its callers UNPARSED.
 
 ## `returns` — the axis that catches a changed response
 
@@ -154,9 +167,24 @@ diff called 21 JavaScript changes breaking when none were:
   (`x?: T` -> `x?: T | undefined`; source compatible), a TypeScript parameter
   type wrapped in `Omit<T, "k">` (usually source compatible: an object literal
   that sets an omitted key no longer compiles) or `Partial<T>` (source
-  compatible) — in each case with every other parameter unchanged, or a
-  Python return annotation (not enforced — but confirm the runtime value did not
-  change too).
+  compatible), a TypeScript options parameter retyped to another **named** type
+  whose members, resolved from the declarations under `src/` at the tag and in
+  the working tree (interfaces, `extends`, aliases, `&`, `Omit`, `Pick`,
+  `Partial`), keep every old member with the same optionality and type and add
+  only optional ones — a member whose type names a local type counts as
+  unchanged only if that type's declaration is identical at both revisions, and
+  a type that does not resolve (generic, import, indexed access, union) stays
+  breaking — a required Python or TypeScript parameter made optional in place
+  (`id: str` -> `id: str | None = None`, `id: string` -> `id?: string`; same
+  name and position, positional stays positional, type unchanged or only widened
+  by `None`/`undefined`; not graded this way for C#), or a Python return
+  annotation (not enforced — but confirm the runtime value did not change too).
+  The parameter-level kinds combine: each old parameter must be unchanged or
+  changed in one of these ways, and any added parameter must be optional and at
+  the end.
+
+Only exported Go methods are surface. A lowercase method is unreachable outside
+the package, so a change to one breaks no caller.
 
 An optional parameter inserted *mid-list* is graded breaking, not a warning: in
 C# a positional `M(id, token)` then tries to bind `token` to the new parameter.
