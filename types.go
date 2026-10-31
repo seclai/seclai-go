@@ -91,6 +91,10 @@ type CreateAgentRequest = generated.RoutersApiAgentsCreateAgentRequest
 // UpdateAgentRequest is the request body for updating an agent.
 type UpdateAgentRequest = generated.RoutersApiAgentsUpdateAgentRequest
 
+// AgentExampleListResponse is a page of the agent gallery: example agents to
+// start from. Pass an entry's "key" as AgentTemplate on [CreateAgentRequest].
+type AgentExampleListResponse = generated.AgentExampleListResponse
+
 // ── Agent Definitions ───────────────────────────────────────────────────────
 
 // AgentDefinitionResponse is the agent's step workflow definition.
@@ -528,6 +532,14 @@ type EstimateExportResponse = generated.RoutersApiSourceExportsEstimateExportRes
 // ExportFormat represents supported export formats: "csv", "jsonl", "parquet", "zip".
 type ExportFormat = generated.ExportFormat
 
+// SpendCapAction is what a source does when its spend cap is reached: "stop"
+// or "delete".
+type SpendCapAction = generated.SpendCapAction
+
+// SpendCapDeleteOrder is which entries a "delete" spend cap removes first:
+// "oldest_added", "oldest_published" or "largest_first".
+type SpendCapDeleteOrder = generated.SpendCapDeleteOrder
+
 // ── Source Embedding Migrations ─────────────────────────────────────────────
 
 // SourceEmbeddingMigrationResponse is the status of a source embedding migration.
@@ -702,6 +714,26 @@ type RoutersApiAgentsSetEmailTriggerConfigRequest = generated.RoutersApiAgentsSe
 // EmailTriggerConfigResponse is an EMAIL_RECEIVED trigger's resolved email
 // address(es) and inbound-handling configuration.
 type EmailTriggerConfigResponse = generated.EmailTriggerConfigResponse
+
+// ── Agent Slack Triggers ────────────────────────────────────────────────────
+
+// SetSlackTriggerConfigRequest is the request body for configuring a
+// SLACK_COMMAND trigger. A nil field is left unchanged.
+type SetSlackTriggerConfigRequest = generated.SetSlackTriggerConfigApiRequest
+
+// SlackTriggerConfigResponse is a SLACK_COMMAND trigger's resolved configuration.
+type SlackTriggerConfigResponse = generated.SlackTriggerConfigApiResponse
+
+// SlackTriggerActivation is where a Slack trigger runs: "everywhere" in its
+// scope, or "channel_opt_in".
+type SlackTriggerActivation = generated.SlackTriggerActivation
+
+// SlackTriggerScope is which channels a Slack trigger covers:
+// "selected_channels" or "bot_channels".
+type SlackTriggerScope = generated.SlackTriggerScope
+
+// SlackReplyVisibility is who sees a Slack trigger's reply: "channel" or "private".
+type SlackReplyVisibility = generated.SlackReplyVisibility
 
 // ── Agent Email Governance ──────────────────────────────────────────────────
 

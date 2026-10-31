@@ -66,3 +66,32 @@ func TestClient_ClearSourceRetention(t *testing.T) {
 		t.Fatalf("expected only an explicit null retention_days, got %s", rec.rawBody)
 	}
 }
+
+func TestClient_ClearSourceSpendLimit(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", testSourceJSON)
+
+	if _, err := c.ClearSourceSpendLimit(context.Background(), "s_1"); err != nil {
+		t.Fatalf("ClearSourceSpendLimit: %v", err)
+	}
+	rec.expect(t, http.MethodPut, "/sources/s_1", "")
+	if string(rec.rawBody) != `{"max_credits_per_period":null}` {
+		t.Fatalf("expected only an explicit null max_credits_per_period, got %s", rec.rawBody)
+	}
+}
+
+func TestClient_UpdateSource_SpendCap(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", testSourceJSON)
+
+	limit := float32(500)
+	action, order := SpendCapAction("delete"), SpendCapDeleteOrder("oldest_added")
+	if _, err := c.UpdateSource(context.Background(), "s_1", UpdateSourceBody{
+		MaxCreditsPerPeriod: &limit, SpendCapAction: &action, SpendCapDeleteOrder: &order,
+	}); err != nil {
+		t.Fatalf("UpdateSource: %v", err)
+	}
+	if string(rec.rawBody) != `{"max_credits_per_period":500,"spend_cap_action":"delete","spend_cap_delete_order":"oldest_added"}` {
+		t.Fatalf("unexpected body %s", rec.rawBody)
+	}
+}

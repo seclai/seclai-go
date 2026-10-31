@@ -149,7 +149,7 @@ baseline applies and responses keep their current shapes. Upgrading this module
 alone never changes the wire contract.
 
 Known versions are package constants (`APIVersion20260701` through
-`APIVersion20261021`, one per version in the table below, plus
+`APIVersion20261028`, one per version in the table below, plus
 `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
 this release was **not** built against makes `NewClient` fail: a newer version
 can reshape responses, and this client would decode them incorrectly rather than
@@ -241,6 +241,7 @@ this client decodes; its row says how:
 | `2026-10-18` | `APIVersion20261018` | A source that follows no web pages, created on a text-only embedder without `document_images`, gets it turned on |
 | `2026-10-19` | `APIVersion20261019` | `CreateSource` rejects `polling_max_items` on a website, custom index or cloud drive source with a 400 |
 | `2026-10-21` | `APIVersion20261021` | `GetNonManualEvaluationSummary` leaves results whose evaluator returned no verdict out of `Failed`, `PassRate` and `FailureRate` (they are in `Error` on every version); a criteria summary's `AverageScore` averages only passed and failed results; `TestDraftEvaluation` sends a null score and verdict for an `error` result, which decode to 0 and false, rather than 0.5 and false |
+| `2026-10-28` | `APIVersion20261028` | An `if_else` or `switch` step's `Output` is the result of the arm it took (its input when that arm is empty or it took none), with that arm's files in `Attachments`, rather than a `{"branch": ...}` marker naming the arm. The arm it took is in the step's `Decision` |
 
 ## Typed responses
 
@@ -337,6 +338,50 @@ imported, _ := client.CreateAgent(ctx, seclai.CreateAgentRequest{
 	EntityRemap:     &entityRemap,
 })
 _ = imported.ImportWarnings // items that couldn't be applied, if any
+```
+
+Start an agent from the gallery. `ListAgentExamples` searches the example
+agents; pass an entry's `key` as `AgentTemplate`, with `ResourceBindings` for
+the resources it should use. `CreateMissingResources` creates the resource
+slots you leave unbound and groups them with the agent in a new solution,
+reported in `CreatedResources` and `SolutionId`:
+
+<!-- sdksync:check -->
+```go
+examples, err := client.ListAgentExamples(ctx, seclai.ListAgentExamplesOptions{Query: "support ticket", UseCase: "support"})
+if err != nil || len(examples.Data) == 0 {
+	return
+}
+entry, _ := examples.Data[0].(map[string]any)
+key, _ := entry["key"].(string)
+createMissing := true
+agent, err := client.CreateAgent(ctx, seclai.CreateAgentRequest{
+	Name:                   "Ticket triage",
+	AgentTemplate:          &key,
+	CreateMissingResources: &createMissing,
+})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+if agent.CreatedResources != nil {
+	fmt.Println(*agent.CreatedResources, agent.SolutionId)
+}
+```
+
+Run limits are set on `UpdateAgentRequest` and reported on
+`AgentSummaryResponse`. A nil limit is left unchanged; to remove one, set its
+`SetMax*` flag and leave the limit nil:
+
+<!-- sdksync:check -->
+```go
+perDay, removeTotal := 500, true
+if _, err := client.UpdateAgent(ctx, "agent_id", seclai.UpdateAgentRequest{
+	MaxRunsPerDay:   &perDay,
+	SetMaxRunsTotal: &removeTotal, // removes the total-runs limit
+}); err != nil {
+	fmt.Println(err)
+}
 ```
 
 ### Agent runs
@@ -503,6 +548,31 @@ nonManual, _ := client.GetNonManualEvaluationSummary(ctx, "agent_id")
 compatible, _ := client.ListCompatibleRuns(ctx, "criteria_id", seclai.ListOptions{})
 ```
 
+The `…WithOptions` forms filter results and runs by status, step, flag and time
+range, and set the period of the non-manual summary:
+
+<!-- sdksync:check -->
+```go
+flagged, err := client.ListAgentEvaluationResultsWithOptions(ctx, "agent_id", seclai.ListAgentEvaluationResultsOptions{
+	Status:      "failed",
+	FlaggedOnly: true,
+	TimeFrom:    "2026-10-01T00:00:00Z",
+})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+summary, err := client.GetNonManualEvaluationSummaryWithOptions(ctx, seclai.NonManualEvaluationSummaryOptions{AgentID: "agent_id", Days: 7})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+fmt.Println(len(flagged.Data), summary.Failed)
+```
+
+`ListEvaluationResultsWithOptions`, `ListEvaluationRunsWithOptions` and
+`ListCompatibleRunsWithOptions` take the same kinds of filter.
+
 `UpdateEvaluationCriteria` sends only the fields you set. To clear a
 description, evaluation prompt or expectation config, or to remove a pinned
 tier so the criteria falls back to the agent's default tier, name the fields
@@ -559,6 +629,29 @@ _, _ = client.AcceptMemoryBankAiSuggestion(ctx, "conversation_id", seclai.Memory
 _ = client.DeleteMemoryBankSource(ctx, "mb_id")
 ```
 
+List one type of bank, set the stats period, or page through the AI
+assistant's last conversation:
+
+<!-- sdksync:check -->
+```go
+banks, err := client.ListMemoryBanksWithOptions(ctx, seclai.ListMemoryBanksOptions{Type: "conversation"})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+stats, err := client.GetMemoryBankStatsWithOptions(ctx, "mb_id", seclai.MemoryBankStatsOptions{StartDate: "2026-10-01", EndDate: "2026-10-31"})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+older, err := client.GetMemoryBankAiLastConversationWithOptions(ctx, seclai.LastConversationOptions{Limit: 5, Offset: 5})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+fmt.Println(banks, string(stats), older)
+```
+
 A nil `RetentionDays` on `CreateMemoryBank` is left out, so the API's default
 applies. A general bank keeps its entries indefinitely on every version. From
 API version `2026-08-03` a conversation bank keeps them for 90 days; earlier
@@ -604,6 +697,31 @@ if _, err := client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{Reten
 if _, err := client.ClearSourceRetention(ctx, "source_id"); err != nil {
 	fmt.Println(err)
 	return
+}
+```
+
+A source's spend limit caps the credits it may commit per billing period.
+`SpendCapAction` says what happens when it is reached: `stop` refuses new
+content, and `delete` deletes entries in `SpendCapDeleteOrder` to make room.
+`SourceResponse` reports the limit and `SpendCapReached`. To remove the limit,
+call `ClearSourceSpendLimit`:
+
+<!-- sdksync:check -->
+```go
+limit := float32(1000)
+action, order := seclai.SpendCapAction("delete"), seclai.SpendCapDeleteOrder("oldest_added")
+updated, err := client.UpdateSource(ctx, "source_id", seclai.UpdateSourceBody{
+	MaxCreditsPerPeriod: &limit,
+	SpendCapAction:      &action,
+	SpendCapDeleteOrder: &order,
+})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+fmt.Println(updated.SpendCapReached)
+if _, err := client.ClearSourceSpendLimit(ctx, "source_id"); err != nil {
+	fmt.Println(err)
 }
 ```
 
@@ -806,11 +924,24 @@ _, _ = client.AddSolutionConversationTurn(ctx, "solution_id", seclai.AddConversa
 _ = client.MarkSolutionConversationTurn(ctx, "solution_id", "conversation_id", seclai.MarkConversationTurnRequest{})
 ```
 
+Search solutions by name with `ListSolutionsWithOptions`:
+
+<!-- sdksync:check -->
+```go
+found, err := client.ListSolutionsWithOptions(ctx, seclai.ListSolutionsOptions{Search: "billing"})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+fmt.Println(found)
+```
+
 ### Governance AI
 
 ```go
 plan, _ := client.GenerateGovernanceAiPlan(ctx, seclai.GovernanceAiAssistantRequest{})
 convs, _ := client.ListGovernanceAiConversations(ctx)
+recent, _ := client.ListGovernanceAiConversationsWithOptions(ctx, seclai.ListGovernanceAiConversationsOptions{Limit: 5})
 _, _ = client.AcceptGovernanceAiPlan(ctx, "conversation_id")
 _ = client.DeclineGovernanceAiPlan(ctx, "conversation_id")
 ```
@@ -839,6 +970,33 @@ prefs, _ := client.ListOrganizationAlertPreferences(ctx)
 _, _ = client.UpdateOrganizationAlertPreference(ctx, "org_id", "alert_type", map[string]any{})
 ```
 
+Filter alerts by agent, source connection and time range, alert
+configurations by agent, source connection or scope, and organization
+preferences by organization:
+
+<!-- sdksync:check -->
+```go
+agentAlerts, err := client.Typed().ListAlerts(ctx, seclai.ListAlertsOptions{
+	AgentID:  "agent_id",
+	TimeFrom: "2026-10-01T00:00:00Z",
+})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+sourceConfigs, err := client.Typed().ListAlertConfigsWithOptions(ctx, seclai.ListAlertConfigsOptions{Scope: "source"})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+prefs, err := client.ListOrganizationAlertPreferencesWithOptions(ctx, seclai.ListOrganizationAlertPreferencesOptions{IncludeDefaults: true})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+fmt.Println(agentAlerts, sourceConfigs, prefs)
+```
+
 ### Agent email triggers
 
 Fields are pointers: a nil field is left unchanged, and a pointer to the zero
@@ -862,6 +1020,52 @@ fmt.Println(cfg.EmailAddresses)
 empty := ""
 _, _ = client.SetEmailTriggerConfig(ctx, "agent_id", "trigger_id",
     seclai.RoutersApiAgentsSetEmailTriggerConfigRequest{Alias: &empty})
+```
+
+### Agent Slack triggers
+
+`SetSlackTriggerConfig` configures a SLACK_COMMAND trigger, which people run
+from Slack with `/seclai` or the message shortcut: the Slack connection, the
+form, the channels, who sees the reply and the conversation settings. A nil
+field is left unchanged. Each form value reaches the run as
+`{{metadata.<key>}}`.
+
+<!-- sdksync:check -->
+```go
+scope := seclai.SlackTriggerScope("selected_channels")
+visibility := seclai.SlackReplyVisibility("private")
+channels := []string{"C0123456789"}
+form := []map[string]any{{"key": "topic", "label": "Topic", "type": "short_text", "required": true}}
+turns := true
+cfg, err := client.SetSlackTriggerConfig(ctx, "agent_id", "trigger_id", seclai.SetSlackTriggerConfigRequest{
+	Scope:        &scope,
+	ChannelIds:   &channels,
+	Visibility:   &visibility,
+	Form:         &form,
+	TurnsEnabled: &turns,
+})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+fmt.Println(cfg.Activation, cfg.MissingScopes) // scopes the Slack connection lacks for optional features
+```
+
+To clear the form or the channel list, pass a pointer to an empty slice; the
+API treats an empty list and null the same. A nil `MaxTurns` is never sent, so
+remove the turn limit with `ClearSlackTriggerMaxTurns`:
+
+<!-- sdksync:check -->
+```go
+noForm := []map[string]any{}
+if _, err := client.SetSlackTriggerConfig(ctx, "agent_id", "trigger_id", seclai.SetSlackTriggerConfigRequest{Form: &noForm}); err != nil {
+	fmt.Println(err)
+	return
+}
+if _, err := client.ClearSlackTriggerMaxTurns(ctx, "agent_id", "trigger_id"); err != nil {
+	fmt.Println(err)
+	return
+}
 ```
 
 ### Agent email governance
@@ -930,6 +1134,7 @@ _ = client.MarkModelAlertRead(ctx, "alert_id")
 _ = client.MarkAllModelAlertsRead(ctx)
 unread, _ := client.GetUnreadModelAlertCount(ctx)
 recs, _ := client.GetModelRecommendations(ctx, "model_id")
+unreadForAgent, _ := client.ListModelAlertsWithOptions(ctx, seclai.ListModelAlertsOptions{AgentID: "agent_id", UnreadOnly: true})
 
 // Model playground experiments
 exp, _ := client.CreateExperiment(ctx, seclai.PlaygroundCreateRequest{ /* ... */ })
@@ -937,6 +1142,28 @@ experiments, _ := client.ListExperiments(ctx, seclai.ListExperimentsOptions{})
 detail, _ := client.GetExperiment(ctx, "experiment_id")
 _, _ = client.CancelExperiment(ctx, "experiment_id")
 _ = client.DeleteExperiment(ctx, "experiment_id") // soft-delete, preserves audit history
+```
+
+Filter models by the media they accept or produce, and recommendations by the
+capabilities a replacement must have:
+
+<!-- sdksync:check -->
+```go
+imageModels, err := client.ListModels(ctx, seclai.ListModelsOptions{SupportsOutputMedia: "image"})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+needTools, minContext := true, 200000
+recs, err := client.Typed().GetModelRecommendationsWithOptions(ctx, "model_id", seclai.ModelRecommendationsOptions{
+	RequireToolUse:   &needTools,
+	MinContextTokens: &minContext,
+})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+fmt.Println(len(imageModels), recs)
 ```
 
 Embedding and reranker models, with their pricing:

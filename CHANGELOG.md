@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.9.0] - 2026-10-31
+
+### Changed
+
+- Move `APIVersionLatest` to `2026-10-28`. On it, an `if_else` or `switch` step's `Output` is the result of the arm it took (its input when that arm is empty or it took none), with that arm's files in `Attachments`, rather than a `{"branch": ...}` marker naming the arm; read the arm from the new `Decision` field
+- Sync the bundled OpenAPI spec, adding 2 paths and 8 schemas, and regenerate the `generated` package from it
+
+### Added
+
+- Add `ListAgentExamples` and `ListAgentExamplesOptions` to search the agent gallery by text and use case. `CreateAgentRequest` gains `ResourceBindings` and `CreateMissingResources` to create an agent from a gallery entry's `key` in `AgentTemplate`, and `AgentSummaryResponse` reports the `CreatedResources` and the `SolutionId` grouping them
+- Add `SetSlackTriggerConfig` to configure an agent's SLACK_COMMAND trigger: its Slack connection, form, channels, reply visibility and conversation settings, with `SetSlackTriggerConfigRequest`, `SlackTriggerConfigResponse` and the `SlackTriggerActivation`, `SlackTriggerScope` and `SlackReplyVisibility` types. A nil field is left unchanged; a pointer to an empty slice clears `Form` or `ChannelIds`
+- Add `ClearSlackTriggerMaxTurns` to remove a SLACK_COMMAND trigger's turn limit, which `SetSlackTriggerConfig` cannot send
+- Add run limits to `UpdateAgentRequest`: `MaxCreditsPerRun`, `MaxCreditsPerPeriod`, `MaxRunsPerHour`, `MaxRunsPerDay` and `MaxRunsTotal`, a `SetMax*` flag for each that removes the limit when the limit is nil, and `ApplyImportRunLimits` to take them from an imported `AgentDefinition`. `AgentSummaryResponse` reports them
+- Add a spend limit to sources: `MaxCreditsPerPeriod`, `SpendCapAction` and `SpendCapDeleteOrder` on `UpdateSourceBody` and `SourceResponse`, `SpendCapReached` on `SourceResponse`, and `ClearSourceSpendLimit` to remove the limit, which `UpdateSource` cannot do because it leaves a nil field out
+- Add `Decision` to `AgentRunStepResponse`, the arm an `if_else` or `switch` step took, and `ReleaseWaitingReason` to `SourceContentStatusResponse`, why an item review approved is still waiting to be released
+- Add the `APIVersion20261028` constant
+- Add the filters each endpoint declares but no method sent, as `…WithOptions` methods beside the originals, which are unchanged: `ListEvaluationResultsWithOptions`, `ListAgentEvaluationResultsWithOptions` and `ListEvaluationRunsWithOptions` by status, step, flag and time range; `ListCompatibleRunsWithOptions` by start time; `GetNonManualEvaluationSummaryWithOptions` and `GetMemoryBankStatsWithOptions` by period; `ListMemoryBanksWithOptions` by type; `ListSolutionsWithOptions` by name; `ListAlertConfigsWithOptions` by agent, source connection and scope; `ListModelAlertsWithOptions` by agent and unread state; `GetModelRecommendationsWithOptions` by required capabilities; `ListOrganizationAlertPreferencesWithOptions` by organization and with defaults; `ListGovernanceAiConversationsWithOptions` with a limit; and `GetMemoryBankAiLastConversationWithOptions` and `GetAiAssistantMemoryBankHistoryWithOptions` to page through turns. `Typed()` gains the forms of the three that return `json.RawMessage`
+- Add `AgentID`, `SourceConnectionID`, `TimeFrom` and `TimeTo` to `ListAlertsOptions`, and `SupportsInputMedia` and `SupportsOutputMedia` to `ListModelsOptions`
+
 ## [1.8.0] - 2026-10-21
 
 ### Changed
@@ -220,6 +239,7 @@ _Stable release. No functional changes since 0.0.2._
 
 _Initial release._
 
+[1.9.0]: https://github.com/seclai/seclai-go/releases/tag/v1.9.0
 [1.8.0]: https://github.com/seclai/seclai-go/releases/tag/v1.8.0
 [1.7.1]: https://github.com/seclai/seclai-go/releases/tag/v1.7.1
 [1.7.0]: https://github.com/seclai/seclai-go/releases/tag/v1.7.0

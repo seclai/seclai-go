@@ -48,6 +48,28 @@ var rawAndTypedLists = []rawAndTypedList{
 		},
 	},
 	{
+		name: "ListAlertConfigsWithOptions", specPath: "/alerts/configs",
+		queryKeys: []string{"agent_id", "limit", "page", "scope", "source_connection_id"},
+		raw: func(ctx context.Context, c *Client) (json.RawMessage, error) {
+			return c.ListAlertConfigsWithOptions(ctx, ListAlertConfigsOptions{ListOptions: ListOptions{Page: 3, Limit: 10}, AgentID: "a_1", SourceConnectionID: "sc_1", Scope: "source"})
+		},
+		typed: func(ctx context.Context, c *Client) error {
+			_, err := c.Typed().ListAlertConfigsWithOptions(ctx, ListAlertConfigsOptions{ListOptions: ListOptions{Page: 3, Limit: 10}, AgentID: "a_1", SourceConnectionID: "sc_1", Scope: "source"})
+			return err
+		},
+	},
+	{
+		name: "ListModelAlertsWithOptions", specPath: "/models/alerts",
+		queryKeys: []string{"agent_id", "limit", "offset", "unread_only"},
+		raw: func(ctx context.Context, c *Client) (json.RawMessage, error) {
+			return c.ListModelAlertsWithOptions(ctx, ListModelAlertsOptions{ListOptions: ListOptions{Page: 3, Limit: 10}, AgentID: "a_1", UnreadOnly: true})
+		},
+		typed: func(ctx context.Context, c *Client) error {
+			_, err := c.Typed().ListModelAlertsWithOptions(ctx, ListModelAlertsOptions{ListOptions: ListOptions{Page: 3, Limit: 10}, AgentID: "a_1", UnreadOnly: true})
+			return err
+		},
+	},
+	{
 		name: "GetGenerationTiers", specPath: "/models/generation-tiers", queryKeys: []string{},
 		raw: func(ctx context.Context, c *Client) (json.RawMessage, error) {
 			return c.GetGenerationTiers(ctx)

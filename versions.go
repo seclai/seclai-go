@@ -50,11 +50,14 @@ const (
 	// APIVersion20261021 is the 2026-10-21 API version.
 	APIVersion20261021 = "2026-10-21"
 
+	// APIVersion20261028 is the 2026-10-28 API version.
+	APIVersion20261028 = "2026-10-28"
+
 	// APIVersionDefault is the baseline applied to an unpinned, header-less caller.
 	APIVersionDefault = APIVersion20260701
 
 	// APIVersionLatest is the newest version known to this SDK release. It may lag the server.
-	APIVersionLatest = APIVersion20261021
+	APIVersionLatest = APIVersion20261028
 )
 
 // KnownAPIVersions lists every version this release was built against, oldest first.
@@ -72,6 +75,7 @@ var KnownAPIVersions = []string{
 	APIVersion20261018,
 	APIVersion20261019,
 	APIVersion20261021,
+	APIVersion20261028,
 }
 
 // isKnownAPIVersion reports whether v is one this release understands.

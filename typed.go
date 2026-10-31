@@ -107,6 +107,11 @@ func (t *TypedClient) UnsubscribeFromAlert(ctx context.Context, alertID string) 
 
 // ListAlertConfigs is the typed form of [Client.ListAlertConfigs].
 func (t *TypedClient) ListAlertConfigs(ctx context.Context, opts ListOptions) (*AlertConfigListResponse, error) {
+	return t.ListAlertConfigsWithOptions(ctx, ListAlertConfigsOptions{ListOptions: opts})
+}
+
+// ListAlertConfigsWithOptions is the typed form of [Client.ListAlertConfigsWithOptions].
+func (t *TypedClient) ListAlertConfigsWithOptions(ctx context.Context, opts ListAlertConfigsOptions) (*AlertConfigListResponse, error) {
 	body, reqURL, err := t.c.alertConfigsBody(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -172,6 +177,11 @@ func (t *TypedClient) UpdateOrganizationAlertPreference(ctx context.Context, org
 
 // ListModelAlerts is the typed form of [Client.ListModelAlerts].
 func (t *TypedClient) ListModelAlerts(ctx context.Context, opts ListOptions) (*ModelAlertListResponse, error) {
+	return t.ListModelAlertsWithOptions(ctx, ListModelAlertsOptions{ListOptions: opts})
+}
+
+// ListModelAlertsWithOptions is the typed form of [Client.ListModelAlertsWithOptions].
+func (t *TypedClient) ListModelAlertsWithOptions(ctx context.Context, opts ListModelAlertsOptions) (*ModelAlertListResponse, error) {
 	body, reqURL, err := t.c.modelAlertsBody(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -198,7 +208,12 @@ func (t *TypedClient) GetUnreadModelAlertCount(ctx context.Context) (*UnreadCoun
 
 // GetModelRecommendations is the typed form of [Client.GetModelRecommendations].
 func (t *TypedClient) GetModelRecommendations(ctx context.Context, modelID string) (*ModelRecommendationsResponse, error) {
-	raw, err := t.c.GetModelRecommendations(ctx, modelID)
+	return t.GetModelRecommendationsWithOptions(ctx, modelID, ModelRecommendationsOptions{})
+}
+
+// GetModelRecommendationsWithOptions is the typed form of [Client.GetModelRecommendationsWithOptions].
+func (t *TypedClient) GetModelRecommendationsWithOptions(ctx context.Context, modelID string, opts ModelRecommendationsOptions) (*ModelRecommendationsResponse, error) {
+	raw, err := t.c.GetModelRecommendationsWithOptions(ctx, modelID, opts)
 	if err != nil {
 		return nil, err
 	}
