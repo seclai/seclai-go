@@ -142,8 +142,21 @@ diff called 21 JavaScript changes breaking when none were:
   gone, parameter list changed, or a return type changed in a static language.
 - **WARN** — compatible but worth checking: a *trailing* optional parameter
   (source compatible; flagged as binary breaking for C#), `unknown` narrowed to a
-  concrete type in TypeScript (safe), or a Python return annotation (not enforced
-  — but confirm the runtime value did not change too).
+  concrete type in TypeScript (safe), an optional member added to an inline
+  TypeScript options object such as `opts: { signal?: AbortSignal } = {}` (never
+  to an empty `{}`, which accepts any value the new type may reject; every
+  other member unchanged or only widened to accept `undefined`, the parameter's
+  name and its default unchanged; usually source
+  compatible, but a caller passing a non-literal object that already carries a
+  same-named property of another type — `const o = { signal: "abc" }` — no
+  longer compiles, since excess-property checks only cover literals), an
+  optional options-object member widened to accept `undefined`
+  (`x?: T` -> `x?: T | undefined`; source compatible), a TypeScript parameter
+  type wrapped in `Omit<T, "k">` (usually source compatible: an object literal
+  that sets an omitted key no longer compiles) or `Partial<T>` (source
+  compatible) — in each case with every other parameter unchanged, or a
+  Python return annotation (not enforced — but confirm the runtime value did not
+  change too).
 
 An optional parameter inserted *mid-list* is graded breaking, not a warning: in
 C# a positional `M(id, token)` then tries to bind `token` to the new parameter.
@@ -310,5 +323,6 @@ local conventions (`searchDocs` / `search_docs` / `SearchDocs`).
 ## Release
 
 The version comes from the merge commit message, read by `seclai/github-tag-action`
-with `DEFAULT_BUMP: patch`. A sync that adds endpoints needs `#minor` in the PR
-title, or it ships as a patch and the changelog heading will not match the tag.
+with `DEFAULT_BUMP: patch`. A sync that adds endpoints needs `#minor` in a commit
+message (not the PR title), or it ships as a patch and the changelog heading
+will not match the tag.

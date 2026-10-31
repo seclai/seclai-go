@@ -47,14 +47,29 @@ PATH_LITERAL_RE = r"""(?:"(/[^"\n]*)"|`(/[^`\n]*)`|'(/[^'\n]*)')"""
 #               "this method sends no params" — a silent false pass.
 #   helpers   — positional helper calls that expand to a fixed, ordered key list.
 #               Expansion is arity-aware: only as many keys as arguments supplied.
+# Signatures, used by `surface`:
+#   sig_re      — a public method's head, ending on its opening `(`. The
+#                 parameter list is then sliced by paren matching, never by a
+#                 `[^)]*` class: a callback type or a `(default: 2000)` doc
+#                 comment would end it early, the method would drop out of the
+#                 surface and be reported REMOVED.
+#   sig_tail_re — matched straight after the closing `)` (the return type).
+#   sig_groups  — head groups, then "params", then tail groups.
+#   line_comment — the line-comment marker; `public_surface` strips these, and
+#                 `/* */` too when it is `//`, from the whole file. Default `//`.
 # Endpoint helpers, used by `params` and `returns` (see `request_blocks`):
 #   helper_re   — a NON-public method declaration on the client, name captured.
 #   helper_call — how the client calls one of its own methods; `{name}` is filled
 #                 in. Receiver-qualified so `_client.X(` and `t.c.x(` — a typed
 #                 façade calling in from another class — are not followed.
+_JS_HELPER_RE = (r"^  (?:(?:private|protected) (?:static )?(?:async )?\*?|(?:async )?\*?#)"
+                 r"([a-zA-Z_][a-zA-Z0-9_]*)\s*[(<]")
+
 LANGS = {
     "python": {
-        "sig_re": r"\n    (?:async )?def ([a-z]\w*)\(([^)]*)\)\s*->\s*([^:]+):",
+        "sig_re": r"\n    (?:async )?def ([a-z]\w*)\(",
+        "sig_tail_re": r"\s*->\s*([^:]+):",
+        "line_comment": "#",
         "sig_groups": ("name", "params", "ret"),
         "detect": "seclai/seclai.py",
         "sources": ["seclai/seclai.py"],
@@ -72,7 +87,8 @@ LANGS = {
         "skip": {"request", "request_raw", "stream", "paginate"},
     },
     "javascript": {
-        "sig_re": r"\n  (?:async )?(\w+)\(([^)]*)\)\s*:\s*([^{\n]+?)\s*\{",
+        "sig_re": r"\n  (?:async )?(\w+)\(",
+        "sig_tail_re": r"\s*:\s*([^{\n]+?)\s*\{",
         "sig_groups": ("name", "params", "ret"),
         "detect": "src/client.ts",
         "sources": ["src/client.ts"],
@@ -91,13 +107,16 @@ LANGS = {
         "dict_key_re": r'["\']?([a-zA-Z_][a-zA-Z0-9_]*)["\']?\s*:',
         # `private`/`protected`/`#name` members only. An unmodified `_name(` is
         # matched by method_re and already audited as a block of its own.
-        "helper_re": (r"^  (?:(?:private|protected) (?:static )?(?:async )?\*?|(?:async )?\*?#)"
-                      r"([a-zA-Z_][a-zA-Z0-9_]*)\s*[(<]"),
+        "helper_re": _JS_HELPER_RE,
+        # method_re skips helpers, so without this a method's block runs on into
+        # the helper below it and takes that helper's request as its own.
+        "boundary_re": _JS_HELPER_RE,
         "helper_call": r"\bthis\.#?{name}\s*[(<]",
         "skip": {"request", "requestRaw", "uploadFile", "paginate"},
     },
     "go": {
-        "sig_re": r"func \(c \*Client\) (\w+)\(([^)]*)\) \(([^)]*)\)",
+        "sig_re": r"func \(c \*Client\) (\w+)\(",
+        "sig_tail_re": r" \(([^)]*)\)",
         "sig_groups": ("name", "params", "ret"),
         "detect": "client.go",
         "sources": ["*.go"],
@@ -124,7 +143,7 @@ LANGS = {
         "skip": {"Do", "buildURL"},
     },
     "csharp": {
-        "sig_re": r"public (?:async )?([\w<>,?\[\]. ]+?) ([A-Z]\w*)\(([^)]*)\)",
+        "sig_re": r"public (?:async )?([\w<>,?\[\]. ]+?) ([A-Z]\w*)\(",
         "sig_groups": ("ret", "name", "params"),
         "detect": "src/Seclai/SeclaiClient.cs",
         "sources": ["src/Seclai/*.cs"],
@@ -216,20 +235,50 @@ def load_spec(ref: str | None, path: str, repo: Path) -> dict:
 
 
 # ── params ───────────────────────────────────────────────────────────────────
+def _quoted_end(text: str, i: int) -> int | None:
+    """Index just past the string literal opening at `text[i]`, or None.
+
+    Only a literal that closes on the same line counts. Every scanner below runs
+    over raw source, comments included, so an apostrophe in `// don't` must stay
+    an ordinary character rather than open a string that swallows the rest of
+    the block. A backslash escapes the next character.
+    """
+    q = text[i]
+    j = i + 1
+    while j < len(text):
+        ch = text[j]
+        if ch == "\\":
+            j += 2
+            continue
+        if ch == q:
+            return j + 1
+        if ch == "\n":
+            return None
+        j += 1
+    return None
+
+
 def balanced_slice(text: str, at: int, opener: str = "{", closer: str = "}") -> str | None:
-    """Return the brace-delimited literal starting at or after `at`.
+    """Return the bracket-delimited literal starting at or after `at`.
 
     Regex cannot do this: query literals span lines and nest, and a non-greedy
-    match silently truncates at the first inner `}`.
+    match silently truncates at the first inner `}`. Brackets inside a string
+    literal (`fmt?: "{id}"`, `sep = ")"`) are text, not structure.
     """
     i = text.find(opener, at)
     if i == -1:
         return None
     depth, j = 0, i
     while j < len(text):
-        if text[j] == opener:
+        ch = text[j]
+        if ch in "\"'`":
+            end = _quoted_end(text, j)
+            if end is not None:
+                j = end
+                continue
+        if ch == opener:
             depth += 1
-        elif text[j] == closer:
+        elif ch == closer:
             depth -= 1
             if depth == 0:
                 return text[i + 1: j]
@@ -237,26 +286,70 @@ def balanced_slice(text: str, at: int, opener: str = "{", closer: str = "}") -> 
     return None
 
 
-def split_args(sig: str) -> list[str]:
+def strip_comments(text: str, line: str = "//") -> str:
+    """`text` with `/* ... */` and `line`-to-end-of-line comments replaced by a
+    space. String literals are left intact, so `"https://x"` is not a comment.
+
+    Python passes `line="#"` and has no block comments; `/*` there would be
+    an operator sequence, never a comment, so it is only honoured for `//`.
+    """
+    out, j, n = [], 0, len(text)
+    while j < n:
+        ch = text[j]
+        if ch in "\"'`":
+            end = _quoted_end(text, j)
+            if end is not None:
+                out.append(text[j:end])
+                j = end
+                continue
+        if line == "//" and text.startswith("/*", j):
+            end = text.find("*/", j + 2)
+            j = n if end == -1 else end + 2
+            out.append(" ")
+            continue
+        if text.startswith(line, j):
+            end = text.find("\n", j)
+            j = n if end == -1 else end
+            out.append(" ")
+            continue
+        out.append(ch)
+        j += 1
+    return "".join(out)
+
+
+def split_args(sig: str, seps: str = ",") -> list[str]:
     """Split a comma-separated argument or parameter list at depth 0.
 
     A naive `split(",")` turns `Dictionary<string, string> q` into two entries,
     which over-counts arity for the query helpers and reports a phantom
-    signature change for `surface`.
+    signature change for `surface`. The `>` of a TypeScript arrow `=>` is not a
+    closing bracket: counting it would split `cb: (a: A, b: B) => void` after
+    the arrow. `seps` lets an object-literal type body split on `;` too.
+    Separators and brackets inside string literals are text.
     """
-    out, depth, cur = [], 0, ""
-    for ch in sig:
+    out, depth, cur, prev = [], 0, [], ""
+    j, n = 0, len(sig)
+    while j < n:
+        ch = sig[j]
+        if ch in "\"'`":
+            end = _quoted_end(sig, j)
+            if end is not None:
+                cur.append(sig[j:end])
+                j = end
+                continue
         if ch in "<([{":
             depth += 1
-        elif ch in ">)]}":
+        elif ch in ")]}" or (ch == ">" and prev != "="):
             depth -= 1
-        if ch == "," and depth == 0:
-            out.append(cur.strip())
-            cur = ""
+        prev = ch
+        if ch in seps and depth == 0:
+            out.append("".join(cur).strip())
+            cur = []
         else:
-            cur += ch
-    if cur.strip():
-        out.append(cur.strip())
+            cur.append(ch)
+        j += 1
+    if "".join(cur).strip():
+        out.append("".join(cur).strip())
     return [p for p in out if p and p != "*"]
 
 
@@ -1013,8 +1106,19 @@ def public_surface(text: str, cfg: dict) -> dict[str, set[tuple[str, str]]]:
     def norm(x: str | None) -> str:
         return " ".join((x or "").split())
 
+    tail_re = re.compile(cfg.get("sig_tail_re", ""), re.S)
+    # Comments are not signature, and stripped before slicing so a `)` or an
+    # apostrophe in one cannot end the parameter list early.
+    text = strip_comments(text, cfg.get("line_comment", "//"))
     for m in re.finditer(cfg["sig_re"], text, re.S):
-        parts = dict(zip(order, m.groups()))
+        open_paren = m.end() - 1
+        params = balanced_slice(text, open_paren, "(", ")")
+        if params is None:
+            continue
+        tail = tail_re.match(text, open_paren + len(params) + 2)
+        if tail is None:
+            continue
+        parts = dict(zip(order, m.groups() + (params,) + tail.groups()))
         out.setdefault(norm(parts["name"]), set()).add((norm(parts["ret"]), norm(parts["params"])))
     return out
 
@@ -1022,6 +1126,162 @@ def public_surface(text: str, cfg: dict) -> dict[str, set[tuple[str, str]]]:
 
 # Kept as an alias: the tests and the older call sites name it `_params`.
 _params = split_args
+
+
+def _ts_inline_object(param: str) -> tuple[str, str, str] | None:
+    """(prefix, body, suffix) when a TypeScript parameter's type is an inline
+    object literal: `opts: { a?: string } = {}` -> ("opts:", "a?: string", "= {}").
+
+    The `{` must follow the annotation colon directly, so a default value such as
+    `x = {}` or a generic `Partial<{...}>` never qualifies. None otherwise.
+    """
+    m = re.match(r"\s*[\w$]+\s*\??\s*:\s*\{", param)
+    if not m:
+        return None
+    start = m.end() - 1
+    body = balanced_slice(param, start)
+    if body is None:
+        return None
+    end = start + len(body) + 1
+    return (" ".join(param[:start].split()), body, " ".join(param[end + 1:].split()))
+
+
+def _ts_object_members(body: str) -> dict[str, tuple[bool, str]] | None:
+    """member name -> (optional, normalised text) for an object-literal type body,
+    split on depth-0 `;` or `,`. None when any member cannot be named (index
+    signatures, call signatures, spread-like text) or a name repeats — the caller
+    then refuses to call the change compatible. Comments are dropped first:
+    seclai-javascript documents each member with `/** ... */`, which would
+    otherwise hide the member's name, and a `,` or `;` inside one would split it.
+    """
+    parts = split_args(strip_comments(body), ";,")
+    out: dict[str, tuple[bool, str]] = {}
+    for raw in parts:
+        text = " ".join(raw.split())
+        if not text:
+            continue
+        m = re.match(r"(?:readonly\s+)?([\w$]+|\"[^\"]*\"|'[^']*')\s*(\?)?\s*[:(]", text)
+        if not m or m.group(1) in out:
+            return None
+        out[m.group(1)] = (bool(m.group(2)), text)
+    return out
+
+
+_TS_MEMBER_RE = re.compile(r"(?:readonly\s+)?([\w$]+|\"[^\"]*\"|'[^']*')\s*(\?)?\s*:\s*(.*)$", re.S)
+
+
+def _ts_union(t: str) -> list[str]:
+    """Top-level `|` members of a type, whitespace-normalised and sorted."""
+    return sorted(" ".join(x.split()) for x in split_args(t, "|"))
+
+
+def _ts_widened_to_undefined(old: str, new: str) -> bool:
+    """`x?: T` -> `x?: T | undefined` (or `undefined | T`). Both optional, same
+    name, and the new union is exactly the old one plus `undefined`. Under
+    exactOptionalPropertyTypes that admits an explicit `undefined`; without it
+    the type is unchanged. Either way every old value and old use still fits."""
+    mo, mn = _TS_MEMBER_RE.match(old), _TS_MEMBER_RE.match(new)
+    if not mo or not mn or mo.group(1) != mn.group(1) or not (mo.group(2) and mn.group(2)):
+        return False
+    old_u = _ts_union(mo.group(3))
+    return "undefined" not in old_u and _ts_union(mn.group(3)) == sorted(old_u + ["undefined"])
+
+
+def _ts_options_change(o: str, n: str) -> set[str] | None:
+    """Kinds of compatible change between two inline options-object parameters,
+    or None when the change is not provably compatible. Same name, optionality
+    and default; every old member unchanged, in any order ("same"), or only
+    widened to accept `undefined`; every added member optional, and none added to an empty `{}`."""
+    po, pn = _ts_inline_object(o), _ts_inline_object(n)
+    if po is None or pn is None or po[0] != pn[0] or po[2] != pn[2]:
+        return None
+    mo, mn = _ts_object_members(po[1]), _ts_object_members(pn[1])
+    if mo is None or mn is None:
+        return None
+    # `{}` accepts any non-null value; a weak type such as `{ a?: T }` does not (TS2559).
+    if not mo and mn:
+        return None
+    kinds: set[str] = set()
+    for k, (opt, text) in mo.items():
+        if k not in mn:
+            return None
+        if mn[k] == (opt, text):
+            continue
+        if not _ts_widened_to_undefined(text, mn[k][1]):
+            return None
+        kinds.add("undefined")
+    added = [v for k, v in mn.items() if k not in mo]
+    if not all(opt for opt, _ in added):
+        return None
+    if added:
+        kinds.add("props")
+    return kinds or {"same"}
+
+
+def _ts_wrapped_type(o: str, n: str) -> str | None:
+    """"omit" or "partial" when the parameter's type `T` became `Omit<T, "k">`
+    (keys a union of string literals) or `Partial<T>`, with `T`, the name, the
+    optionality and the default textually unchanged. Every old argument still
+    fits both. None otherwise — including `Pick<>` and an `Omit<>` of another
+    type."""
+    ho = re.match(r"\s*([\w$]+\s*\??\s*:\s*)", o)
+    hn = re.match(r"\s*([\w$]+\s*\??\s*:\s*)", n)
+    if not ho or not hn or " ".join(ho.group(1).split()) != " ".join(hn.group(1).split()):
+        return None
+    rest_o, rest_n = o[ho.end():], n[hn.end():]
+    w = re.match(r"(Omit|Partial)\s*<", rest_n)
+    if not w:
+        return None
+    inner = balanced_slice(rest_n, w.end() - 1, "<", ">")
+    if inner is None:
+        return None
+    after = rest_n[w.end() + len(inner) + 1:]
+    args = split_args(inner)
+    kind = w.group(1).lower()
+    if kind == "omit":
+        if len(args) != 2:
+            return None
+        keys = split_args(args[1], "|")
+        if not keys or not all(re.fullmatch(r"\"[^\"]*\"|'[^']*'", k) for k in keys):
+            return None
+    elif len(args) != 1:
+        return None
+    norm = lambda x: " ".join(x.split())  # noqa: E731
+    return kind if norm(rest_o) == norm(args[0] + after) else None
+
+
+_TS_COMPATIBLE_LABELS = {
+    "props": ("optional property added to an options object — usually source compatible, "
+              "but breaks a caller passing a non-literal object whose same-named property "
+              "has another type"),
+    "undefined": "optional property widened to accept undefined — source compatible",
+    "omit": ("parameter type wrapped in Omit<…> — usually source compatible: every old value "
+             "still fits, but an object literal that sets an omitted key no longer compiles"),
+    "partial": "parameter type wrapped in Partial<…> — source compatible: every old value still fits",
+    "same": "options object unchanged apart from member order or separators",
+}
+
+
+def _ts_compatible_change(old: list[str], new: list[str]) -> str | None:
+    """Label when every changed TypeScript parameter changed in one of the
+    provably compatible ways above, with the same count, order and every other
+    parameter textually unchanged. None — graded breaking — otherwise."""
+    if len(old) != len(new) or old == new:
+        return None
+    kinds: set[str] = set()
+    for o, n in zip(old, new):
+        if o == n:
+            continue
+        k = _ts_options_change(o, n)
+        if k is None:
+            w = _ts_wrapped_type(o, n)
+            if w is None:
+                return None
+            k = {w}
+        kinds |= k
+    if len(kinds) > 1:
+        kinds.discard("same")
+    return "; ".join(_TS_COMPATIBLE_LABELS[k] for k in _TS_COMPATIBLE_LABELS if k in kinds)
 
 
 def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str]) -> tuple[str, str]:
@@ -1038,6 +1298,10 @@ def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str]) -> tu
     new_ret, new_par = new
     if old_par != new_par:
         op, np_ = split_args(old_par), split_args(new_par)
+        if lang == "javascript" and old_ret == new_ret:
+            label = _ts_compatible_change(op, np_)
+            if label:
+                return "warn", label
         # `len(np_) > len(op)` matters: `split_args` drops Python's bare `*`, so
         # `f(self, a, b)` -> `f(self, a, *, b)` yields two IDENTICAL lists, the
         # empty tail passes `all()` vacuously, and making a parameter
