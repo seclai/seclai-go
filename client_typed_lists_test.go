@@ -295,35 +295,15 @@ func TestTypedLists_RawAndTypedSendTheIdenticalRequest(t *testing.T) {
 }
 
 // The spec is the oracle for query keys: sdksync's params audit reads requests
-// from exported Client methods only, and these six now build theirs in an
-// unexported function it does not follow.
+// from exported Client methods only, and every entry in rawAndTypedLists builds
+// its request in an unexported function that audit does not follow.
 func TestTypedLists_QueryKeysAreDeclaredByTheSpec(t *testing.T) {
-	specBytes, err := os.ReadFile("openapi/seclai.openapi.json")
-	if err != nil {
-		t.Fatalf("read spec: %v", err)
-	}
-	var spec struct {
-		Paths map[string]map[string]struct {
-			Parameters []struct {
-				Name string `json:"name"`
-				In   string `json:"in"`
-			} `json:"parameters"`
-		} `json:"paths"`
-	}
-	if err := json.Unmarshal(specBytes, &spec); err != nil {
-		t.Fatalf("parse spec: %v", err)
-	}
+	spec := specQueryParams(t)
 	for _, list := range rawAndTypedLists {
 		t.Run(list.name, func(t *testing.T) {
-			operation, ok := spec.Paths[list.specPath]["get"]
+			declared, ok := spec[list.specPath]
 			if !ok {
 				t.Fatalf("the spec declares no GET %s", list.specPath)
-			}
-			declared := map[string]bool{}
-			for _, p := range operation.Parameters {
-				if p.In == "query" {
-					declared[p.Name] = true
-				}
 			}
 
 			c, seen := stubClient(t, "", `[]`)

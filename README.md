@@ -365,7 +365,10 @@ if err != nil {
 	return
 }
 if agent.CreatedResources != nil {
-	fmt.Println(*agent.CreatedResources, agent.SolutionId)
+	fmt.Println(*agent.CreatedResources)
+}
+if agent.SolutionId != nil {
+	fmt.Println(*agent.SolutionId)
 }
 ```
 
@@ -704,7 +707,7 @@ A source's spend limit caps the credits it may commit per billing period.
 `SpendCapAction` says what happens when it is reached: `stop` refuses new
 content, and `delete` deletes entries in `SpendCapDeleteOrder` to make room.
 `SourceResponse` reports the limit and `SpendCapReached`. To remove the limit,
-call `ClearSourceSpendLimit`:
+call `ClearSourceFields` with `SourceFieldMaxCreditsPerPeriod`:
 
 <!-- sdksync:check -->
 ```go
@@ -719,8 +722,8 @@ if err != nil {
 	fmt.Println(err)
 	return
 }
-fmt.Println(updated.SpendCapReached)
-if _, err := client.ClearSourceSpendLimit(ctx, "source_id"); err != nil {
+fmt.Println(updated.SpendCapReached != nil && *updated.SpendCapReached)
+if _, err := client.ClearSourceFields(ctx, "source_id", seclai.SourceFieldMaxCreditsPerPeriod); err != nil {
 	fmt.Println(err)
 }
 ```
@@ -729,8 +732,9 @@ Every request body works this way: a nil optional field is left out rather
 than sent as `null`. The exceptions are documented on their methods: a nil
 `AcceptedAttachments` on `SetAcceptedAttachments` and a nil version on
 `UpdateAPIVersion` are sent as `null`. Where the API gives an explicit `null`
-a meaning of its own, a named method or option sends it: `ClearSourceRetention`,
-`ClearEvaluationCriteriaFields`, and `RetainIndefinitely` on
+a meaning of its own, a named method or option sends it: `ClearSourceFields`
+(and `ClearSourceRetention`), `ClearEvaluationCriteriaFields`,
+`ClearSlackTriggerMaxTurns`, and `RetainIndefinitely` on
 `CreateMemoryBankWithOptions`.
 
 Indexing status of a source's content, keyed by the `content_version_id` the

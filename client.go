@@ -463,6 +463,34 @@ func sortableListQuery(opts SortableListOptions) map[string]string {
 	return q
 }
 
+// setQueryValues copies the non-empty values into q. Callers pass the keys as a
+// map literal, so every query key an endpoint sends stays written out in its
+// method, where sdksync's params audit reads it. A helper that took the values
+// positionally would hide the keys from that audit.
+func setQueryValues(q, values map[string]string) {
+	for k, v := range values {
+		if v != "" {
+			q[k] = v
+		}
+	}
+}
+
+// queryBool renders a flag that is sent only when set.
+func queryBool(b bool) string {
+	if b {
+		return "true"
+	}
+	return ""
+}
+
+// queryPositiveInt renders a count that is sent only when positive.
+func queryPositiveInt(n int) string {
+	if n > 0 {
+		return fmt.Sprintf("%d", n)
+	}
+	return ""
+}
+
 // ListAgents lists agents.
 func (c *Client) ListAgents(ctx context.Context, opts ListOptions) (*AgentListResponse, error) {
 	var out AgentListResponse
@@ -1035,18 +1063,12 @@ type ListEvaluationResultsOptions struct {
 // filtered by status, flag and time range.
 func (c *Client) ListEvaluationResultsWithOptions(ctx context.Context, criteriaID string, opts ListEvaluationResultsOptions) (*EvaluationResultListResponse, error) {
 	q := listQuery(opts.Page, opts.Limit)
-	if opts.Status != "" {
-		q["status"] = opts.Status
-	}
-	if opts.FlaggedOnly {
-		q["flagged_only"] = "true"
-	}
-	if opts.TimeFrom != "" {
-		q["time_from"] = opts.TimeFrom
-	}
-	if opts.TimeTo != "" {
-		q["time_to"] = opts.TimeTo
-	}
+	setQueryValues(q, map[string]string{
+		"status":       opts.Status,
+		"flagged_only": queryBool(opts.FlaggedOnly),
+		"time_from":    opts.TimeFrom,
+		"time_to":      opts.TimeTo,
+	})
 	var out EvaluationResultListResponse
 	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/results", url.PathEscape(criteriaID)), q, nil, "data", &out); err != nil {
 		return nil, err
@@ -1128,21 +1150,13 @@ type ListAgentEvaluationResultsOptions struct {
 // filtered by status, step, flag and time range.
 func (c *Client) ListAgentEvaluationResultsWithOptions(ctx context.Context, agentID string, opts ListAgentEvaluationResultsOptions) (*EvaluationResultWithCriteriaListResponse, error) {
 	q := listQuery(opts.Page, opts.Limit)
-	if opts.Status != "" {
-		q["status"] = opts.Status
-	}
-	if opts.Step != "" {
-		q["step"] = opts.Step
-	}
-	if opts.FlaggedOnly {
-		q["flagged_only"] = "true"
-	}
-	if opts.TimeFrom != "" {
-		q["time_from"] = opts.TimeFrom
-	}
-	if opts.TimeTo != "" {
-		q["time_to"] = opts.TimeTo
-	}
+	setQueryValues(q, map[string]string{
+		"status":       opts.Status,
+		"step":         opts.Step,
+		"flagged_only": queryBool(opts.FlaggedOnly),
+		"time_from":    opts.TimeFrom,
+		"time_to":      opts.TimeTo,
+	})
 	var out EvaluationResultWithCriteriaListResponse
 	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-results", url.PathEscape(agentID)), q, nil, "data", &out); err != nil {
 		return nil, err
@@ -1188,18 +1202,12 @@ type ListEvaluationRunsOptions struct {
 // filtered by status, step and time range.
 func (c *Client) ListEvaluationRunsWithOptions(ctx context.Context, agentID string, opts ListEvaluationRunsOptions) (*EvaluationRunSummaryListResponse, error) {
 	q := listQuery(opts.Page, opts.Limit)
-	if opts.Status != "" {
-		q["status"] = opts.Status
-	}
-	if opts.Step != "" {
-		q["step"] = opts.Step
-	}
-	if opts.TimeFrom != "" {
-		q["time_from"] = opts.TimeFrom
-	}
-	if opts.TimeTo != "" {
-		q["time_to"] = opts.TimeTo
-	}
+	setQueryValues(q, map[string]string{
+		"status":    opts.Status,
+		"step":      opts.Step,
+		"time_from": opts.TimeFrom,
+		"time_to":   opts.TimeTo,
+	})
 	var out EvaluationRunSummaryListResponse
 	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-runs", url.PathEscape(agentID)), q, nil, "data", &out); err != nil {
 		return nil, err
@@ -1217,14 +1225,19 @@ func (c *Client) GetNonManualEvaluationSummary(ctx context.Context, agentID stri
 
 // NonManualEvaluationSummaryOptions controls query parameters for
 // [Client.GetNonManualEvaluationSummaryWithOptions].
+//
+// The period is StartDate through EndDate, or StartDate through today when
+// EndDate is empty; Days applies only when StartDate is empty. An EndDate
+// without a StartDate is ignored.
 type NonManualEvaluationSummaryOptions struct {
 	// AgentID scopes the summary to one agent. Empty is account-wide.
 	AgentID string
-	// Days is the look-back period in days (server default 30). Zero omits it.
+	// Days is the look-back period in days, ending today (server default 30).
+	// Zero omits it. Ignored when StartDate is set.
 	Days int
-	// StartDate starts the period (ISO 8601).
+	// StartDate starts the period (YYYY-MM-DD). Overrides Days.
 	StartDate string
-	// EndDate ends the period (ISO 8601).
+	// EndDate ends the period (YYYY-MM-DD). Used only with StartDate.
 	EndDate string
 }
 
@@ -1232,18 +1245,12 @@ type NonManualEvaluationSummaryOptions struct {
 // evaluation results over a chosen period.
 func (c *Client) GetNonManualEvaluationSummaryWithOptions(ctx context.Context, opts NonManualEvaluationSummaryOptions) (*NonManualEvaluationSummaryResponse, error) {
 	q := map[string]string{}
-	if opts.AgentID != "" {
-		q["agent_id"] = opts.AgentID
-	}
-	if opts.Days > 0 {
-		q["days"] = fmt.Sprintf("%d", opts.Days)
-	}
-	if opts.StartDate != "" {
-		q["start_date"] = opts.StartDate
-	}
-	if opts.EndDate != "" {
-		q["end_date"] = opts.EndDate
-	}
+	setQueryValues(q, map[string]string{
+		"agent_id":   opts.AgentID,
+		"days":       queryPositiveInt(opts.Days),
+		"start_date": opts.StartDate,
+		"end_date":   opts.EndDate,
+	})
 	var out NonManualEvaluationSummaryResponse
 	if err := c.Do(ctx, http.MethodGet, "/agents/evaluation-results/non-manual-summary", q, nil, nil, &out); err != nil {
 		return nil, err
@@ -2093,12 +2100,16 @@ func (c *Client) GetMemoryBankStats(ctx context.Context, memoryBankID string) (j
 
 // MemoryBankStatsOptions controls query parameters for
 // [Client.GetMemoryBankStatsWithOptions].
+//
+// StartDate and EndDate override Days only when both are set; either one alone
+// is ignored and Days applies.
 type MemoryBankStatsOptions struct {
-	// Days is the look-back period in days (server default 30). Zero omits it.
+	// Days is the look-back period in days, ending today (server default 30,
+	// 1-730). Zero omits it.
 	Days int
-	// StartDate starts the period (YYYY-MM-DD).
+	// StartDate starts the period (YYYY-MM-DD). Used only with EndDate.
 	StartDate string
-	// EndDate ends the period (YYYY-MM-DD).
+	// EndDate ends the period (YYYY-MM-DD). Used only with StartDate.
 	EndDate string
 }
 
@@ -2106,15 +2117,11 @@ type MemoryBankStatsOptions struct {
 // chosen period.
 func (c *Client) GetMemoryBankStatsWithOptions(ctx context.Context, memoryBankID string, opts MemoryBankStatsOptions) (json.RawMessage, error) {
 	q := map[string]string{}
-	if opts.Days > 0 {
-		q["days"] = fmt.Sprintf("%d", opts.Days)
-	}
-	if opts.StartDate != "" {
-		q["start_date"] = opts.StartDate
-	}
-	if opts.EndDate != "" {
-		q["end_date"] = opts.EndDate
-	}
+	setQueryValues(q, map[string]string{
+		"days":       queryPositiveInt(opts.Days),
+		"start_date": opts.StartDate,
+		"end_date":   opts.EndDate,
+	})
 	var out json.RawMessage
 	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/stats", url.PathEscape(memoryBankID)), q, nil, nil, &out); err != nil {
 		return nil, err
@@ -2192,12 +2199,10 @@ type LastConversationOptions struct {
 // last memory bank AI assistant conversation.
 func (c *Client) GetMemoryBankAiLastConversationWithOptions(ctx context.Context, opts LastConversationOptions) (*MemoryBankLastConversationResponse, error) {
 	q := map[string]string{}
-	if opts.Limit > 0 {
-		q["limit"] = fmt.Sprintf("%d", opts.Limit)
-	}
-	if opts.Offset > 0 {
-		q["offset"] = fmt.Sprintf("%d", opts.Offset)
-	}
+	setQueryValues(q, map[string]string{
+		"limit":  queryPositiveInt(opts.Limit),
+		"offset": queryPositiveInt(opts.Offset),
+	})
 	var out MemoryBankLastConversationResponse
 	if err := c.Do(ctx, http.MethodGet, "/memory_banks/ai-assistant/last-conversation", q, nil, nil, &out); err != nil {
 		return nil, err
@@ -2255,8 +2260,8 @@ func (c *Client) GetSource(ctx context.Context, sourceID string) (*SourceRespons
 }
 
 // UpdateSource updates a source. Only the fields set on body are sent; a nil
-// field leaves that setting unchanged. To clear the retention window, use
-// ClearSourceRetention.
+// field leaves that setting unchanged. To clear the retention window or the
+// spend limit, use [Client.ClearSourceFields].
 func (c *Client) UpdateSource(ctx context.Context, sourceID string, body UpdateSourceBody) (*SourceResponse, error) {
 	var out SourceResponse
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, body, nil, &out); err != nil {
@@ -2265,29 +2270,54 @@ func (c *Client) UpdateSource(ctx context.Context, sourceID string, body UpdateS
 	return &out, nil
 }
 
-// ClearSourceRetention removes a source's retention window, so its content is
-// kept indefinitely. It sends an explicit null retention_days and leaves every
-// other setting unchanged.
-func (c *Client) ClearSourceRetention(ctx context.Context, sourceID string) (*SourceResponse, error) {
+// SourceField names a setting of a source that [Client.ClearSourceFields] can
+// clear.
+type SourceField string
+
+const (
+	// SourceFieldRetentionDays removes the retention window, so the source's
+	// content is kept indefinitely.
+	SourceFieldRetentionDays SourceField = "retention_days"
+	// SourceFieldMaxCreditsPerPeriod removes the spend limit, so the source may
+	// commit any number of credits per billing period.
+	SourceFieldMaxCreditsPerPeriod SourceField = "max_credits_per_period"
+)
+
+// ClearSourceFields clears the named settings of a source and leaves every
+// other setting unchanged. It sends the fields as explicit nulls, which
+// [Client.UpdateSource] cannot, since it leaves a nil field out of the body:
+//
+//   - [SourceFieldRetentionDays] removes the retention window, so content is
+//     kept indefinitely.
+//   - [SourceFieldMaxCreditsPerPeriod] removes the spend limit. Set a limit
+//     with UpdateSource's MaxCreditsPerPeriod.
+//
+// It returns a [*ConfigurationError], without sending a request, when no
+// field is given or a field is not one of these constants.
+func (c *Client) ClearSourceFields(ctx context.Context, sourceID string, fields ...SourceField) (*SourceResponse, error) {
+	if len(fields) == 0 {
+		return nil, &ConfigurationError{Message: "ClearSourceFields needs at least one field to clear"}
+	}
+	payload := make(map[string]any, len(fields))
+	for _, f := range fields {
+		switch f {
+		case SourceFieldRetentionDays, SourceFieldMaxCreditsPerPeriod:
+			payload[string(f)] = nil
+		default:
+			return nil, &ConfigurationError{Message: fmt.Sprintf("ClearSourceFields cannot clear %q; use one of the SourceField constants", string(f))}
+		}
+	}
 	var out SourceResponse
-	payload := map[string]any{"retention_days": nil}
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// ClearSourceSpendLimit removes a source's spend limit, so it may commit any
-// number of credits per billing period. It sends an explicit null
-// max_credits_per_period and leaves every other setting unchanged; set a limit
-// with UpdateSource's MaxCreditsPerPeriod.
-func (c *Client) ClearSourceSpendLimit(ctx context.Context, sourceID string) (*SourceResponse, error) {
-	var out SourceResponse
-	payload := map[string]any{"max_credits_per_period": nil}
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, payload, nil, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
+// ClearSourceRetention removes a source's retention window, so its content is
+// kept indefinitely. It is ClearSourceFields with [SourceFieldRetentionDays].
+func (c *Client) ClearSourceRetention(ctx context.Context, sourceID string) (*SourceResponse, error) {
+	return c.ClearSourceFields(ctx, sourceID, SourceFieldRetentionDays)
 }
 
 // DeleteSource deletes a source.
@@ -3559,12 +3589,10 @@ func (c *Client) GetAiAssistantMemoryBankHistory(ctx context.Context) (*MemoryBa
 // last AI assistant memory bank conversation.
 func (c *Client) GetAiAssistantMemoryBankHistoryWithOptions(ctx context.Context, opts LastConversationOptions) (*MemoryBankLastConversationResponse, error) {
 	q := map[string]string{}
-	if opts.Limit > 0 {
-		q["limit"] = fmt.Sprintf("%d", opts.Limit)
-	}
-	if opts.Offset > 0 {
-		q["offset"] = fmt.Sprintf("%d", opts.Offset)
-	}
+	setQueryValues(q, map[string]string{
+		"limit":  queryPositiveInt(opts.Limit),
+		"offset": queryPositiveInt(opts.Offset),
+	})
 	var out MemoryBankLastConversationResponse
 	if err := c.Do(ctx, http.MethodGet, "/ai-assistant/memory-bank/last-conversation", q, nil, nil, &out); err != nil {
 		return nil, err

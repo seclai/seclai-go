@@ -2,6 +2,7 @@ package seclai
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 )
@@ -67,16 +68,45 @@ func TestClient_ClearSourceRetention(t *testing.T) {
 	}
 }
 
-func TestClient_ClearSourceSpendLimit(t *testing.T) {
+func TestClient_ClearSourceFields(t *testing.T) {
 	var rec requestRecorder
 	c := newRecordingServer(t, &rec, 200, "application/json", testSourceJSON)
 
-	if _, err := c.ClearSourceSpendLimit(context.Background(), "s_1"); err != nil {
-		t.Fatalf("ClearSourceSpendLimit: %v", err)
+	if _, err := c.ClearSourceFields(context.Background(), "s_1", SourceFieldMaxCreditsPerPeriod); err != nil {
+		t.Fatalf("ClearSourceFields: %v", err)
 	}
 	rec.expect(t, http.MethodPut, "/sources/s_1", "")
 	if string(rec.rawBody) != `{"max_credits_per_period":null}` {
 		t.Fatalf("expected only an explicit null max_credits_per_period, got %s", rec.rawBody)
+	}
+
+	rec = requestRecorder{}
+	if _, err := c.ClearSourceFields(context.Background(), "s_1", SourceFieldRetentionDays, SourceFieldMaxCreditsPerPeriod); err != nil {
+		t.Fatalf("ClearSourceFields: %v", err)
+	}
+	if string(rec.rawBody) != `{"max_credits_per_period":null,"retention_days":null}` {
+		t.Fatalf("expected both fields as explicit nulls, got %s", rec.rawBody)
+	}
+}
+
+func TestClient_ClearSourceFields_RejectsBadInputWithoutARequest(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", testSourceJSON)
+
+	for name, fields := range map[string][]SourceField{
+		"no fields":     nil,
+		"unknown field": {SourceField("name")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := c.ClearSourceFields(context.Background(), "s_1", fields...)
+			var cfgErr *ConfigurationError
+			if !errors.As(err, &cfgErr) {
+				t.Fatalf("expected a *ConfigurationError, got %v", err)
+			}
+		})
+	}
+	if rec.method != "" {
+		t.Fatalf("expected no request, got %s %s", rec.method, rec.path)
 	}
 }
 

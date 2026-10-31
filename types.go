@@ -722,6 +722,12 @@ type EmailTriggerConfigResponse = generated.EmailTriggerConfigResponse
 type SetSlackTriggerConfigRequest = generated.SetSlackTriggerConfigApiRequest
 
 // SlackTriggerConfigResponse is a SLACK_COMMAND trigger's resolved configuration.
+//
+// Its Activation, Scope and Visibility are plain strings, not the
+// [SlackTriggerActivation], [SlackTriggerScope] and [SlackReplyVisibility]
+// types the request uses, because the spec declares them inline on the
+// response. Convert to compare or reuse one, e.g.
+// SlackTriggerActivation(cfg.Activation).
 type SlackTriggerConfigResponse = generated.SlackTriggerConfigApiResponse
 
 // SlackTriggerActivation is where a Slack trigger runs: "everywhere" in its
