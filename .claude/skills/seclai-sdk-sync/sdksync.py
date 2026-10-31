@@ -105,6 +105,12 @@ LANGS = {
         "return_re": r"\s*:\s*([^{\n]+?)\s*\{",
         "dict_at": [r"query:\s*"],
         "dict_key_re": r'["\']?([a-zA-Z_][a-zA-Z0-9_]*)["\']?\s*:',
+        # Read a query literal member by member rather than with dict_key_re:
+        # `{ download }` and `{ offset, limit: opts.limit }` send keys the regex
+        # cannot see (both were reported UNEXPOSED), and a `...spread` or
+        # `[computed]` member sends keys nobody can read here — UNPARSED, never
+        # clean. See `object_literal_keys`.
+        "dict_members": True,
         # `private`/`protected`/`#name` members only. An unmodified `_name(` is
         # matched by method_re and already audited as a block of its own.
         "helper_re": _JS_HELPER_RE,
@@ -115,7 +121,10 @@ LANGS = {
         "skip": {"request", "requestRaw", "uploadFile", "paginate"},
     },
     "go": {
-        "sig_re": r"func \(c \*Client\) (\w+)\(",
+        # Exported only: a lowercase method is unreachable outside the package,
+        # so a change to one breaks no caller. `alertConfigsBody` and
+        # `modelAlertsBody` were graded BREAKING for that reason alone.
+        "sig_re": r"func \(c \*Client\) ([A-Z]\w*)\(",
         "sig_tail_re": r" \(([^)]*)\)",
         "sig_groups": ("name", "params", "ret"),
         "detect": "client.go",
@@ -135,7 +144,12 @@ LANGS = {
         # false positive twin of the bug this check exists to find.
         "dict_at": [r"map\[string\]string"],
         "dict_key_re": r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:',
-        "helpers": {"listQuery(": ["page", "limit"]},
+        # Package-level functions that build and return a query map, such as
+        # `listQuery(page, limit)` and `sortableListQuery(opts)`. Their keys are
+        # read from their own bodies (see `query_builders`) rather than listed
+        # here: a hard-coded list missed `sortableListQuery`, so every method
+        # using it was reported as never sending page/limit/sort/order.
+        "builder_re": r"^func ([a-z][A-Za-z0-9]*)\([^)]*\)\s*map\[string\]string\s*\{",
         "helper_re": r"^func \(c \*Client\) ([a-z][A-Za-z0-9]*)\(",
         "helper_call": r"(?<![\w.])c\.{name}\(",
         # The receiver type scopes a Go method, not the file it sits in.
@@ -317,7 +331,7 @@ def strip_comments(text: str, line: str = "//") -> str:
     return "".join(out)
 
 
-def split_args(sig: str, seps: str = ",") -> list[str]:
+def split_args(sig: str, seps: str = ",", keep_star: bool = False) -> list[str]:
     """Split a comma-separated argument or parameter list at depth 0.
 
     A naive `split(",")` turns `Dictionary<string, string> q` into two entries,
@@ -350,7 +364,7 @@ def split_args(sig: str, seps: str = ",") -> list[str]:
         j += 1
     if "".join(cur).strip():
         out.append("".join(cur).strip())
-    return [p for p in out if p and p != "*"]
+    return [p for p in out if p and (keep_star or p != "*")]
 
 
 def spec_query_index(spec: dict) -> dict[tuple[str, str], tuple[str, set[str], set[str]]]:
@@ -499,11 +513,81 @@ def via_helper_line(n: int) -> str:
             f" holding the request (one hop)")
 
 
-def block_query_keys(body: str, cfg: dict) -> tuple[set[str], bool]:
-    """(keys, parsed_ok). parsed_ok is False when a construction site was found
-    but could not be read — reported as an error, never as "sends nothing"."""
+def object_literal_keys(lit: str) -> tuple[set[str], bool]:
+    """Keys of a JavaScript object literal's body, read member by member.
+
+    `a: x`, `"a": x` and the shorthand `a` each name a key. A `...spread`, a
+    `[computed]` key or anything else unreadable makes the literal unparsed:
+    it can send keys nobody can see, so it must never read as clean. Nested
+    literals are a member's value and contribute no keys of their own.
+    """
     keys: set[str] = set()
     ok = True
+    for member in split_args(strip_comments(lit)):
+        m = re.match(r"""(?:"([^"]+)"|'([^']+)'|([A-Za-z_$][\w$]*))\s*:""", member)
+        if m:
+            keys.add(next(g for g in m.groups() if g))
+        elif re.fullmatch(r"[A-Za-z_$][\w$]*", member):
+            keys.add(member)
+        else:
+            ok = False
+    return keys, ok
+
+
+def query_builders(texts: list[str], cfg: dict) -> dict[str, tuple[set[str], bool]]:
+    """Package-level query builder name -> (keys it can set, parsed_ok).
+
+    Keys come from the builder's own body, including any builder it calls, so
+    `sortableListQuery` inherits `listQuery`'s page/limit and adds sort/order —
+    and a method calling only `listQuery` is never credited with sort/order.
+    A builder whose body cannot be read, or that recurses, is not ok: every
+    method using it is then UNPARSED rather than credited with nothing.
+    """
+    if "builder_re" not in cfg:
+        return {}
+    bodies: dict[str, str] = {}
+    for text in texts:
+        for m in re.finditer(cfg["builder_re"], text, re.M):
+            body = balanced_slice(text, m.end() - 1)
+            bodies.setdefault(m.group(1), body if body is not None else "")
+    out: dict[str, tuple[set[str], bool]] = {}
+
+    def resolve(name: str, stack: tuple[str, ...]) -> tuple[set[str], bool]:
+        if name in out:
+            return out[name]
+        if name in stack or not bodies[name]:
+            return set(), False
+        nested = {n: resolve(n, stack + (name,)) for n in bodies
+                  if n != name and _calls(bodies[name], n)}
+        res = block_query_keys(bodies[name], cfg, nested)
+        if any(_calls(bodies[name], n) for n in stack + (name,)):
+            res = (res[0], False)
+        out[name] = res
+        return res
+
+    for name in bodies:
+        resolve(name, ())
+    return out
+
+
+def _calls(body: str, name: str) -> bool:
+    """A call to the free function `name(` — not `x.name(`, not `othername(`."""
+    return re.search(rf"(?<![\w.]){re.escape(name)}\(", strip_docs(body)) is not None
+
+
+def block_query_keys(body: str, cfg: dict,
+                     builders: dict[str, tuple[set[str], bool]] | None = None
+                     ) -> tuple[set[str], bool]:
+    """(keys, parsed_ok). parsed_ok is False when a construction site was found
+    but could not be read — reported as an error, never as "sends nothing".
+    `builders` is `query_builders(...)`: calls to them add their keys."""
+    keys: set[str] = set()
+    ok = True
+
+    for name, (bkeys, bok) in (builders or {}).items():
+        if _calls(body, name):
+            keys |= bkeys
+            ok = ok and bok
 
     for anchor, ordered in (cfg.get("helpers") or {}).items():
         for m in re.finditer(re.escape(anchor), body):
@@ -531,7 +615,12 @@ def block_query_keys(body: str, cfg: dict) -> tuple[set[str], bool]:
             if lit is None:
                 ok = False
                 continue
-            keys |= set(re.findall(cfg["dict_key_re"], lit))
+            if cfg.get("dict_members"):
+                lkeys, lok = object_literal_keys(lit)
+                keys |= lkeys
+                ok = ok and lok
+            else:
+                keys |= set(re.findall(cfg["dict_key_re"], lit))
 
     if indirect and not keys:
         ok = False
@@ -560,9 +649,10 @@ def cmd_params(args) -> int:
 
     via_helper = 0
     texts = [f.read_text(errors="replace") for f in files]
+    builders = query_builders(texts, cfg)
     for mname, _body, call, request_body, helper in request_blocks(texts, cfg):
         via_helper += helper is not None
-        keys, ok = block_query_keys(request_body, cfg)
+        keys, ok = block_query_keys(request_body, cfg, builders)
         if not ok:
             unparsed.add((mname, f"{call[0]} {call[1]}"))
         if call not in index:
@@ -1251,6 +1341,8 @@ def _ts_wrapped_type(o: str, n: str) -> str | None:
 
 
 _TS_COMPATIBLE_LABELS = {
+    "default": "required parameter made optional in place — source compatible",
+    "added": "optional parameters added — source compatible",
     "props": ("optional property added to an options object — usually source compatible, "
               "but breaks a caller passing a non-literal object whose same-named property "
               "has another type"),
@@ -1284,7 +1376,359 @@ def _ts_compatible_change(old: list[str], new: list[str]) -> str | None:
     return "; ".join(_TS_COMPATIBLE_LABELS[k] for k in _TS_COMPATIBLE_LABELS if k in kinds)
 
 
-def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str]) -> tuple[str, str]:
+# ── Parameters that gained a default ─────────────────────────────────────────
+# `f(id: str)` -> `f(id: str | None = None)` and `f(id: string)` -> `f(id?: string)`
+# keep every old call working, but a textual diff called both BREAKING. They
+# are accepted only parameter by parameter: same name, same position, same
+# kind, the type unchanged or only widened to admit None/undefined, and every
+# other parameter unchanged or added as optional at the end. Anything else —
+# a default lost, a rename, a reorder, a narrowed type, a positional parameter
+# made keyword-only — stays BREAKING. C# is deliberately not included: the
+# default lands in metadata the caller compiled against, and it has no case
+# that needs it.
+
+def _top_level_index(s: str, ch: str) -> int:
+    """Index of the first `ch` at bracket depth 0 outside string literals, or -1.
+    For `=`, the `=` of `=>`, `==`, `!=`, `<=` and `>=` does not count."""
+    depth, j, prev = 0, 0, ""
+    while j < len(s):
+        c = s[j]
+        if c in "\"'`":
+            end = _quoted_end(s, j)
+            if end is not None:
+                j, prev = end, ""
+                continue
+        if c in "<([{":
+            depth += 1
+        elif c in ")]}" or (c == ">" and prev != "="):
+            depth -= 1
+        elif c == ch and depth == 0:
+            nxt = s[j + 1] if j + 1 < len(s) else ""
+            if ch != "=" or (nxt not in "=>" and prev not in "=!<>"):
+                return j
+        prev = c
+        j += 1
+    return -1
+
+
+def _union_members(t: str) -> set[str]:
+    m = re.fullmatch(r"\s*Optional\[(.*)\]\s*", t, re.S)
+    if m:
+        return {" ".join(x.split()) for x in split_args(m.group(1), "|")} | {"None"}
+    return {" ".join(x.split()) for x in split_args(t, "|")}
+
+
+def _py_param(p: str) -> tuple[str, str, str | None] | None:
+    """(name, type, default) of one Python parameter, or None if not plain."""
+    eq = _top_level_index(p, "=")
+    head, default = (p, None) if eq < 0 else (p[:eq], p[eq + 1:].strip())
+    m = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*(?::\s*(.+?))?\s*", head, re.S)
+    if not m:
+        return None
+    return m.group(1), " ".join((m.group(2) or "").split()), default
+
+
+def _ts_param(p: str) -> tuple[str, bool, str, str | None] | None:
+    """(name, optional `?`, type, default) of one TypeScript parameter, or None."""
+    eq = _top_level_index(p, "=")
+    head, default = (p, None) if eq < 0 else (p[:eq], " ".join(p[eq + 1:].split()))
+    m = re.fullmatch(r"\s*([A-Za-z_$][\w$]*)\s*(\?)?\s*(?::\s*(.+?))?\s*", head, re.S)
+    if not m:
+        return None
+    return m.group(1), bool(m.group(2)), " ".join((m.group(3) or "").split()), default
+
+
+def _gained_default(lang: str, o: str, n: str) -> bool:
+    """`o` was required and `n` is the same parameter made optional, its type
+    unchanged or only widened by None (Python) / undefined (TypeScript)."""
+    if lang == "python":
+        po, pn = _py_param(o), _py_param(n)
+        if not po or not pn or po[0] != pn[0] or po[2] is not None or pn[2] is None:
+            return False
+        nullable = "None"
+    else:
+        po, pn = _ts_param(o), _ts_param(n)
+        if (not po or not pn or po[0] != pn[0] or po[1] or po[3] is not None
+                or not (pn[1] or pn[3] is not None)):
+            return False
+        nullable = "undefined"
+    type_at = 2 if lang == "javascript" else 1
+    old_t, new_t = po[type_at], pn[type_at]
+    if not old_t:
+        return not new_t
+    return new_t == old_t or _union_members(new_t) == _union_members(old_t) | {nullable}
+
+
+def _is_optional(lang: str, p: str) -> bool:
+    if lang == "python":
+        q = _py_param(p)
+        return q is not None and q[2] is not None
+    q = _ts_param(p)
+    return q is not None and (q[1] or q[3] is not None)
+
+
+def _py_kinds(raw: str) -> list[tuple[str, str]] | None:
+    """[(param, "pos"|"kw")] with the bare `*` consumed, or None when the list
+    has `/`, `*args` or `**kwargs` — shapes this rule does not reason about."""
+    out, kind = [], "pos"
+    for p in split_args(raw, keep_star=True):
+        if p == "*":
+            kind = "kw"
+        elif p == "/" or p.startswith("*"):
+            return None
+        else:
+            out.append((p, kind))
+    return out
+
+
+def _gained_default_change(lang: str, old_par: str, new_par: str,
+                           param_change=None) -> set[str] | None:
+    """Kinds of compatible change, when every old parameter is unchanged, made
+    optional in place, or (via `param_change`) changed in another provably
+    compatible way, and every added parameter is optional. None otherwise."""
+    if lang == "python":
+        ok, nk = _py_kinds(old_par), _py_kinds(new_par)
+        if ok is None or nk is None:
+            return None
+        o_pos = [p for p, k in ok if k == "pos"]
+        n_pos = [p for p, k in nk if k == "pos"]
+        o_kw = {(_py_param(p) or ("",))[0]: p for p, k in ok if k == "kw"}
+        n_kw = {(_py_param(p) or ("",))[0]: p for p, k in nk if k == "kw"}
+        if len(n_pos) < len(o_pos) or "" in o_kw or "" in n_kw:
+            return None
+        pairs = list(zip(o_pos, n_pos))
+        for name, o in o_kw.items():
+            if name not in n_kw:
+                return None
+            pairs.append((o, n_kw[name]))
+        added = n_pos[len(o_pos):] + [p for name, p in n_kw.items() if name not in o_kw]
+    else:
+        op, np_ = split_args(old_par), split_args(new_par)
+        if len(np_) < len(op):
+            return None
+        pairs, added = list(zip(op, np_)), np_[len(op):]
+    kinds: set[str] = set()
+    for o, n in pairs:
+        if o == n:
+            continue
+        if _gained_default(lang, o, n):
+            kinds.add("default")
+            continue
+        k = param_change(o, n) if param_change else None
+        if k is None:
+            return None
+        kinds |= k
+    if not all(_is_optional(lang, a) for a in added):
+        return None
+    if added:
+        kinds.add("added")
+    return kinds or None
+
+
+# ── TypeScript named types ───────────────────────────────────────────────────
+# An options parameter retyped from one named type to another (`ListOptions` ->
+# `ListSolutionsOptions`) was graded BREAKING on its text. It is compatible only
+# when both types resolve, from source at their own revision, to members where
+# every old member survives unchanged and every added one is optional. A type
+# that does not resolve — a generic, an import, an indexed access, a top-level
+# union — keeps the change BREAKING.
+
+_TS_BUILTIN = {"string", "number", "boolean", "undefined", "null", "unknown", "any",
+               "never", "object", "void", "bigint", "symbol", "true", "false",
+               "Record", "Array", "ReadonlyArray", "Promise", "Date", "Readonly",
+               "Partial", "Required", "Pick", "Omit", "Map", "Set", "readonly",
+               "keyof", "typeof"}
+
+
+def _ts_expr_end(text: str, i: int) -> int:
+    """End of a type-alias expression starting at `i`: the first `;` at depth 0,
+    or a blank line / new top-level declaration when the `;` is omitted."""
+    depth, j, prev = 0, i, ""
+    while j < len(text):
+        c = text[j]
+        if c in "\"'`":
+            end = _quoted_end(text, j)
+            if end is not None:
+                j, prev = end, ""
+                continue
+        if c in "<([{":
+            depth += 1
+        elif c in ")]}" or (c == ">" and prev != "="):
+            depth -= 1
+        elif depth == 0 and (c == ";" or (c == "\n" and re.match(
+                r"\n\s*(?:\n|(?:export\s+)?(?:interface|type|const|function|class|import)\b)",
+                text[j:]))):
+            return j
+        prev = c
+        j += 1
+    return len(text)
+
+
+def ts_declarations(texts: list[str]) -> dict[str, tuple | None]:
+    """Type name -> ("interface", [extends...], body, text) | ("alias", expr, text),
+    or None when it cannot be resolved (generic, or declared twice differently)."""
+    out: dict[str, tuple | None] = {}
+
+    def put(name: str, decl: tuple | None) -> None:
+        if name in out and out[name] != decl:
+            out[name] = None
+        else:
+            out[name] = decl
+
+    for raw in texts:
+        text = strip_comments(raw)
+        for m in re.finditer(r"(?m)^[ \t]*(?:export\s+)?(?:declare\s+)?interface\s+([\w$]+)\s*(<)?",
+                             text):
+            brace = text.find("{", m.end())
+            body = balanced_slice(text, m.end()) if brace >= 0 else None
+            if m.group(2) or body is None:
+                put(m.group(1), None)
+                continue
+            ext = text[m.end():brace].strip()
+            bases = split_args(ext[len("extends"):]) if ext.startswith("extends") else []
+            if ext and not bases:
+                put(m.group(1), None)
+                continue
+            whole = " ".join(text[m.start():brace + len(body) + 2].split())
+            put(m.group(1), ("interface", bases, body, whole))
+        for m in re.finditer(r"(?m)^[ \t]*(?:export\s+)?(?:declare\s+)?type\s+([\w$]+)\s*(<)?", text):
+            if m.group(2):
+                put(m.group(1), None)
+                continue
+            eq = re.match(r"\s*=", text[m.end():])
+            if not eq:
+                continue
+            start = m.end() + eq.end()
+            end = _ts_expr_end(text, start)
+            expr = " ".join(text[start:end].split())
+            put(m.group(1), ("alias", expr, " ".join(text[m.start():end].split())))
+    return out
+
+
+def _ts_typed_members(body: str) -> dict[str, tuple[bool, str]] | None:
+    """member -> (optional, type) for an object type body; None if any member
+    is not a plain `name?: type` property (methods, index signatures, ...)."""
+    out: dict[str, tuple[bool, str]] = {}
+    for raw in split_args(strip_comments(body), ";,"):
+        text = " ".join(raw.split())
+        if not text:
+            continue
+        m = _TS_MEMBER_RE.match(text)
+        if not m or m.group(1) in out:
+            return None
+        out[m.group(1).strip("\"'")] = (bool(m.group(2)), " ".join(m.group(3).split()))
+    return out
+
+
+def _ts_string_keys(k: str) -> set[str] | None:
+    keys = split_args(k, "|")
+    if not keys or not all(re.fullmatch(r"\"[^\"]*\"|'[^']*'", x) for x in keys):
+        return None
+    return {x[1:-1] for x in keys}
+
+
+def ts_resolve(expr: str, decls: dict, seen: tuple[str, ...] = ()
+               ) -> dict[str, tuple[bool, str]] | None:
+    """Members of a TypeScript object type expression, or None if unresolvable."""
+    e = " ".join(expr.split())
+    while e.startswith("(") and balanced_slice(e, 0, "(", ")") == e[1:-1]:
+        e = e[1:-1].strip()
+    if not e:
+        return None
+    if e.startswith("{") and balanced_slice(e, 0) == e[1:-1]:
+        return _ts_typed_members(e[1:-1])
+    if len(split_args(e, "|")) > 1:
+        return None
+    parts = split_args(e, "&")
+    if len(parts) > 1:
+        merged: dict[str, tuple[bool, str]] = {}
+        for part in parts:
+            r = ts_resolve(part, decls, seen)
+            if r is None:
+                return None
+            for k, v in r.items():
+                if k in merged and merged[k] != v:
+                    return None
+                merged[k] = v
+        return merged
+    m = re.fullmatch(r"(Omit|Pick|Partial)\s*<(.*)>", e, re.S)
+    if m:
+        args = split_args(m.group(2))
+        base = ts_resolve(args[0], decls, seen) if args else None
+        if base is None:
+            return None
+        if m.group(1) == "Partial":
+            return {k: (True, t) for k, (_, t) in base.items()} if len(args) == 1 else None
+        keys = _ts_string_keys(args[1]) if len(args) == 2 else None
+        if keys is None:
+            return None
+        if m.group(1) == "Omit":
+            return {k: v for k, v in base.items() if k not in keys}
+        return {k: v for k, v in base.items() if k in keys} if keys <= set(base) else None
+    if not re.fullmatch(r"[A-Za-z_$][\w$]*", e) or e in seen:
+        return None
+    d = decls.get(e)
+    if d is None:
+        return None
+    if d[0] == "alias":
+        return ts_resolve(d[1], decls, seen + (e,))
+    merged = {}
+    for b in d[1]:
+        r = ts_resolve(b, decls, seen + (e,))
+        if r is None:
+            return None
+        merged.update(r)
+    own = _ts_typed_members(d[2])
+    if own is None:
+        return None
+    merged.update(own)
+    return merged
+
+
+def _ts_type_refs_unchanged(t: str, old_decls: dict, new_decls: dict) -> bool:
+    """Every identifier a property type names is a builtin, or a local type whose
+    declaration is textually identical at both revisions. Same text naming a
+    type that changed underneath is not the same type."""
+    bare = re.sub(r"\"[^\"]*\"|'[^']*'|`[^`]*`", "", t)
+    for ident in set(re.findall(r"[A-Za-z_$][\w$]*", bare)):
+        if ident in _TS_BUILTIN:
+            continue
+        o, n = old_decls.get(ident), new_decls.get(ident)
+        if o is None or n is None or o[-1] != n[-1]:
+            return False
+    return True
+
+
+def ts_named_options_change(o: str, n: str, old_decls: dict, new_decls: dict) -> set[str] | None:
+    """Kinds of compatible change between two options parameters whose types are
+    resolved from declarations; None unless provably compatible."""
+    po, pn = _ts_param(o), _ts_param(n)
+    if not po or not pn or (po[0], po[1], po[3]) != (pn[0], pn[1], pn[3]) or not po[2] or not pn[2]:
+        return None
+    mo, mn = ts_resolve(po[2], old_decls), ts_resolve(pn[2], new_decls)
+    if mo is None or mn is None or (not mo and mn):
+        return None
+    kinds: set[str] = set()
+    for k, (opt, typ) in mo.items():
+        if k not in mn or mn[k][0] != opt:
+            return None
+        if not _ts_type_refs_unchanged(typ, old_decls, new_decls):
+            return None
+        if mn[k][1] == typ:
+            continue
+        if not _ts_widened_to_undefined(f"{k}?: {typ}", f"{k}?: {mn[k][1]}"):
+            return None
+        kinds.add("undefined")
+    added = [v for k, v in mn.items() if k not in mo]
+    if not all(opt for opt, _ in added):
+        return None
+    if added:
+        kinds.add("props")
+    return kinds or {"same"}
+
+
+def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str],
+                    ts_decls: tuple[dict, dict] | None = None) -> tuple[str, str]:
     """(severity, label) for one signature change. severity is 'break' or 'warn'.
 
     Not every signature change breaks a caller, and a check that says it does is
@@ -1302,6 +1746,22 @@ def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str]) -> tu
             label = _ts_compatible_change(op, np_)
             if label:
                 return "warn", label
+        if lang in ("python", "javascript") and old_ret == new_ret:
+            def ts_param_change(o: str, n: str) -> set[str] | None:
+                k = _ts_options_change(o, n)
+                if k is None:
+                    w = _ts_wrapped_type(o, n)
+                    k = {w} if w else None
+                if k is None and ts_decls is not None:
+                    k = ts_named_options_change(o, n, *ts_decls)
+                return k
+            kinds = _gained_default_change(
+                lang, old_par, new_par, ts_param_change if lang == "javascript" else None)
+            if kinds:
+                if len(kinds) > 1:
+                    kinds.discard("same")
+                return "warn", "; ".join(_TS_COMPATIBLE_LABELS[k]
+                                         for k in _TS_COMPATIBLE_LABELS if k in kinds)
         # `len(np_) > len(op)` matters: `split_args` drops Python's bare `*`, so
         # `f(self, a, b)` -> `f(self, a, *, b)` yields two IDENTICAL lists, the
         # empty tail passes `all()` vacuously, and making a parameter
@@ -1322,6 +1782,25 @@ def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str]) -> tu
             return "warn", "return annotation changed — not enforced at runtime, but check the value did not change"
         return "break", "return type changed"
     return "warn", "signature reordered"
+
+
+def _texts_at(repo: Path, rev: str | None, sub: str, suffix: str) -> list[str]:
+    """Every `*suffix` file under `sub`, at `rev` or in the working tree. A file
+    that cannot be read is skipped: its types then do not resolve, which keeps
+    any change that needs them BREAKING."""
+    if rev is None:
+        return [f.read_text(encoding="utf-8", errors="replace")
+                for f in sorted((repo / sub).rglob(f"*{suffix}"))]
+    ls = subprocess.run(["git", "-C", str(repo), "ls-tree", "-r", "--name-only", rev, "--", sub],
+                        capture_output=True, text=True)
+    out = []
+    for name in ls.stdout.split():
+        if name.endswith(suffix):
+            p = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{name}"],
+                               capture_output=True, text=True)
+            if p.returncode == 0:
+                out.append(p.stdout)
+    return out
 
 
 def cmd_surface(args) -> int:
@@ -1369,6 +1848,10 @@ def cmd_surface(args) -> int:
     new_text = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in files)
 
     old, new = public_surface(old_text, cfg), public_surface(new_text, cfg)
+    ts_decls = None
+    if lang == "javascript":
+        ts_decls = (ts_declarations(_texts_at(repo, args.rev, "src", ".ts")),
+                    ts_declarations(_texts_at(repo, None, "src", ".ts")))
     removed = sorted(set(old) - set(new))
     added = sorted(set(new) - set(old))
     changed = [k for k in sorted(set(old) & set(new)) if old[k] - new[k]]
@@ -1385,7 +1868,7 @@ def cmd_surface(args) -> int:
         now = sorted(new[k] - old[k])
         sev, label = ("break", "signature removed")
         if len(gone) == 1 and len(now) == 1:
-            sev, label = classify_change(lang, gone[0], now[0])
+            sev, label = classify_change(lang, gone[0], now[0], ts_decls)
         (breaks if sev == "break" else warns).append((k, label, gone, now))
 
     def show(rows: list) -> None:
