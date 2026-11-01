@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seclai Go SDK Docs (v1.8.0)</title>
+  <title>Seclai Go SDK Docs (v1.9.0)</title>
   <style>
     :root { color-scheme: light dark; }
     body { max-width: 960px; margin: 0 auto; padding: 24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
@@ -15,7 +15,7 @@
 </head>
 <body>
   <h1>Seclai Go SDK</h1>
-  <p class="meta">Version: <code>1.8.0</code></p>
+  <p class="meta">Version: <code>1.9.0</code></p>
   <p class="meta">Generated from <code>go doc</code>.</p>
   <pre><code>
 === github.com/seclai/seclai-go ===
@@ -167,11 +167,14 @@ const (
 	// APIVersion20261021 is the 2026-10-21 API version.
 	APIVersion20261021 = &#34;2026-10-21&#34;
 
+	// APIVersion20261028 is the 2026-10-28 API version.
+	APIVersion20261028 = &#34;2026-10-28&#34;
+
 	// APIVersionDefault is the baseline applied to an unpinned, header-less caller.
 	APIVersionDefault = APIVersion20260701
 
 	// APIVersionLatest is the newest version known to this SDK release. It may lag the server.
-	APIVersionLatest = APIVersion20261021
+	APIVersionLatest = APIVersion20261028
 )
     Dated API versions known to this release, for use with [Options.APIVersion].
 
@@ -218,6 +221,7 @@ var KnownAPIVersions = []string{
 	APIVersion20261018,
 	APIVersion20261019,
 	APIVersion20261021,
+	APIVersion20261028,
 }
     KnownAPIVersions lists every version this release was built against,
     oldest first.
@@ -329,6 +333,10 @@ type AgentEmailOptOutResponse = generated.AgentEmailOptOutResponse
 type AgentEvaluationTier = generated.AgentEvaluationTier
     AgentEvaluationTier controls model selection for agent evaluation: &#34;fast&#34;,
     &#34;balanced&#34;, or &#34;thorough&#34;.
+
+type AgentExampleListResponse = generated.AgentExampleListResponse
+    AgentExampleListResponse is a page of the agent gallery: example agents to
+    start from. Pass an entry&#39;s &#34;key&#34; as AgentTemplate on CreateAgentRequest.
 
 type AgentExportResponse = generated.AgentExportResponse
     AgentExportResponse is a portable JSON snapshot of an agent definition.
@@ -617,10 +625,28 @@ func (c *Client) ClearMemoryBankRetention(ctx context.Context, memoryBankID stri
     which is how the update endpoint spells &#34;no window&#34;, and leaves every other
     setting unchanged.
 
+func (c *Client) ClearSlackTriggerMaxTurns(ctx context.Context, agentID string, triggerID string) (*SlackTriggerConfigResponse, error)
+    ClearSlackTriggerMaxTurns removes the turn limit of an agent&#39;s SLACK_COMMAND
+    trigger, so a conversation may continue for any number of turns. It sends
+    an explicit null max_turns and leaves every other setting unchanged;
+    set a limit with SetSlackTriggerConfig&#39;s MaxTurns.
+
+func (c *Client) ClearSourceFields(ctx context.Context, sourceID string, fields ...SourceField) (*SourceResponse, error)
+    ClearSourceFields clears the named settings of a source and leaves every
+    other setting unchanged. It sends the fields as explicit nulls, which
+    Client.UpdateSource cannot, since it leaves a nil field out of the body:
+
+      - SourceFieldRetentionDays removes the retention window, so content is
+        kept indefinitely.
+      - SourceFieldMaxCreditsPerPeriod removes the spend limit. Set a limit with
+        UpdateSource&#39;s MaxCreditsPerPeriod.
+
+    It returns a *ConfigurationError, without sending a request, when no field
+    is given or a field is not one of these constants.
+
 func (c *Client) ClearSourceRetention(ctx context.Context, sourceID string) (*SourceResponse, error)
     ClearSourceRetention removes a source&#39;s retention window, so its content is
-    kept indefinitely. It sends an explicit null retention_days and leaves every
-    other setting unchanged.
+    kept indefinitely. It is ClearSourceFields with SourceFieldRetentionDays.
 
 func (c *Client) CompactMemoryBank(ctx context.Context, memoryBankID string) error
     CompactMemoryBank triggers compaction for a memory bank.
@@ -876,6 +902,13 @@ func (c *Client) GetAiAssistantMemoryBankHistory(ctx context.Context) (*MemoryBa
     GetAiAssistantMemoryBankHistory retrieves the last AI assistant memory bank
     conversation.
 
+    Use Client.GetAiAssistantMemoryBankHistoryWithOptions to page through its
+    turns.
+
+func (c *Client) GetAiAssistantMemoryBankHistoryWithOptions(ctx context.Context, opts LastConversationOptions) (*MemoryBankLastConversationResponse, error)
+    GetAiAssistantMemoryBankHistoryWithOptions retrieves a page of turns from
+    the last AI assistant memory bank conversation.
+
 func (c *Client) GetAlert(ctx context.Context, alertID string) (json.RawMessage, error)
     GetAlert retrieves an alert by ID.
 
@@ -935,8 +968,21 @@ func (c *Client) GetMemoryBankAiLastConversation(ctx context.Context) (*MemoryBa
     GetMemoryBankAiLastConversation retrieves the last AI assistant conversation
     for memory banks.
 
+    Use Client.GetMemoryBankAiLastConversationWithOptions to page through its
+    turns.
+
+func (c *Client) GetMemoryBankAiLastConversationWithOptions(ctx context.Context, opts LastConversationOptions) (*MemoryBankLastConversationResponse, error)
+    GetMemoryBankAiLastConversationWithOptions retrieves a page of turns from
+    the last memory bank AI assistant conversation.
+
 func (c *Client) GetMemoryBankStats(ctx context.Context, memoryBankID string) (json.RawMessage, error)
     GetMemoryBankStats retrieves statistics for a memory bank.
+
+    Use Client.GetMemoryBankStatsWithOptions to set the period.
+
+func (c *Client) GetMemoryBankStatsWithOptions(ctx context.Context, memoryBankID string, opts MemoryBankStatsOptions) (json.RawMessage, error)
+    GetMemoryBankStatsWithOptions retrieves statistics for a memory bank over a
+    chosen period.
 
 func (c *Client) GetModel(ctx context.Context, modelID string) (*PromptModelResponse, error)
     GetModel retrieves full details for a specific model.
@@ -944,9 +990,21 @@ func (c *Client) GetModel(ctx context.Context, modelID string) (*PromptModelResp
 func (c *Client) GetModelRecommendations(ctx context.Context, modelID string) (json.RawMessage, error)
     GetModelRecommendations retrieves recommendations for a model.
 
+    Use Client.GetModelRecommendationsWithOptions to require capabilities.
+
+func (c *Client) GetModelRecommendationsWithOptions(ctx context.Context, modelID string, opts ModelRecommendationsOptions) (json.RawMessage, error)
+    GetModelRecommendationsWithOptions retrieves recommendations for a model,
+    limited to models with the required capabilities.
+
 func (c *Client) GetNonManualEvaluationSummary(ctx context.Context, agentID string) (*NonManualEvaluationSummaryResponse, error)
     GetNonManualEvaluationSummary retrieves a summary of non-manual evaluation
-    results.
+    results, for one agent or account-wide when agentID is empty.
+
+    Use Client.GetNonManualEvaluationSummaryWithOptions to set the period.
+
+func (c *Client) GetNonManualEvaluationSummaryWithOptions(ctx context.Context, opts NonManualEvaluationSummaryOptions) (*NonManualEvaluationSummaryResponse, error)
+    GetNonManualEvaluationSummaryWithOptions retrieves a summary of non-manual
+    evaluation results over a chosen period.
 
 func (c *Client) GetSolution(ctx context.Context, solutionID string) (*SolutionResponse, error)
     GetSolution retrieves a solution by ID.
@@ -984,6 +1042,18 @@ func (c *Client) ListAgentEmailOptOuts(ctx context.Context, opts AgentEmailOptOu
 func (c *Client) ListAgentEvaluationResults(ctx context.Context, agentID string, opts ListOptions) (*EvaluationResultWithCriteriaListResponse, error)
     ListAgentEvaluationResults lists all evaluation results for an agent.
 
+    Use Client.ListAgentEvaluationResultsWithOptions to filter them.
+
+func (c *Client) ListAgentEvaluationResultsWithOptions(ctx context.Context, agentID string, opts ListAgentEvaluationResultsOptions) (*EvaluationResultWithCriteriaListResponse, error)
+    ListAgentEvaluationResultsWithOptions lists an agent&#39;s evaluation results,
+    filtered by status, step, flag and time range.
+
+func (c *Client) ListAgentExamples(ctx context.Context, opts ListAgentExamplesOptions) (*AgentExampleListResponse, error)
+    ListAgentExamples lists the agent gallery: example agents to start from,
+    searchable by text and filterable by use case. Pass an entry&#39;s &#34;key&#34; as
+    AgentTemplate on Client.CreateAgent, with ResourceBindings for the resources
+    it needs.
+
 func (c *Client) ListAgentRuns(ctx context.Context, agentID string, opts ListAgentRunsOptions) (*AgentRunListResponse, error)
     ListAgentRuns lists runs for an agent.
 
@@ -995,6 +1065,13 @@ func (c *Client) ListAlertConfigs(ctx context.Context, opts ListOptions) (json.R
     under &#34;configs&#34; alongside &#34;total&#34; by default. Once the caller opts in with
     Options.APIVersion of 2026-07-27 or later the endpoint returns the canonical
     {data, pagination} envelope instead, so the top-level key changes.
+
+    Use Client.ListAlertConfigsWithOptions to filter them.
+
+func (c *Client) ListAlertConfigsWithOptions(ctx context.Context, opts ListAlertConfigsOptions) (json.RawMessage, error)
+    ListAlertConfigsWithOptions lists alert configurations, filtered
+    by agent, source connection or scope. The response shape is as for
+    Client.ListAlertConfigs.
 
 func (c *Client) ListAlerts(ctx context.Context, opts ListAlertsOptions) (json.RawMessage, error)
     ListAlerts lists alerts. Severity is accepted and dropped: GET /alerts
@@ -1020,6 +1097,12 @@ func (c *Client) ListCloudDrives(ctx context.Context) ([]CloudDriveResponse, err
 
 func (c *Client) ListCompatibleRuns(ctx context.Context, criteriaID string, opts ListOptions) (*CompatibleRunListResponse, error)
     ListCompatibleRuns lists runs compatible with evaluation criteria.
+
+    Use Client.ListCompatibleRunsWithOptions to filter them by start time.
+
+func (c *Client) ListCompatibleRunsWithOptions(ctx context.Context, criteriaID string, opts ListCompatibleRunsOptions) (*CompatibleRunListResponse, error)
+    ListCompatibleRunsWithOptions lists runs compatible with evaluation
+    criteria, optionally only those started after a given time.
 
 func (c *Client) ListContentAttachmentEmbeddings(ctx context.Context, contentVersionID, attachmentID string, opts ListOptions) (*ContentEmbeddingsListResponse, error)
     ListContentAttachmentEmbeddings lists the embeddings (chunk vectors) an
@@ -1079,14 +1162,32 @@ func (c *Client) ListEvaluationCriteriaPage(ctx context.Context, agentID string,
 func (c *Client) ListEvaluationResults(ctx context.Context, criteriaID string, opts ListOptions) (*EvaluationResultListResponse, error)
     ListEvaluationResults lists evaluation results for criteria.
 
+    Use Client.ListEvaluationResultsWithOptions to filter them.
+
+func (c *Client) ListEvaluationResultsWithOptions(ctx context.Context, criteriaID string, opts ListEvaluationResultsOptions) (*EvaluationResultListResponse, error)
+    ListEvaluationResultsWithOptions lists evaluation results for criteria,
+    filtered by status, flag and time range.
+
 func (c *Client) ListEvaluationRuns(ctx context.Context, agentID string, opts ListOptions) (*EvaluationRunSummaryListResponse, error)
     ListEvaluationRuns lists evaluation run summaries for an agent.
+
+    Use Client.ListEvaluationRunsWithOptions to filter them.
+
+func (c *Client) ListEvaluationRunsWithOptions(ctx context.Context, agentID string, opts ListEvaluationRunsOptions) (*EvaluationRunSummaryListResponse, error)
+    ListEvaluationRunsWithOptions lists an agent&#39;s evaluation run summaries,
+    filtered by status, step and time range.
 
 func (c *Client) ListExperiments(ctx context.Context, opts ListExperimentsOptions) (json.RawMessage, error)
     ListExperiments lists model playground experiments.
 
 func (c *Client) ListGovernanceAiConversations(ctx context.Context) ([]GovernanceConversationResponse, error)
     ListGovernanceAiConversations lists governance AI assistant conversations.
+
+    Use Client.ListGovernanceAiConversationsWithOptions to set how many.
+
+func (c *Client) ListGovernanceAiConversationsWithOptions(ctx context.Context, opts ListGovernanceAiConversationsOptions) ([]GovernanceConversationResponse, error)
+    ListGovernanceAiConversationsWithOptions lists governance AI assistant
+    conversations, up to Limit.
 
 func (c *Client) ListInboundEmailRejections(ctx context.Context, opts InboundEmailRejectionOptions) ([]InboundEmailRejectionResponse, error)
     ListInboundEmailRejections lists recent inbound emails that were discarded
@@ -1102,16 +1203,33 @@ func (c *Client) ListMemoryBankTemplates(ctx context.Context) (json.RawMessage, 
 func (c *Client) ListMemoryBanks(ctx context.Context, opts SortableListOptions) (*MemoryBankListResponse, error)
     ListMemoryBanks lists memory banks.
 
+    Use Client.ListMemoryBanksWithOptions to filter them by type.
+
+func (c *Client) ListMemoryBanksWithOptions(ctx context.Context, opts ListMemoryBanksOptions) (*MemoryBankListResponse, error)
+    ListMemoryBanksWithOptions lists memory banks, optionally of one type.
+
 func (c *Client) ListModelAlerts(ctx context.Context, opts ListOptions) (json.RawMessage, error)
     ListModelAlerts lists model alerts. The endpoint declares limit/offset,
     not page, so opts.Page is translated — previously it was ignored and every
     page after the first returned page 1.
+
+    Use Client.ListModelAlertsWithOptions to filter them.
+
+func (c *Client) ListModelAlertsWithOptions(ctx context.Context, opts ListModelAlertsOptions) (json.RawMessage, error)
+    ListModelAlertsWithOptions lists model alerts, optionally for one agent or
+    unread only.
 
 func (c *Client) ListModels(ctx context.Context, opts ListModelsOptions) ([]ProviderGroupResponse, error)
     ListModels lists all enabled LLM models grouped by provider.
 
 func (c *Client) ListOrganizationAlertPreferences(ctx context.Context) (*OrganizationAlertPreferenceListResponse, error)
     ListOrganizationAlertPreferences lists organization alert preferences.
+
+    Use Client.ListOrganizationAlertPreferencesWithOptions to filter them.
+
+func (c *Client) ListOrganizationAlertPreferencesWithOptions(ctx context.Context, opts ListOrganizationAlertPreferencesOptions) (*OrganizationAlertPreferenceListResponse, error)
+    ListOrganizationAlertPreferencesWithOptions lists organization alert
+    preferences, optionally for one organization and with the defaults included.
 
 func (c *Client) ListRerankerModels(ctx context.Context) (*RerankerModelListResponse, error)
     ListRerankerModels lists the reranker models a knowledge base can use,
@@ -1132,6 +1250,11 @@ func (c *Client) ListSolutionConversations(ctx context.Context, solutionID strin
 
 func (c *Client) ListSolutions(ctx context.Context, opts SortableListOptions) (*SolutionListResponse, error)
     ListSolutions lists solutions.
+
+    Use Client.ListSolutionsWithOptions to search them by name.
+
+func (c *Client) ListSolutionsWithOptions(ctx context.Context, opts ListSolutionsOptions) (*SolutionListResponse, error)
+    ListSolutionsWithOptions lists solutions, optionally searched by name.
 
 func (c *Client) ListSourceContents(ctx context.Context, sourceID string, opts ListSourceContentsOptions) (*SourceContentStatusListResponse, error)
     ListSourceContents lists a source&#39;s content items and their indexing status.
@@ -1271,6 +1394,16 @@ func (c *Client) SetPrimaryEmailDomain(ctx context.Context, domainID string) (*E
     domain, so agent email sends from and receives on it instead of the shared
     agent.seclai.com.
 
+func (c *Client) SetSlackTriggerConfig(ctx context.Context, agentID string, triggerID string, body SetSlackTriggerConfigRequest) (*SlackTriggerConfigResponse, error)
+    SetSlackTriggerConfig sets the Slack connection, form, channels, visibility
+    and conversation settings of an agent&#39;s SLACK_COMMAND trigger, which people
+    run from Slack with /seclai or the message shortcut.
+
+    A nil field is left unchanged. To clear Form or ChannelIds, pass a
+    non-nil pointer to an empty slice; the API treats an empty list and null
+    the same. A nil MaxTurns cannot be sent, so remove the turn limit with
+    ClearSlackTriggerMaxTurns.
+
 func (c *Client) StartSourceEmbeddingMigration(ctx context.Context, sourceID string, body StartSourceEmbeddingMigrationRequest) (*SourceEmbeddingMigrationResponse, error)
     StartSourceEmbeddingMigration starts an embedding migration for a source.
 
@@ -1350,8 +1483,8 @@ func (c *Client) UpdateSolution(ctx context.Context, solutionID string, body Upd
 
 func (c *Client) UpdateSource(ctx context.Context, sourceID string, body UpdateSourceBody) (*SourceResponse, error)
     UpdateSource updates a source. Only the fields set on body are sent;
-    a nil field leaves that setting unchanged. To clear the retention window,
-    use ClearSourceRetention.
+    a nil field leaves that setting unchanged. To clear the retention window or
+    the spend limit, use Client.ClearSourceFields.
 
 func (c *Client) UploadAgentInput(ctx context.Context, agentID string, req UploadFileRequest) (*UploadAgentInputApiResponse, error)
     UploadAgentInput uploads an input file for a dynamic_input agent&#39;s run;
@@ -1852,9 +1985,44 @@ type KnowledgeBaseListResponse = generated.KnowledgeBaseListResponseModel
 type KnowledgeBaseResponse = generated.KnowledgeBaseResponseModel
     KnowledgeBaseResponse is the full knowledge base configuration and metadata.
 
+type LastConversationOptions struct {
+	// Limit is the maximum number of turns (server default 5). Zero omits it.
+	Limit int
+	// Offset is the number of most recent turns to skip. Zero omits it.
+	Offset int
+}
+    LastConversationOptions pages through the turns of an AI assistant&#39;s last
+    conversation.
+
 type LinkResourcesRequest = generated.LinkResourcesRequest
     LinkResourcesRequest is the request body for linking resources (agents, KBs,
     sources) to a parent.
+
+type ListAgentEvaluationResultsOptions struct {
+	ListOptions
+	// Status keeps only results with this status (e.g. &#34;passed&#34;, &#34;failed&#34;, &#34;error&#34;).
+	Status string
+	// Step keeps only results for this agent step.
+	Step string
+	// FlaggedOnly keeps only flagged results.
+	FlaggedOnly bool
+	// TimeFrom keeps results from this time on (ISO 8601).
+	TimeFrom string
+	// TimeTo keeps results up to this time (ISO 8601).
+	TimeTo string
+}
+    ListAgentEvaluationResultsOptions controls query parameters for
+    Client.ListAgentEvaluationResultsWithOptions.
+
+type ListAgentExamplesOptions struct {
+	ListOptions
+	// Query keeps only entries containing every one of these words.
+	Query string
+	// UseCase keeps only entries for this use case.
+	UseCase string
+}
+    ListAgentExamplesOptions controls query parameters for
+    Client.ListAgentExamples.
 
 type ListAgentRunsOptions struct {
 	// Page is the 1-based page number.
@@ -1866,14 +2034,42 @@ type ListAgentRunsOptions struct {
 }
     ListAgentRunsOptions controls optional query parameters for ListAgentRuns.
 
+type ListAlertConfigsOptions struct {
+	ListOptions
+	// AgentID keeps only configurations for this agent.
+	AgentID string
+	// SourceConnectionID keeps only configurations for this source connection.
+	SourceConnectionID string
+	// Scope set to &#34;source&#34; lists the account-level source alert configurations.
+	Scope string
+}
+    ListAlertConfigsOptions controls query parameters for
+    Client.ListAlertConfigsWithOptions.
+
 type ListAlertsOptions struct {
 	ListOptions
 	// Status filters alerts by status (e.g. &#34;active&#34;, &#34;resolved&#34;).
 	Status string
 	// Severity filters alerts by severity.
 	Severity string
+	// AgentID keeps only alerts for this agent.
+	AgentID string
+	// SourceConnectionID keeps only alerts for this source connection.
+	SourceConnectionID string
+	// TimeFrom keeps alerts from this time on (ISO 8601 date-time).
+	TimeFrom string
+	// TimeTo keeps alerts up to this time (ISO 8601 date-time).
+	TimeTo string
 }
     ListAlertsOptions controls optional query parameters for ListAlerts.
+
+type ListCompatibleRunsOptions struct {
+	ListOptions
+	// StartedAfter keeps only runs started after this time (ISO 8601 date-time).
+	StartedAfter string
+}
+    ListCompatibleRunsOptions controls query parameters for
+    Client.ListCompatibleRunsWithOptions.
 
 type ListEmbeddingModelsOptions struct {
 	// SupportsInputMedia keeps only embedders that can index this input
@@ -1882,6 +2078,34 @@ type ListEmbeddingModelsOptions struct {
 }
     ListEmbeddingModelsOptions controls query parameters for
     Client.ListEmbeddingModels.
+
+type ListEvaluationResultsOptions struct {
+	ListOptions
+	// Status keeps only results with this status (e.g. &#34;passed&#34;, &#34;failed&#34;, &#34;error&#34;).
+	Status string
+	// FlaggedOnly keeps only flagged results.
+	FlaggedOnly bool
+	// TimeFrom keeps results from this time on (ISO 8601).
+	TimeFrom string
+	// TimeTo keeps results up to this time (ISO 8601).
+	TimeTo string
+}
+    ListEvaluationResultsOptions controls query parameters for
+    Client.ListEvaluationResultsWithOptions.
+
+type ListEvaluationRunsOptions struct {
+	ListOptions
+	// Status keeps only runs with this status.
+	Status string
+	// Step keeps only runs for this agent step.
+	Step string
+	// TimeFrom keeps runs from this time on (ISO 8601).
+	TimeFrom string
+	// TimeTo keeps runs up to this time (ISO 8601).
+	TimeTo string
+}
+    ListEvaluationRunsOptions controls query parameters for
+    Client.ListEvaluationRunsWithOptions.
 
 type ListExperimentsOptions struct {
 	// Days is the look-back window in days (1-730, default 30).
@@ -1898,6 +2122,32 @@ type ListExperimentsOptions struct {
     ListExperimentsOptions controls query parameters for the ListExperiments
     endpoint.
 
+type ListGovernanceAiConversationsOptions struct {
+	// Limit is the number of conversations (server default 20). Zero omits it.
+	Limit int
+}
+    ListGovernanceAiConversationsOptions controls query parameters for
+    Client.ListGovernanceAiConversationsWithOptions.
+
+type ListMemoryBanksOptions struct {
+	SortableListOptions
+	// Type keeps only banks of this type: &#34;conversation&#34; or &#34;general&#34;.
+	Type string
+}
+    ListMemoryBanksOptions controls query parameters for
+    Client.ListMemoryBanksWithOptions.
+
+type ListModelAlertsOptions struct {
+	ListOptions
+	// AgentID keeps only alerts for this agent.
+	AgentID string
+	// UnreadOnly keeps only unread alerts.
+	UnreadOnly bool
+}
+    ListModelAlertsOptions controls query parameters for
+    Client.ListModelAlertsWithOptions. Page is translated to the endpoint&#39;s
+    offset as for Client.ListModelAlerts.
+
 type ListModelsOptions struct {
 	// Provider filters by provider name (e.g. &#34;anthropic&#34;, &#34;openai&#34;).
 	Provider string
@@ -1905,6 +2155,12 @@ type ListModelsOptions struct {
 	SupportsToolUse *bool
 	// SupportsThinking filters to models with extended thinking support.
 	SupportsThinking *bool
+	// SupportsInputMedia filters to models that accept this input modality: a
+	// coarse kind (&#34;image&#34;, &#34;audio&#34;, &#34;video&#34;, &#34;pdf&#34;) or a full MIME type.
+	SupportsInputMedia string
+	// SupportsOutputMedia filters to models that produce this output modality: a
+	// coarse kind (&#34;image&#34;, &#34;audio&#34;, &#34;video&#34;) or a full MIME type.
+	SupportsOutputMedia string
 }
     ListModelsOptions controls query parameters for the ListModels endpoint.
 
@@ -1915,6 +2171,24 @@ type ListOptions struct {
 	Limit int
 }
     ListOptions contains common pagination parameters.
+
+type ListOrganizationAlertPreferencesOptions struct {
+	// OrganizationID keeps only preferences for this organization.
+	OrganizationID string
+	// IncludeDefaults adds the default subscribed entries for every alert type.
+	IncludeDefaults bool
+}
+    ListOrganizationAlertPreferencesOptions controls query parameters for
+    Client.ListOrganizationAlertPreferencesWithOptions.
+
+type ListSolutionsOptions struct {
+	SortableListOptions
+	// Search keeps only solutions whose name contains this text, case-insensitively
+	// (1-200 characters).
+	Search string
+}
+    ListSolutionsOptions controls query parameters for
+    Client.ListSolutionsWithOptions.
 
 type ListSourceContentsOptions struct {
 	// Page is the 1-indexed page number. Zero omits the parameter.
@@ -1988,6 +2262,21 @@ type MemoryBankListResponse = generated.MemoryBankListResponseModel
 type MemoryBankResponse = generated.MemoryBankResponseModel
     MemoryBankResponse is the full memory bank configuration and metadata.
 
+type MemoryBankStatsOptions struct {
+	// Days is the look-back period in days, ending today (server default 30,
+	// 1-730). Zero omits it.
+	Days int
+	// StartDate starts the period (YYYY-MM-DD). Used only with EndDate.
+	StartDate string
+	// EndDate ends the period (YYYY-MM-DD). Used only with StartDate.
+	EndDate string
+}
+    MemoryBankStatsOptions controls query parameters for
+    Client.GetMemoryBankStatsWithOptions.
+
+    StartDate and EndDate override Days only when both are set; either one alone
+    is ignored and Days applies.
+
 type ModalityRateResponse = generated.ModalityRateResponse
     ModalityRateResponse is a per-modality rate for a model that prices
     image/audio/video distinctly from its default text rate.
@@ -2015,6 +2304,21 @@ type ModelAlertResponse = generated.RoutersApiModelLifecycleModelAlertResponse
 type ModelRecommendationResponse = generated.RoutersApiModelLifecycleModelRecommendationResponse
     ModelRecommendationResponse is a single successor recommendation.
 
+type ModelRecommendationsOptions struct {
+	// RequireToolUse recommends only models that support tool use.
+	RequireToolUse *bool
+	// RequireStructuredOutput recommends only models that support structured output.
+	RequireStructuredOutput *bool
+	// RequireThinking recommends only models that support thinking/reasoning.
+	RequireThinking *bool
+	// MinContextTokens is the minimum context window size in tokens.
+	MinContextTokens *int
+	// MinOutputTokens is the minimum output token limit.
+	MinOutputTokens *int
+}
+    ModelRecommendationsOptions controls query parameters for
+    Client.GetModelRecommendationsWithOptions. A nil field is not sent.
+
 type ModelRecommendationsResponse = generated.RoutersApiModelLifecycleModelRecommendationsResponse
     ModelRecommendationsResponse is the set of successor recommendations for a
     model.
@@ -2022,6 +2326,24 @@ type ModelRecommendationsResponse = generated.RoutersApiModelLifecycleModelRecom
 type NonManualEvaluationModeStatResponse = generated.SchemasV1AgentEvaluationsNonManualEvaluationModeStatResponse
     NonManualEvaluationModeStatResponse is per-mode stats within a non-manual
     evaluation summary.
+
+type NonManualEvaluationSummaryOptions struct {
+	// AgentID scopes the summary to one agent. Empty is account-wide.
+	AgentID string
+	// Days is the look-back period in days, ending today (server default 30).
+	// Zero omits it. Ignored when StartDate is set.
+	Days int
+	// StartDate starts the period (YYYY-MM-DD). Overrides Days.
+	StartDate string
+	// EndDate ends the period (YYYY-MM-DD). Used only with StartDate.
+	EndDate string
+}
+    NonManualEvaluationSummaryOptions controls query parameters for
+    Client.GetNonManualEvaluationSummaryWithOptions.
+
+    The period is StartDate through EndDate, or StartDate through today when
+    EndDate is empty; Days applies only when StartDate is empty. An EndDate
+    without a StartDate is ignored.
 
 type NonManualEvaluationSummaryResponse = generated.SchemasV1AgentEvaluationsNonManualEvaluationSummaryResponse
     NonManualEvaluationSummaryResponse is a summary of non-manual (automated)
@@ -2193,6 +2515,10 @@ type SetAcceptedAttachmentsRequest = generated.SetAcceptedAttachmentsRequest
 type SetAutoBlockModeRequest = generated.SetAutoBlockModeRequest
     SetAutoBlockModeRequest is the request body for setting the auto-block mode.
 
+type SetSlackTriggerConfigRequest = generated.SetSlackTriggerConfigApiRequest
+    SetSlackTriggerConfigRequest is the request body for configuring a
+    SLACK_COMMAND trigger. A nil field is left unchanged.
+
 type SkippedAttachmentReason = generated.SkippedAttachmentReason
     SkippedAttachmentReason is why an email part was not stored as an
     attachment.
@@ -2200,6 +2526,27 @@ type SkippedAttachmentReason = generated.SkippedAttachmentReason
 type SkippedAttachmentResponse = generated.SkippedAttachmentResponse
     SkippedAttachmentResponse is a part of an email that was not stored as an
     attachment.
+
+type SlackReplyVisibility = generated.SlackReplyVisibility
+    SlackReplyVisibility is who sees a Slack trigger&#39;s reply: &#34;channel&#34; or
+    &#34;private&#34;.
+
+type SlackTriggerActivation = generated.SlackTriggerActivation
+    SlackTriggerActivation is where a Slack trigger runs: &#34;everywhere&#34; in its
+    scope, or &#34;channel_opt_in&#34;.
+
+type SlackTriggerConfigResponse = generated.SlackTriggerConfigApiResponse
+    SlackTriggerConfigResponse is a SLACK_COMMAND trigger&#39;s resolved
+    configuration.
+
+    Its Activation, Scope and Visibility are plain strings, not the
+    SlackTriggerActivation, SlackTriggerScope and SlackReplyVisibility types the
+    request uses, because the spec declares them inline on the response. Convert
+    to compare or reuse one, e.g. SlackTriggerActivation(cfg.Activation).
+
+type SlackTriggerScope = generated.SlackTriggerScope
+    SlackTriggerScope is which channels a Slack trigger covers:
+    &#34;selected_channels&#34; or &#34;bot_channels&#34;.
 
 type SolutionConversationResponse = generated.RoutersApiSolutionsSolutionConversationResponse
     SolutionConversationResponse is a conversation in a solution AI assistant.
@@ -2236,11 +2583,31 @@ type SourceEmbeddingMigrationResponse = generated.SourceEmbeddingMigrationRespon
     SourceEmbeddingMigrationResponse is the status of a source embedding
     migration.
 
+type SourceField string
+    SourceField names a setting of a source that Client.ClearSourceFields can
+    clear.
+
+const (
+	// SourceFieldRetentionDays removes the retention window, so the source&#39;s
+	// content is kept indefinitely.
+	SourceFieldRetentionDays SourceField = &#34;retention_days&#34;
+	// SourceFieldMaxCreditsPerPeriod removes the spend limit, so the source may
+	// commit any number of credits per billing period.
+	SourceFieldMaxCreditsPerPeriod SourceField = &#34;max_credits_per_period&#34;
+)
 type SourceListResponse = generated.RoutersApiSourcesSourceListResponse
     SourceListResponse is a paginated list of sources.
 
 type SourceResponse = generated.SourceResponse
     SourceResponse is the full source response with metadata and configuration.
+
+type SpendCapAction = generated.SpendCapAction
+    SpendCapAction is what a source does when its spend cap is reached: &#34;stop&#34;
+    or &#34;delete&#34;.
+
+type SpendCapDeleteOrder = generated.SpendCapDeleteOrder
+    SpendCapDeleteOrder is which entries a &#34;delete&#34; spend cap removes first:
+    &#34;oldest_added&#34;, &#34;oldest_published&#34; or &#34;largest_first&#34;.
 
 type SsoCacheEntry struct {
 	// AccessToken is the JWT access token.
@@ -2375,12 +2742,20 @@ func (t *TypedClient) GetGenerationTiers(ctx context.Context) (*GenerationTierLi
 func (t *TypedClient) GetModelRecommendations(ctx context.Context, modelID string) (*ModelRecommendationsResponse, error)
     GetModelRecommendations is the typed form of Client.GetModelRecommendations.
 
+func (t *TypedClient) GetModelRecommendationsWithOptions(ctx context.Context, modelID string, opts ModelRecommendationsOptions) (*ModelRecommendationsResponse, error)
+    GetModelRecommendationsWithOptions is the typed form of
+    Client.GetModelRecommendationsWithOptions.
+
 func (t *TypedClient) GetUnreadModelAlertCount(ctx context.Context) (*UnreadCountResponse, error)
     GetUnreadModelAlertCount is the typed form of
     Client.GetUnreadModelAlertCount.
 
 func (t *TypedClient) ListAlertConfigs(ctx context.Context, opts ListOptions) (*AlertConfigListResponse, error)
     ListAlertConfigs is the typed form of Client.ListAlertConfigs.
+
+func (t *TypedClient) ListAlertConfigsWithOptions(ctx context.Context, opts ListAlertConfigsOptions) (*AlertConfigListResponse, error)
+    ListAlertConfigsWithOptions is the typed form of
+    Client.ListAlertConfigsWithOptions.
 
 func (t *TypedClient) ListAlerts(ctx context.Context, opts ListAlertsOptions) (*AlertListResponse, error)
     ListAlerts is the typed form of Client.ListAlerts.
@@ -2394,6 +2769,10 @@ func (t *TypedClient) ListMemoryBankTemplates(ctx context.Context) ([]map[string
 
 func (t *TypedClient) ListModelAlerts(ctx context.Context, opts ListOptions) (*ModelAlertListResponse, error)
     ListModelAlerts is the typed form of Client.ListModelAlerts.
+
+func (t *TypedClient) ListModelAlertsWithOptions(ctx context.Context, opts ListModelAlertsOptions) (*ModelAlertListResponse, error)
+    ListModelAlertsWithOptions is the typed form of
+    Client.ListModelAlertsWithOptions.
 
 func (t *TypedClient) Search(ctx context.Context, opts SearchOptions) (*SearchResponse, error)
     Search is the typed form of Client.Search.
@@ -3172,6 +3551,10 @@ func NewListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetRequest(se
     generates requests for
     ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet
 
+func NewListAgentExamplesApiAgentsExamplesGetRequest(server string, params *ListAgentExamplesApiAgentsExamplesGetParams) (*http.Request, error)
+    NewListAgentExamplesApiAgentsExamplesGetRequest generates requests for
+    ListAgentExamplesApiAgentsExamplesGet
+
 func NewListAgentRunsApiAgentsAgentIdRunsGetRequest(server string, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams) (*http.Request, error)
     NewListAgentRunsApiAgentsAgentIdRunsGetRequest generates requests for
     ListAgentRunsApiAgentsAgentIdRunsGet
@@ -3493,6 +3876,18 @@ func NewSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostRequest(server
     NewSetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostRequest
     generates requests for
     SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost
+
+func NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequest(server string, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody) (*http.Request, error)
+    NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequest
+    calls the generic
+    SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut
+    builder with application/json body
+
+func NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequestWithBody(server string, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader) (*http.Request, error)
+    NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequestWithBody
+    generates requests for
+    SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut with
+    any type of body
 
 func NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest(server string, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody) (*http.Request, error)
     NewStartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostRequest
@@ -3967,8 +4362,16 @@ const (
 )
     Defines values for AgentEvaluationTier.
 
+type AgentExampleListResponse struct {
+	Data []interface{} `json:&#34;data&#34;`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:&#34;pagination&#34;`
+}
+    AgentExampleListResponse defines model for AgentExampleListResponse.
+
 type AgentExportResponse struct {
-	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, created_at, updated_at.
+	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, max_credits_per_run, max_credits_per_period, max_runs_per_hour, max_runs_per_day, max_runs_total, created_at, updated_at.
 	Agent map[string]interface{} `json:&#34;agent&#34;`
 
 	// AlertConfigs Alert configurations.
@@ -4127,6 +4530,9 @@ type AgentRunStepResponse struct {
 	// CreditsUsed Credits consumed by this step across every attempt it made. Some charges made outside any step, such as governance screening of the run&#39;s input, count toward the run&#39;s total but no step&#39;s. The timestamps above and the tool calls below describe the latest attempt only.
 	CreditsUsed float32 `json:&#34;credits_used&#34;`
 
+	// Decision The arm an `if_else` or `switch` step took: `then` or `else`, or the case name or `else`. Null for other step types, until the step has decided, and when a `switch` took no arm.
+	Decision *string `json:&#34;decision&#34;`
+
 	// DurationSeconds Duration of the step attempt in seconds.
 	DurationSeconds *float32 `json:&#34;duration_seconds&#34;`
 
@@ -4136,7 +4542,7 @@ type AgentRunStepResponse struct {
 	// Input Input text provided to the step, if any.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step that produced it output files and is not a `for_each`.
 	Input *string `json:&#34;input&#34;`
 
-	// Output Output text produced by the step, if any; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step output files and is not a `for_each`.
+	// Output Output text produced by the step, if any; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step output files and is not a `for_each`.  For an `if_else` or `switch`, the result of the arm it took (its input when that arm is empty or it took none); below `Seclai-Version: 2026-10-28`, the `{&#34;branch&#34;: ...}` marker naming that arm, with no `attachments`.
 	Output *string `json:&#34;output&#34;`
 
 	// OutputContentType Content type of the step output, if any.
@@ -4222,6 +4628,9 @@ type AgentSummaryResponse struct {
 	// CreatedAt ISO 8601 creation timestamp.
 	CreatedAt string `json:&#34;created_at&#34;`
 
+	// CreatedResources On a create from an `agent_template`: {slot: resource_id} for each resource `create_missing_resources` created.
+	CreatedResources *map[string]string `json:&#34;created_resources&#34;`
+
 	// DefaultEvaluationTier Default evaluation tier: fast, balanced, or thorough.
 	DefaultEvaluationTier *string `json:&#34;default_evaluation_tier&#34;`
 
@@ -4246,8 +4655,23 @@ type AgentSummaryResponse struct {
 	// ImportWarnings One entry per item dropped or substituted during import. Present only on endpoints that accept agent_definition; null on non-import calls; [] when the import had no skips.
 	ImportWarnings *[]ImportSkipResponse `json:&#34;import_warnings&#34;`
 
+	// MaxCreditsPerPeriod Credit limit per billing period; null when none.
+	MaxCreditsPerPeriod *float32 `json:&#34;max_credits_per_period&#34;`
+
+	// MaxCreditsPerRun Credit limit per run; null when none.
+	MaxCreditsPerRun *float32 `json:&#34;max_credits_per_run&#34;`
+
 	// MaxRetries Max retries for eval_and_retry mode.
 	MaxRetries *int `json:&#34;max_retries,omitempty&#34;`
+
+	// MaxRunsPerDay Runs per day limit; null when none.
+	MaxRunsPerDay *int `json:&#34;max_runs_per_day&#34;`
+
+	// MaxRunsPerHour Runs per hour limit; null when none.
+	MaxRunsPerHour *int `json:&#34;max_runs_per_hour&#34;`
+
+	// MaxRunsTotal Limit on runs in total; null when none.
+	MaxRunsTotal *int `json:&#34;max_runs_total&#34;`
 
 	// Name Agent name.
 	Name string `json:&#34;name&#34;`
@@ -4266,6 +4690,9 @@ type AgentSummaryResponse struct {
 
 	// SamplingConfig Sampling configuration for sample_and_flag mode.
 	SamplingConfig *map[string]interface{} `json:&#34;sampling_config&#34;`
+
+	// SolutionId On a create from an `agent_template` that created resources: the solution grouping the agent with them.
+	SolutionId *string `json:&#34;solution_id&#34;`
 
 	// TriggerId ID of the agent&#39;s trigger, for the `/agents/{agent_id}/triggers/{trigger_id}/…` endpoints such as `accepted-attachments` and `email-config`.
 	TriggerId *string `json:&#34;trigger_id&#34;`
@@ -5615,6 +6042,8 @@ func (c *Client) ListAgentEmailOptoutsApiApiAgentsAgentEmailOptoutsGet(ctx conte
 
 func (c *Client) ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGet(ctx context.Context, agentId string, params *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+func (c *Client) ListAgentExamplesApiAgentsExamplesGet(ctx context.Context, params *ListAgentExamplesApiAgentsExamplesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 func (c *Client) ListAgentRunsApiAgentsAgentIdRunsGet(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 func (c *Client) ListAgentsApiAgentsGet(ctx context.Context, params *ListAgentsApiAgentsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5750,6 +6179,10 @@ func (c *Client) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailC
 func (c *Client) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 func (c *Client) SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPost(ctx context.Context, domainId openapi_types.UUID, params *SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+func (c *Client) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 func (c *Client) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPost(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, body StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5900,6 +6333,9 @@ type ClientInterface interface {
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAgentExamplesApiAgentsExamplesGet request
+	ListAgentExamplesApiAgentsExamplesGet(ctx context.Context, params *ListAgentExamplesApiAgentsExamplesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet request
 	ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -6027,6 +6463,11 @@ type ClientInterface interface {
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody request with any body
+	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPost request
 	ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7061,6 +7502,10 @@ func (c *ClientWithResponses) ListAgentEvaluationResultsApiAgentsAgentIdEvaluati
     request returning
     *ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse
 
+func (c *ClientWithResponses) ListAgentExamplesApiAgentsExamplesGetWithResponse(ctx context.Context, params *ListAgentExamplesApiAgentsExamplesGetParams, reqEditors ...RequestEditorFn) (*ListAgentExamplesApiAgentsExamplesGetResponse, error)
+    ListAgentExamplesApiAgentsExamplesGetWithResponse request returning
+    *ListAgentExamplesApiAgentsExamplesGetResponse
+
 func (c *ClientWithResponses) ListAgentRunsApiAgentsAgentIdRunsGetWithResponse(ctx context.Context, agentId string, params *ListAgentRunsApiAgentsAgentIdRunsGetParams, reqEditors ...RequestEditorFn) (*ListAgentRunsApiAgentsAgentIdRunsGetResponse, error)
     ListAgentRunsApiAgentsAgentIdRunsGetWithResponse request returning
     *ListAgentRunsApiAgentsAgentIdRunsGetResponse
@@ -7337,6 +7782,13 @@ func (c *ClientWithResponses) SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPri
     request returning
     *SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse
 
+func (c *ClientWithResponses) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error)
+    SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse
+    request with arbitrary body returning
+    *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse
+
+func (c *ClientWithResponses) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error)
+
 func (c *ClientWithResponses) StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse(ctx context.Context, sourceConnectionId openapi_types.UUID, params *StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostResponse, error)
     StartSourceEmbeddingMigrationApiSourcesSourceConnectionIdEmbeddingMigrationPostWithBodyWithResponse
     request with arbitrary body returning
@@ -7557,6 +8009,9 @@ type ClientWithResponsesInterface interface {
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse, error)
 
+	// ListAgentExamplesApiAgentsExamplesGetWithResponse request
+	ListAgentExamplesApiAgentsExamplesGetWithResponse(ctx context.Context, params *ListAgentExamplesApiAgentsExamplesGetParams, reqEditors ...RequestEditorFn) (*ListAgentExamplesApiAgentsExamplesGetResponse, error)
+
 	// ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse request
 	ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse, error)
 
@@ -7684,6 +8139,11 @@ type ClientWithResponsesInterface interface {
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error)
 
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error)
+
+	// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse request with any body
+	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error)
+
+	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error)
 
 	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request
 	ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error)
@@ -9631,7 +10091,7 @@ type EmailSourceRejectionResponse struct {
 	// Id Unique identifier of the refusal.
 	Id string `json:&#34;id&#34;`
 
-	// Reason Why it was refused: sender_not_allowed, unauthenticated_sender, unreadable_from, sender_blocked, spam, virus, unsafe_content, rate_limited, account_not_chargeable or empty_message; or, for a message the source received before, what became of the earlier one: repeat_stored, repeat_held, repeat_deleted or repeat_in_progress.
+	// Reason Why it was refused: sender_not_allowed, unauthenticated_sender, unreadable_from, sender_blocked, spam, virus, unsafe_content, rate_limited, account_not_chargeable, spend_limit_reached or empty_message; or, for a message the source received before, what became of the earlier one: repeat_stored, repeat_held, repeat_deleted or repeat_in_progress.
 	Reason string `json:&#34;reason&#34;`
 
 	// Recipient The source address it was sent to.
@@ -11753,6 +12213,46 @@ func (r ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse) 
 func (r ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse) StatusCode() int
     StatusCode returns HTTPResponse.StatusCode
 
+type ListAgentExamplesApiAgentsExamplesGetParams struct {
+	// Query Words every match must contain.
+	Query *string `form:&#34;query,omitempty&#34; json:&#34;query,omitempty&#34;`
+
+	// UseCase Only entries for this use case.
+	UseCase *string `form:&#34;use_case,omitempty&#34; json:&#34;use_case,omitempty&#34;`
+
+	// Page Page number
+	Page *int `form:&#34;page,omitempty&#34; json:&#34;page,omitempty&#34;`
+
+	// Limit Items per page
+	Limit *int `form:&#34;limit,omitempty&#34; json:&#34;limit,omitempty&#34;`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user&#39;s default account is used. Ignored for API key authentication — the key&#39;s account is always used.
+	XAccountId *XAccountId `json:&#34;X-Account-Id,omitempty&#34;`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account&#39;s pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change&#39;s release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:&#34;Seclai-Version,omitempty&#34;`
+}
+    ListAgentExamplesApiAgentsExamplesGetParams defines parameters for
+    ListAgentExamplesApiAgentsExamplesGet.
+
+type ListAgentExamplesApiAgentsExamplesGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentExampleListResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+func ParseListAgentExamplesApiAgentsExamplesGetResponse(rsp *http.Response) (*ListAgentExamplesApiAgentsExamplesGetResponse, error)
+    ParseListAgentExamplesApiAgentsExamplesGetResponse parses an HTTP response
+    from a ListAgentExamplesApiAgentsExamplesGetWithResponse call
+
+func (r ListAgentExamplesApiAgentsExamplesGetResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r ListAgentExamplesApiAgentsExamplesGetResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
 type ListAgentRunsApiAgentsAgentIdRunsGetParams struct {
 	// Page Page number
 	Page *int `form:&#34;page,omitempty&#34; json:&#34;page,omitempty&#34;`
@@ -13830,8 +14330,11 @@ type RoutersApiAgentsCreateAgentRequest struct {
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, replaces any template-derived workflow and pre-fills metadata/trigger fields the request does not specify explicitly. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
 	AgentDefinition *map[string]interface{} `json:&#34;agent_definition,omitempty&#34;`
 
-	// AgentTemplate Template to initialize the agent from. Values: blank, retrieval_example, simple_qa, summarizer, json_extractor, content_change_notifier, scheduled_report, webhook_pipeline.
+	// AgentTemplate Agent gallery entry to start from: a `key` from GET /agents/examples, or `blank`. The keys retrieval_example and simple_qa remain accepted for their gallery entries.
 	AgentTemplate *string `json:&#34;agent_template,omitempty&#34;`
+
+	// CreateMissingResources For an `agent_template`: create each creatable resource slot left out of `resource_bindings`, and group the agent with them in a new solution. When false, an unbound slot the template needs is an error.
+	CreateMissingResources *bool `json:&#34;create_missing_resources,omitempty&#34;`
 
 	// Description Optional description.
 	Description *string `json:&#34;description,omitempty&#34;`
@@ -13842,7 +14345,10 @@ type RoutersApiAgentsCreateAgentRequest struct {
 	// Name Name for the new agent.
 	Name string `json:&#34;name&#34;`
 
-	// TriggerType Trigger type: dynamic_input, template_input, schedule, new_content, email_received.
+	// ResourceBindings For an `agent_template`: the existing resource to use for each of the template&#39;s resource slots, as {slot: resource_id}. GET /agents/examples lists each template&#39;s slots.
+	ResourceBindings *map[string]openapi_types.UUID `json:&#34;resource_bindings,omitempty&#34;`
+
+	// TriggerType Defaults to dynamic_input, or to the template&#39;s own trigger type for an `agent_template` without `agent_definition`.
 	TriggerType *string `json:&#34;trigger_type,omitempty&#34;`
 }
     RoutersApiAgentsCreateAgentRequest defines model for
@@ -13887,6 +14393,9 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, agent metadata fields the request does not set explicitly are taken from the payload, and the agent&#39;s workflow is replaced from `agent.definition`. The previous version is preserved in history. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
 	AgentDefinition *map[string]interface{} `json:&#34;agent_definition,omitempty&#34;`
 
+	// ApplyImportRunLimits With `agent_definition`, also replace the agent&#39;s run limits with the payload&#39;s (a null there removes a limit). Off by default: the agent keeps its limits.
+	ApplyImportRunLimits *bool `json:&#34;apply_import_run_limits,omitempty&#34;`
+
 	// DefaultEvaluationTier Default evaluation tier: &#39;fast&#39;, &#39;balanced&#39;, or &#39;thorough&#39;.
 	DefaultEvaluationTier *string `json:&#34;default_evaluation_tier,omitempty&#34;`
 
@@ -13899,8 +14408,23 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 	// EvaluationMode Evaluation mode: &#39;output_expectation&#39;, &#39;eval_and_retry&#39;, or &#39;sample_and_flag&#39;.
 	EvaluationMode *string `json:&#34;evaluation_mode,omitempty&#34;`
 
+	// MaxCreditsPerPeriod Credit limit per billing period of the paying account: once reached, runs stop at their next step and new runs are refused.
+	MaxCreditsPerPeriod *float32 `json:&#34;max_credits_per_period,omitempty&#34;`
+
+	// MaxCreditsPerRun Credit limit per run: a run that reaches it is stopped before its next step.
+	MaxCreditsPerRun *float32 `json:&#34;max_credits_per_run,omitempty&#34;`
+
 	// MaxRetries Max retries for eval_and_retry mode (1-10).
 	MaxRetries *int `json:&#34;max_retries,omitempty&#34;`
+
+	// MaxRunsPerDay Runs per day; at most the plan&#39;s run quota.
+	MaxRunsPerDay *int `json:&#34;max_runs_per_day,omitempty&#34;`
+
+	// MaxRunsPerHour Runs per hour; at most the plan&#39;s run quota.
+	MaxRunsPerHour *int `json:&#34;max_runs_per_hour,omitempty&#34;`
+
+	// MaxRunsTotal Runs in total; once reached, new runs are refused.
+	MaxRunsTotal *int `json:&#34;max_runs_total,omitempty&#34;`
 
 	// Name New name for the agent.
 	Name *string `json:&#34;name,omitempty&#34;`
@@ -13920,6 +14444,21 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 
 	// SetDefaultEvaluationTier When true and default_evaluation_tier is omitted, clears the tier to null (system default).
 	SetDefaultEvaluationTier *bool `json:&#34;set_default_evaluation_tier,omitempty&#34;`
+
+	// SetMaxCreditsPerPeriod When true and max_credits_per_period is omitted, removes the limit.
+	SetMaxCreditsPerPeriod *bool `json:&#34;set_max_credits_per_period,omitempty&#34;`
+
+	// SetMaxCreditsPerRun When true and max_credits_per_run is omitted, removes the limit.
+	SetMaxCreditsPerRun *bool `json:&#34;set_max_credits_per_run,omitempty&#34;`
+
+	// SetMaxRunsPerDay When true and max_runs_per_day is omitted, removes the limit.
+	SetMaxRunsPerDay *bool `json:&#34;set_max_runs_per_day,omitempty&#34;`
+
+	// SetMaxRunsPerHour When true and max_runs_per_hour is omitted, removes the limit.
+	SetMaxRunsPerHour *bool `json:&#34;set_max_runs_per_hour,omitempty&#34;`
+
+	// SetMaxRunsTotal When true and max_runs_total is omitted, removes the limit.
+	SetMaxRunsTotal *bool `json:&#34;set_max_runs_total,omitempty&#34;`
 
 	// SetPromptModelAutoRollbackTriggers When true and prompt_model_auto_rollback_triggers is omitted, clears the list to null (revert to system defaults).
 	SetPromptModelAutoRollbackTriggers *bool `json:&#34;set_prompt_model_auto_rollback_triggers,omitempty&#34;`
@@ -15005,7 +15544,7 @@ func (r SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttach
     StatusCode returns HTTPResponse.StatusCode
 
 type SetAcceptedAttachmentsRequest struct {
-	// AcceptedAttachments The input attachments the trigger accepts; ``null`` accepts any files (one attachment named ``files``). Only ``dynamic_input`` and ``email_received`` triggers take files.
+	// AcceptedAttachments The input attachments the trigger accepts; ``null`` accepts any files (one attachment named ``files``). Only ``dynamic_input``, ``email_received`` and ``slack_command`` triggers take files.
 	AcceptedAttachments *[]AcceptedAttachmentSlot `json:&#34;accepted_attachments&#34;`
 }
     SetAcceptedAttachmentsRequest defines model for
@@ -15117,6 +15656,69 @@ func (r SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse) Stat
 func (r SetPrimaryEmailDomainApiApiEmailDomainsDomainIdPrimaryPostResponse) StatusCode() int
     StatusCode returns HTTPResponse.StatusCode
 
+type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody = SetSlackTriggerConfigApiRequest
+    SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody
+    defines body for
+    SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut for
+    application/json ContentType.
+
+type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user&#39;s default account is used. Ignored for API key authentication — the key&#39;s account is always used.
+	XAccountId *XAccountId `json:&#34;X-Account-Id,omitempty&#34;`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account&#39;s pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change&#39;s release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:&#34;Seclai-Version,omitempty&#34;`
+}
+    SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams
+    defines parameters for
+    SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut.
+
+type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SlackTriggerConfigApiResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+func ParseSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse(rsp *http.Response) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error)
+    ParseSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse
+    parses an HTTP response from a
+    SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithResponse
+    call
+
+func (r SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse) Status() string
+    Status returns HTTPResponse.Status
+
+func (r SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse) StatusCode() int
+    StatusCode returns HTTPResponse.StatusCode
+
+type SetSlackTriggerConfigApiRequest struct {
+	Activation *SlackTriggerActivation `json:&#34;activation,omitempty&#34;`
+
+	// AllowDms Runnable in the app&#39;s own DMs.
+	AllowDms   *bool     `json:&#34;allow_dms,omitempty&#34;`
+	ChannelIds *[]string `json:&#34;channel_ids,omitempty&#34;`
+
+	// Form Form fields `{key, label, type, required, hint, choices, max_length}`. `type`: short_text, long_text, number, single_choice, multi_choice, yes_no, date, slack_user or slack_channel. Each value reaches the run as `{{metadata.&lt;key&gt;}}`.
+	Form                *[]map[string]interface{} `json:&#34;form,omitempty&#34;`
+	IncludeInvokerEmail *bool                     `json:&#34;include_invoker_email,omitempty&#34;`
+
+	// Input The trigger&#39;s input template. Each `{{metadata.&lt;key&gt;}}` in it must be a form field key or a platform key; it is checked together with `form`.
+	Input    *string `json:&#34;input,omitempty&#34;`
+	MaxTurns *int    `json:&#34;max_turns,omitempty&#34;`
+
+	// McpClientId The account&#39;s connected Slack (Bot) MCP client.
+	McpClientId              *openapi_types.UUID   `json:&#34;mcp_client_id,omitempty&#34;`
+	NotifyFailureAfterAnswer *bool                 `json:&#34;notify_failure_after_answer,omitempty&#34;`
+	Scope                    *SlackTriggerScope    `json:&#34;scope,omitempty&#34;`
+	StartWithoutForm         *bool                 `json:&#34;start_without_form,omitempty&#34;`
+	TurnsAnyone              *bool                 `json:&#34;turns_anyone,omitempty&#34;`
+	TurnsEnabled             *bool                 `json:&#34;turns_enabled,omitempty&#34;`
+	Visibility               *SlackReplyVisibility `json:&#34;visibility,omitempty&#34;`
+}
+    SetSlackTriggerConfigApiRequest Omitted fields are left unchanged.
+
 type SkippedAttachmentReason string
     SkippedAttachmentReason defines model for SkippedAttachmentReason.
 
@@ -15141,6 +15743,57 @@ type SkippedAttachmentResponse struct {
 }
     SkippedAttachmentResponse A part of an email that was not stored as an
     attachment.
+
+type SlackReplyVisibility string
+    SlackReplyVisibility defines model for SlackReplyVisibility.
+
+const (
+	Channel SlackReplyVisibility = &#34;channel&#34;
+	Private SlackReplyVisibility = &#34;private&#34;
+)
+    Defines values for SlackReplyVisibility.
+
+type SlackTriggerActivation string
+    SlackTriggerActivation defines model for SlackTriggerActivation.
+
+const (
+	ChannelOptIn SlackTriggerActivation = &#34;channel_opt_in&#34;
+	Everywhere   SlackTriggerActivation = &#34;everywhere&#34;
+)
+    Defines values for SlackTriggerActivation.
+
+type SlackTriggerConfigApiResponse struct {
+	Activation          string                   `json:&#34;activation&#34;`
+	AgentId             openapi_types.UUID       `json:&#34;agent_id&#34;`
+	AllowDms            bool                     `json:&#34;allow_dms&#34;`
+	ChannelIds          []string                 `json:&#34;channel_ids&#34;`
+	Form                []map[string]interface{} `json:&#34;form&#34;`
+	IncludeInvokerEmail bool                     `json:&#34;include_invoker_email&#34;`
+	MaxTurns            *int                     `json:&#34;max_turns&#34;`
+	McpClientId         *openapi_types.UUID      `json:&#34;mcp_client_id&#34;`
+
+	// MissingScopes Scopes the Slack connection lacks for optional features.
+	MissingScopes            []string           `json:&#34;missing_scopes&#34;`
+	NotifyFailureAfterAnswer bool               `json:&#34;notify_failure_after_answer&#34;`
+	Scope                    string             `json:&#34;scope&#34;`
+	SlackTeamId              *string            `json:&#34;slack_team_id&#34;`
+	StartWithoutForm         bool               `json:&#34;start_without_form&#34;`
+	TriggerId                openapi_types.UUID `json:&#34;trigger_id&#34;`
+	TurnsAnyone              bool               `json:&#34;turns_anyone&#34;`
+	TurnsEnabled             bool               `json:&#34;turns_enabled&#34;`
+	Visibility               string             `json:&#34;visibility&#34;`
+}
+    SlackTriggerConfigApiResponse defines model for
+    SlackTriggerConfigApiResponse.
+
+type SlackTriggerScope string
+    SlackTriggerScope defines model for SlackTriggerScope.
+
+const (
+	BotChannels      SlackTriggerScope = &#34;bot_channels&#34;
+	SelectedChannels SlackTriggerScope = &#34;selected_channels&#34;
+)
+    Defines values for SlackTriggerScope.
 
 type SolutionSourceConnectionResponse struct {
 	Id   openapi_types.UUID `json:&#34;id&#34;`
@@ -15241,7 +15894,7 @@ type SourceContentStatusResponse struct {
 	// ExtractedMediaLimit The bound that was reached, when extracted_media_capped is true and the stop was a bound — a number of fetch attempts, of seconds, of bytes, or of media listed. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.
 	ExtractedMediaLimit *int `json:&#34;extracted_media_limit&#34;`
 
-	// HeldForReview An ENFORCE governance policy blocked this item at import. It is held for review and is not retrievable: resolving its blocking evaluations releases it into the source, and it is purged when the hold window ends.
+	// HeldForReview An ENFORCE governance policy blocked this item at import. It is held for review and is not retrievable: resolving its blocking evaluations releases it into the source; left unresolved, it is purged when the hold window ends.
 	HeldForReview *bool `json:&#34;held_for_review,omitempty&#34;`
 
 	// IndexedAt Timestamp when the item finished indexing and became retrievable. `null` until then.
@@ -15256,7 +15909,10 @@ type SourceContentStatusResponse struct {
 	// PulledAt Timestamp when the item was uploaded or pulled.
 	PulledAt string `json:&#34;pulled_at&#34;`
 
-	// SourceConnectionContentVersionId ID to pass to `GET /contents/{id}`. `null` until the item has finished indexing — an item that is still processing, or that failed, has no retrievable content and keeps this `null`.
+	// ReleaseWaitingReason Set on a held item review approved whose release was refused: why it waits, the account being unable to pay for it or the source&#39;s spend limit having no room for it. Its release is retried; null until one is refused.
+	ReleaseWaitingReason *string `json:&#34;release_waiting_reason&#34;`
+
+	// SourceConnectionContentVersionId ID to pass to `GET /contents/{id}`. `null` while the item has no retrievable content.
 	SourceConnectionContentVersionId *string `json:&#34;source_connection_content_version_id&#34;`
 
 	// Title Title of the content item.
@@ -15403,6 +16059,9 @@ type SourceResponse struct {
 	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
 	IndexMode *SourceIndexMode `json:&#34;index_mode,omitempty&#34;`
 
+	// MaxCreditsPerPeriod The source&#39;s spend limit: credits it may commit per billing period. Null when it has none.
+	MaxCreditsPerPeriod *float32 `json:&#34;max_credits_per_period&#34;`
+
 	// MediaTypes Media kinds in a web page&#39;s main content that are attached to the page&#39;s item and indexed (subset of [&#39;images&#39;, &#39;video&#39;]). On a website or RSS source &#39;images&#39; also covers the images inside PDF, DOCX, PPTX and XLSX files.
 	MediaTypes *[]string `json:&#34;media_types,omitempty&#34;`
 
@@ -15431,7 +16090,14 @@ type SourceResponse struct {
 	Retention *int `json:&#34;retention&#34;`
 
 	// SourceType Type of the source connection.
-	SourceType string `json:&#34;source_type&#34;`
+	SourceType     string          `json:&#34;source_type&#34;`
+	SpendCapAction *SpendCapAction `json:&#34;spend_cap_action,omitempty&#34;`
+
+	// SpendCapDeleteOrder Which entries a DELETE cap removes first.
+	SpendCapDeleteOrder *SpendCapDeleteOrder `json:&#34;spend_cap_delete_order,omitempty&#34;`
+
+	// SpendCapReached True while the spend limit refuses uploads and email to this source.
+	SpendCapReached *bool `json:&#34;spend_cap_reached,omitempty&#34;`
 
 	// SystemManaged Indicates if this source is automatically managed by the system (e.g., agent traces).
 	SystemManaged *bool `json:&#34;system_managed,omitempty&#34;`
@@ -15443,6 +16109,25 @@ type SourceResponse struct {
 	Url *string `json:&#34;url&#34;`
 }
     SourceResponse Response model for source data.
+
+type SpendCapAction string
+    SpendCapAction defines model for SpendCapAction.
+
+const (
+	Delete SpendCapAction = &#34;delete&#34;
+	Stop   SpendCapAction = &#34;stop&#34;
+)
+    Defines values for SpendCapAction.
+
+type SpendCapDeleteOrder string
+    SpendCapDeleteOrder Which entries a DELETE cap removes first.
+
+const (
+	LargestFirst    SpendCapDeleteOrder = &#34;largest_first&#34;
+	OldestAdded     SpendCapDeleteOrder = &#34;oldest_added&#34;
+	OldestPublished SpendCapDeleteOrder = &#34;oldest_published&#34;
+)
+    Defines values for SpendCapDeleteOrder.
 
 type StandaloneTestCompactionRequest struct {
 	// BankType Memory bank type (&#39;conversation&#39; or &#39;general&#39;) — controls the style of generated entries.
@@ -16429,6 +17114,9 @@ type UpdateSourceBody struct {
 	// FeedAttachments Kinds of file listed beside a feed item&#39;s content to attach to the item and index, on an RSS source. Subset of [&#39;enclosures&#39;, &#39;item_image&#39;, &#39;media_rss&#39;]; any other value is refused. [] attaches none. Applies to items added after it changes. Omit the field to leave it unchanged.
 	FeedAttachments *[]string `json:&#34;feed_attachments,omitempty&#34;`
 
+	// MaxCreditsPerPeriod Spend limit: the credits this source may commit per billing period — what the account was charged for it this period plus the storage of what it holds until the period ends. Send null to remove the limit; omit to leave it unchanged.
+	MaxCreditsPerPeriod *float32 `json:&#34;max_credits_per_period,omitempty&#34;`
+
 	// MediaTypes Media kinds in a web page&#39;s main content to attach to the page&#39;s item and index, on a website or RSS source. Subset of [&#39;images&#39;, &#39;video&#39;]. From `Seclai-Version: 2026-10-13` any other value, and any kind on another source type, is refused with a 400; older versions drop an unknown value and store the rest. A kind the source&#39;s embedder cannot index is stored and not indexed (see `supported_input_media` on GET /models/embedders). [] attaches no media from web pages. &#39;images&#39; also covers the images inside PDF, DOCX, PPTX and XLSX files. Applies to pages and documents added after it changes.
 	MediaTypes *[]string `json:&#34;media_types,omitempty&#34;`
 
@@ -16439,7 +17127,11 @@ type UpdateSourceBody struct {
 	Polling *string `json:&#34;polling,omitempty&#34;`
 
 	// RetentionDays New retention period in days — content older than this is deleted permanently. Send null to clear the window: content is then kept indefinitely. Omit the field to leave it unchanged.
-	RetentionDays *int `json:&#34;retention_days,omitempty&#34;`
+	RetentionDays  *int            `json:&#34;retention_days,omitempty&#34;`
+	SpendCapAction *SpendCapAction `json:&#34;spend_cap_action,omitempty&#34;`
+
+	// SpendCapDeleteOrder Which entries a DELETE cap removes first.
+	SpendCapDeleteOrder *SpendCapDeleteOrder `json:&#34;spend_cap_delete_order,omitempty&#34;`
 }
     UpdateSourceBody Request body for updating a content source.
 
