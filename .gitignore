@@ -7,3 +7,5 @@
 
 # Docs/build output
 build/
+
+__pycache__

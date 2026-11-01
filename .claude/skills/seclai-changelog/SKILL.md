@@ -70,7 +70,7 @@ Do not guess the next version. Releases are cut by `seclai/github-tag-action` in
 - contains `#minor` → minor bump
 - otherwise → `DEFAULT_BUMP: patch`
 
-So a PR that adds endpoints must say `#minor` in its title/merge commit, or the heading you write will not match the tag that gets cut. Confirm the intended bump with the user when it isn't stated, and flag the mismatch risk if the PR title lacks the keyword.
+So a change that adds endpoints must say `#minor` in a commit message, or the heading you write will not match the tag that gets cut. The keyword goes in the commit message, not the PR title. Confirm the intended bump with the user when it isn't stated, and flag the mismatch risk if no commit message carries the keyword.
 
 Check `git tag --sort=-v:refname | head -1` for the current latest, then apply the bump.
 
@@ -160,8 +160,10 @@ export type AddEmailDomainInput = Pick<AddEmailDomainRequest, "kind" | "value"> 
 
 See `AddEmailDomainInput` and `CreateExperimentInput` in `src/types.ts`.
 
-**Compile the doc examples.** `npm run typecheck` covers `src/` and `tests/`, not
-README or changelog snippets. Paste any example you write into a scratch `.ts`
+**Compile the doc examples.** `npm run typecheck` covers `src/` only — its
+`tsconfig.json` includes `src/**/*.ts`, and vitest strips types without checking
+them, so `tests/` is not type-checked either — let alone README or changelog
+snippets. Paste any example you write into a scratch `.ts`
 that imports from `../src/index` and compile it — that is how the
 `delegated`-is-required bug above was found, after the snippet had already shipped
 in a PR.

@@ -419,12 +419,30 @@
         "title": "AgentEvaluationTier",
         "type": "string"
       },
+      "AgentExampleListResponse": {
+        "properties": {
+          "data": {
+            "items": {},
+            "title": "Data",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/PaginationResponse"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "title": "AgentExampleListResponse",
+        "type": "object"
+      },
       "AgentExportResponse": {
         "description": "Portable JSON snapshot of an agent definition.",
         "properties": {
           "agent": {
             "additionalProperties": true,
-            "description": "Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, created_at, updated_at.",
+            "description": "Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, max_credits_per_run, max_credits_per_period, max_runs_per_hour, max_runs_per_day, max_runs_total, created_at, updated_at.",
             "title": "Agent",
             "type": "object"
           },
@@ -963,6 +981,18 @@
             "title": "Credits Used",
             "type": "number"
           },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The arm an `if_else` or `switch` step took: `then` or `else`, or the case name or `else`. Null for other step types, until the step has decided, and when a `switch` took no arm.",
+            "title": "Decision"
+          },
           "duration_seconds": {
             "anyOf": [
               {
@@ -1008,7 +1038,7 @@
                 "type": "null"
               }
             ],
-            "description": "Output text produced by the step, if any; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step output files and is not a `for_each`.",
+            "description": "Output text produced by the step, if any; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step output files and is not a `for_each`.  For an `if_else` or `switch`, the result of the arm it took (its input when that arm is empty or it took none); below `Seclai-Version: 2026-10-28`, the `{\"branch\": ...}` marker naming that arm, with no `attachments`.",
             "title": "Output"
           },
           "output_content_type": {
@@ -1289,6 +1319,21 @@
             "title": "Created At",
             "type": "string"
           },
+          "created_resources": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On a create from an `agent_template`: {slot: resource_id} for each resource `create_missing_resources` created.",
+            "title": "Created Resources"
+          },
           "default_evaluation_tier": {
             "anyOf": [
               {
@@ -1369,11 +1414,71 @@
             "description": "One entry per item dropped or substituted during import. Present only on endpoints that accept agent_definition; null on non-import calls; [] when the import had no skips.",
             "title": "Import Warnings"
           },
+          "max_credits_per_period": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Credit limit per billing period; null when none.",
+            "title": "Max Credits Per Period"
+          },
+          "max_credits_per_run": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Credit limit per run; null when none.",
+            "title": "Max Credits Per Run"
+          },
           "max_retries": {
             "default": 3,
             "description": "Max retries for eval_and_retry mode.",
             "title": "Max Retries",
             "type": "integer"
+          },
+          "max_runs_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Runs per day limit; null when none.",
+            "title": "Max Runs Per Day"
+          },
+          "max_runs_per_hour": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Runs per hour limit; null when none.",
+            "title": "Max Runs Per Hour"
+          },
+          "max_runs_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Limit on runs in total; null when none.",
+            "title": "Max Runs Total"
           },
           "name": {
             "description": "Agent name.",
@@ -1425,6 +1530,18 @@
             ],
             "description": "Sampling configuration for sample_and_flag mode.",
             "title": "Sampling Config"
+          },
+          "solution_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On a create from an `agent_template` that created resources: the solution grouping the agent with them.",
+            "title": "Solution Id"
           },
           "trigger_id": {
             "anyOf": [
@@ -4526,7 +4643,7 @@
             "type": "string"
           },
           "reason": {
-            "description": "Why it was refused: sender_not_allowed, unauthenticated_sender, unreadable_from, sender_blocked, spam, virus, unsafe_content, rate_limited, account_not_chargeable or empty_message; or, for a message the source received before, what became of the earlier one: repeat_stored, repeat_held, repeat_deleted or repeat_in_progress.",
+            "description": "Why it was refused: sender_not_allowed, unauthenticated_sender, unreadable_from, sender_blocked, spam, virus, unsafe_content, rate_limited, account_not_chargeable, spend_limit_reached or empty_message; or, for a message the source received before, what became of the earlier one: repeat_stored, repeat_held, repeat_deleted or repeat_in_progress.",
             "title": "Reason",
             "type": "string"
           },
@@ -7828,7 +7945,7 @@
                 "type": "null"
               }
             ],
-            "description": "The input attachments the trigger accepts; ``null`` accepts any files (one attachment named ``files``). Only ``dynamic_input`` and ``email_received`` triggers take files.",
+            "description": "The input attachments the trigger accepts; ``null`` accepts any files (one attachment named ``files``). Only ``dynamic_input``, ``email_received`` and ``slack_command`` triggers take files.",
             "title": "Accepted Attachments"
           }
         },
@@ -7850,6 +7967,179 @@
           "mode"
         ],
         "title": "SetAutoBlockModeRequest",
+        "type": "object"
+      },
+      "SetSlackTriggerConfigApiRequest": {
+        "description": "Omitted fields are left unchanged.",
+        "properties": {
+          "activation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlackTriggerActivation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`everywhere` in scope, or `channel_opt_in`."
+          },
+          "allow_dms": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Runnable in the app's own DMs.",
+            "title": "Allow Dms"
+          },
+          "channel_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Ids"
+          },
+          "form": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Form fields `{key, label, type, required, hint, choices, max_length}`. `type`: short_text, long_text, number, single_choice, multi_choice, yes_no, date, slack_user or slack_channel. Each value reaches the run as `{{metadata.<key>}}`.",
+            "title": "Form"
+          },
+          "include_invoker_email": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Invoker Email"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trigger's input template. Each `{{metadata.<key>}}` in it must be a form field key or a platform key; it is checked together with `form`.",
+            "title": "Input"
+          },
+          "max_turns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Turns"
+          },
+          "mcp_client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The account's connected Slack (Bot) MCP client.",
+            "title": "Mcp Client Id"
+          },
+          "notify_failure_after_answer": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Failure After Answer"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlackTriggerScope"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`selected_channels` (see `channel_ids`) or `bot_channels`."
+          },
+          "start_without_form": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Without Form"
+          },
+          "turns_anyone": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turns Anyone"
+          },
+          "turns_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turns Enabled"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlackReplyVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`channel`, or `private` (replies in the person's DM)."
+          }
+        },
+        "title": "SetSlackTriggerConfigApiRequest",
         "type": "object"
       },
       "SkippedAttachmentReason": {
@@ -7907,6 +8197,158 @@
         ],
         "title": "SkippedAttachmentResponse",
         "type": "object"
+      },
+      "SlackReplyVisibility": {
+        "enum": [
+          "channel",
+          "private"
+        ],
+        "title": "SlackReplyVisibility",
+        "type": "string"
+      },
+      "SlackTriggerActivation": {
+        "enum": [
+          "everywhere",
+          "channel_opt_in"
+        ],
+        "title": "SlackTriggerActivation",
+        "type": "string"
+      },
+      "SlackTriggerConfigApiResponse": {
+        "properties": {
+          "activation": {
+            "title": "Activation",
+            "type": "string"
+          },
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "allow_dms": {
+            "title": "Allow Dms",
+            "type": "boolean"
+          },
+          "channel_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channel Ids",
+            "type": "array"
+          },
+          "form": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Form",
+            "type": "array"
+          },
+          "include_invoker_email": {
+            "title": "Include Invoker Email",
+            "type": "boolean"
+          },
+          "max_turns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Turns"
+          },
+          "mcp_client_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcp Client Id"
+          },
+          "missing_scopes": {
+            "description": "Scopes the Slack connection lacks for optional features.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Scopes",
+            "type": "array"
+          },
+          "notify_failure_after_answer": {
+            "title": "Notify Failure After Answer",
+            "type": "boolean"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "slack_team_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slack Team Id"
+          },
+          "start_without_form": {
+            "title": "Start Without Form",
+            "type": "boolean"
+          },
+          "trigger_id": {
+            "format": "uuid",
+            "title": "Trigger Id",
+            "type": "string"
+          },
+          "turns_anyone": {
+            "title": "Turns Anyone",
+            "type": "boolean"
+          },
+          "turns_enabled": {
+            "title": "Turns Enabled",
+            "type": "boolean"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trigger_id",
+          "agent_id",
+          "mcp_client_id",
+          "slack_team_id",
+          "form",
+          "scope",
+          "allow_dms",
+          "activation",
+          "visibility",
+          "start_without_form",
+          "turns_enabled",
+          "turns_anyone",
+          "max_turns",
+          "include_invoker_email",
+          "notify_failure_after_answer",
+          "channel_ids",
+          "missing_scopes"
+        ],
+        "title": "SlackTriggerConfigApiResponse",
+        "type": "object"
+      },
+      "SlackTriggerScope": {
+        "enum": [
+          "selected_channels",
+          "bot_channels"
+        ],
+        "title": "SlackTriggerScope",
+        "type": "string"
       },
       "SolutionSourceConnectionResponse": {
         "properties": {
@@ -8161,7 +8603,7 @@
           },
           "held_for_review": {
             "default": false,
-            "description": "An ENFORCE governance policy blocked this item at import. It is held for review and is not retrievable: resolving its blocking evaluations releases it into the source, and it is purged when the hold window ends.",
+            "description": "An ENFORCE governance policy blocked this item at import. It is held for review and is not retrievable: resolving its blocking evaluations releases it into the source; left unresolved, it is purged when the hold window ends.",
             "title": "Held For Review",
             "type": "boolean"
           },
@@ -8206,6 +8648,18 @@
             "title": "Pulled At",
             "type": "string"
           },
+          "release_waiting_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on a held item review approved whose release was refused: why it waits, the account being unable to pay for it or the source's spend limit having no room for it. Its release is retried; null until one is refused.",
+            "title": "Release Waiting Reason"
+          },
           "source_connection_content_version_id": {
             "anyOf": [
               {
@@ -8215,7 +8669,7 @@
                 "type": "null"
               }
             ],
-            "description": "ID to pass to `GET /contents/{id}`. `null` until the item has finished indexing \u2014 an item that is still processing, or that failed, has no retrievable content and keeps this `null`.",
+            "description": "ID to pass to `GET /contents/{id}`. `null` while the item has no retrievable content.",
             "title": "Source Connection Content Version Id"
           },
           "title": {
@@ -8684,6 +9138,18 @@
             ],
             "description": "Index mode for custom_index sources: fast_and_cheap, balanced, slow_and_thorough, or custom."
           },
+          "max_credits_per_period": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The source's spend limit: credits it may commit per billing period. Null when it has none.",
+            "title": "Max Credits Per Period"
+          },
           "media_types": {
             "description": "Media kinds in a web page's main content that are attached to the page's item and indexed (subset of ['images', 'video']). On a website or RSS source 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files.",
             "items": {
@@ -8780,6 +9246,22 @@
             "title": "Source Type",
             "type": "string"
           },
+          "spend_cap_action": {
+            "$ref": "#/components/schemas/SpendCapAction",
+            "default": "stop",
+            "description": "What the source does once it reaches its spend limit."
+          },
+          "spend_cap_delete_order": {
+            "$ref": "#/components/schemas/SpendCapDeleteOrder",
+            "default": "oldest_added",
+            "description": "Which entries a `delete` spend limit removes first."
+          },
+          "spend_cap_reached": {
+            "default": false,
+            "description": "True while the spend limit refuses uploads and email to this source.",
+            "title": "Spend Cap Reached",
+            "type": "boolean"
+          },
           "system_managed": {
             "default": false,
             "description": "Indicates if this source is automatically managed by the system (e.g., agent traces).",
@@ -8822,6 +9304,24 @@
         ],
         "title": "SourceResponse",
         "type": "object"
+      },
+      "SpendCapAction": {
+        "enum": [
+          "stop",
+          "delete"
+        ],
+        "title": "SpendCapAction",
+        "type": "string"
+      },
+      "SpendCapDeleteOrder": {
+        "description": "Which entries a DELETE cap removes first.",
+        "enum": [
+          "oldest_added",
+          "oldest_published",
+          "largest_first"
+        ],
+        "title": "SpendCapDeleteOrder",
+        "type": "string"
       },
       "StandaloneTestCompactionRequest": {
         "description": "Request body for testing a compaction prompt *without* an existing bank.\n\nUsed on the create-memory-bank page where no bank ID exists yet.\n``compaction_prompt`` is required (no bank to fall back to).\nContent must come from ``sample_entries`` or ``generate_direction``\n(no existing entries to fetch).",
@@ -9739,6 +10239,19 @@
             "description": "Kinds of file listed beside a feed item's content to attach to the item and index, on an RSS source. Subset of ['enclosures', 'item_image', 'media_rss']; any other value is refused. [] attaches none. Applies to items added after it changes. Omit the field to leave it unchanged.",
             "title": "Feed Attachments"
           },
+          "max_credits_per_period": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Spend limit: the credits this source may commit per billing period \u2014 what the account was charged for it this period plus the storage of what it holds until the period ends. Send null to remove the limit; omit to leave it unchanged.",
+            "title": "Max Credits Per Period"
+          },
           "media_types": {
             "anyOf": [
               {
@@ -9791,6 +10304,28 @@
             ],
             "description": "New retention period in days \u2014 content older than this is deleted permanently. Send null to clear the window: content is then kept indefinitely. Omit the field to leave it unchanged.",
             "title": "Retention Days"
+          },
+          "spend_cap_action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpendCapAction"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Once the limit is reached: `stop` refuses new content; `delete` deletes entries, in `spend_cap_delete_order`, to make room, and refuses new content as `stop` does once spend already fills the limit. Deleting does not return credits already spent."
+          },
+          "spend_cap_delete_order": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpendCapDeleteOrder"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which entries `delete` removes first: `oldest_added`, `oldest_published` or `largest_first`."
           }
         },
         "title": "UpdateSourceBody",
@@ -10325,8 +10860,14 @@
                 "type": "null"
               }
             ],
-            "description": "Template to initialize the agent from. Values: blank, retrieval_example, simple_qa, summarizer, json_extractor, content_change_notifier, scheduled_report, webhook_pipeline.",
+            "description": "Agent gallery entry to start from: a `key` from GET /agents/examples, or `blank`. The keys retrieval_example and simple_qa remain accepted for their gallery entries.",
             "title": "Agent Template"
+          },
+          "create_missing_resources": {
+            "default": false,
+            "description": "For an `agent_template`: create each creatable resource slot left out of `resource_bindings`, and group the agent with them in a new solution. When false, an unbound slot the template needs is an error.",
+            "title": "Create Missing Resources",
+            "type": "boolean"
           },
           "description": {
             "anyOf": [
@@ -10360,11 +10901,33 @@
             "title": "Name",
             "type": "string"
           },
+          "resource_bindings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For an `agent_template`: the existing resource to use for each of the template's resource slots, as {slot: resource_id}. GET /agents/examples lists each template's slots.",
+            "title": "Resource Bindings"
+          },
           "trigger_type": {
-            "default": "dynamic_input",
-            "description": "Trigger type: dynamic_input, template_input, schedule, new_content, email_received.",
-            "title": "Trigger Type",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Defaults to dynamic_input, or to the template's own trigger type for an `agent_template` without `agent_definition`.",
+            "title": "Trigger Type"
           }
         },
         "required": [
@@ -10498,6 +11061,12 @@
             "description": "Optional payload in the same format produced by GET /agents/{id}/export. When provided, agent metadata fields the request does not set explicitly are taken from the payload, and the agent's workflow is replaced from `agent.definition`. The previous version is preserved in history. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.",
             "title": "Agent Definition"
           },
+          "apply_import_run_limits": {
+            "default": false,
+            "description": "With `agent_definition`, also replace the agent's run limits with the payload's (a null there removes a limit). Off by default: the agent keeps its limits.",
+            "title": "Apply Import Run Limits",
+            "type": "boolean"
+          },
           "default_evaluation_tier": {
             "anyOf": [
               {
@@ -10549,6 +11118,32 @@
             "description": "Evaluation mode: 'output_expectation', 'eval_and_retry', or 'sample_and_flag'.",
             "title": "Evaluation Mode"
           },
+          "max_credits_per_period": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Credit limit per billing period of the paying account: once reached, runs stop at their next step and new runs are refused.",
+            "title": "Max Credits Per Period"
+          },
+          "max_credits_per_run": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Credit limit per run: a run that reaches it is stopped before its next step.",
+            "title": "Max Credits Per Run"
+          },
           "max_retries": {
             "anyOf": [
               {
@@ -10560,6 +11155,45 @@
             ],
             "description": "Max retries for eval_and_retry mode (1-10).",
             "title": "Max Retries"
+          },
+          "max_runs_per_day": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Runs per day; at most the plan's run quota.",
+            "title": "Max Runs Per Day"
+          },
+          "max_runs_per_hour": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Runs per hour; at most the plan's run quota.",
+            "title": "Max Runs Per Hour"
+          },
+          "max_runs_total": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Runs in total; once reached, new runs are refused.",
+            "title": "Max Runs Total"
           },
           "name": {
             "anyOf": [
@@ -10640,6 +11274,36 @@
             "default": false,
             "description": "When true and default_evaluation_tier is omitted, clears the tier to null (system default).",
             "title": "Set Default Evaluation Tier",
+            "type": "boolean"
+          },
+          "set_max_credits_per_period": {
+            "default": false,
+            "description": "When true and max_credits_per_period is omitted, removes the limit.",
+            "title": "Set Max Credits Per Period",
+            "type": "boolean"
+          },
+          "set_max_credits_per_run": {
+            "default": false,
+            "description": "When true and max_credits_per_run is omitted, removes the limit.",
+            "title": "Set Max Credits Per Run",
+            "type": "boolean"
+          },
+          "set_max_runs_per_day": {
+            "default": false,
+            "description": "When true and max_runs_per_day is omitted, removes the limit.",
+            "title": "Set Max Runs Per Day",
+            "type": "boolean"
+          },
+          "set_max_runs_per_hour": {
+            "default": false,
+            "description": "When true and max_runs_per_hour is omitted, removes the limit.",
+            "title": "Set Max Runs Per Hour",
+            "type": "boolean"
+          },
+          "set_max_runs_total": {
+            "default": false,
+            "description": "When true and max_runs_total is omitted, removes the limit.",
+            "title": "Set Max Runs Total",
             "type": "boolean"
           },
           "set_prompt_model_auto_rollback_triggers": {
@@ -13663,7 +14327,7 @@
         ]
       },
       "post": {
-        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `schedule`: triggered on a schedule\n- `new_content`: triggered when new content arrives\n- `email_received`: a virtual email inbox; runs when mail arrives at the agent's address. Configure the alias/allowlist with `PUT /agents/{agent_id}/triggers/{trigger_id}/email-config`, using the `trigger_id` this response returns.\n\nTemplates: `blank`, `retrieval_example`, `simple_qa`, `summarizer`, `json_extractor`, `content_change_notifier`, `scheduled_report`, `webhook_pipeline`\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
+        "description": "Create a new agent.\n\nTrigger types:\n- `dynamic_input`: triggered via API with user-provided input\n- `template_input`: triggered via API with a predefined template\n- `email_received`: a virtual email inbox; runs when mail arrives at the agent's address. Configure the alias/allowlist with `PUT /agents/{agent_id}/triggers/{trigger_id}/email-config`, using the `trigger_id` this response returns.\n\nStarting from the agent gallery:\n- Pass a `key` from `GET /agents/examples` as `agent_template`, or `blank` for an empty agent.\n- Bind the template's resource slots to existing resources with `resource_bindings`, or set `create_missing_resources` to have the creatable ones created.\n\nImporting an existing agent:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. The full extras suite (alert_configs, evaluation_criteria, governance_policies, schedules, solutions) is applied; items that don't resolve in this account are reported in the response's `import_warnings` array.\n- Use `POST /agents/preview-import` first to surface `unresolved_refs` (workflow refs to KBs, memory banks, source connections, sub-agents that don't exist here). Then pass `entity_remap: {source_uuid: target_uuid}` on this call to substitute them before save.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. Agent is created in the caller's account.",
         "operationId": "create_agent_api_agents_post",
         "parameters": [
           {
@@ -14883,6 +15547,127 @@
         ]
       }
     },
+    "/agents/examples": {
+      "get": {
+        "description": "List the agent gallery: example agents to start from, searchable by text and filterable by use case. Pass an entry's `key` as `agent_template` on POST /agents, with `resource_bindings` for the resources it needs.",
+        "operationId": "list_agent_examples_api_agents_examples_get",
+        "parameters": [
+          {
+            "description": "Words every match must contain.",
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words every match must contain.",
+              "title": "Query"
+            }
+          },
+          {
+            "description": "Only entries for this use case.",
+            "in": "query",
+            "name": "use_case",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only entries for this use case.",
+              "title": "Use Case"
+            }
+          },
+          {
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "Page number",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Items per page",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Items per page",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentExampleListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            },
+            "description": "A dependency is unavailable. `database_unavailable` is temporary (for example routine maintenance) and carries a `Retry-After` header, after which the request can be retried unchanged. `vector_store_unavailable` means the vector store backing an embeddings operation is not configured; it carries no `Retry-After` because it does not clear without an operator.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying. Sent only with `database_unavailable`.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent gallery examples",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/agents/inbound-email-rejections": {
       "get": {
         "description": "List recent inbound emails that were quietly discarded before running an agent (unauthorized sender, unknown alias, spam/virus, flood-shed) for this account's agents.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; always scoped to the key's account.",
@@ -15524,7 +16309,7 @@
         ]
       },
       "put": {
-        "description": "Update an agent's name, description, evaluation settings, and model lifecycle settings.\n\nEvaluation settings: `evaluation_mode` ('output_expectation', 'eval_and_retry', 'sample_and_flag'), `default_evaluation_tier` ('fast', 'balanced', 'thorough'), `max_retries`, `retry_on_failure`, `sampling_config`.\n\nModel lifecycle settings: `prompt_model_auto_upgrade_strategy` ('none', 'early_adopter', 'middle_of_road', 'cautious_adopter'), `prompt_model_auto_rollback_enabled`, `prompt_model_auto_rollback_triggers` (list of 'agent_eval_fail', 'governance_flag', 'governance_block', 'agent_run_failed').\n\nReplacing the workflow from an export:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. Update only touches the workflow + agent metadata \u2014 alert_configs, evaluation_criteria, governance_policies, schedules, and solution links from the imported file are NOT applied (use the dedicated endpoints for those, or `POST /agents` to import as a new agent).\n- `entity_remap: {source_uuid: target_uuid}` substitutes workflow entity refs before save (same shape as `POST /agents`).\n\nAt least one field must be provided.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
+        "description": "Update an agent's name, description, evaluation settings, model lifecycle settings and run limits.\n\nEvaluation settings: `evaluation_mode` ('output_expectation', 'eval_and_retry', 'sample_and_flag'), `default_evaluation_tier` ('fast', 'balanced', 'thorough'), `max_retries`, `retry_on_failure`, `sampling_config`.\n\nModel lifecycle settings: `prompt_model_auto_upgrade_strategy` ('none', 'early_adopter', 'middle_of_road', 'cautious_adopter'), `prompt_model_auto_rollback_enabled`, `prompt_model_auto_rollback_triggers` (list of 'agent_eval_fail', 'governance_flag', 'governance_block', 'agent_run_failed').\n\nRun limits (each must be greater than 0; pass the paired `set_<name>: true` with the value omitted to remove one): `max_credits_per_run`, `max_credits_per_period`, `max_runs_per_hour`, `max_runs_per_day`, `max_runs_total`. A runs-per-hour or per-day value above the plan's run quota is rejected with 400.\n\nReplacing the workflow from an export:\n- Pass `agent_definition` with the JSON shape produced by `GET /agents/{id}/export`. Update only touches the workflow + agent metadata \u2014 alert_configs, evaluation_criteria, governance_policies, schedules, and solution links from the imported file are NOT applied (use the dedicated endpoints for those, or `POST /agents` to import as a new agent).\n- `entity_remap: {source_uuid: target_uuid}` substitutes workflow entity refs before save (same shape as `POST /agents`).\n\nAt least one field must be provided.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. You can only update agents belonging to your account.",
         "operationId": "update_agent_api_agents__agent_id__put",
         "parameters": [
           {
@@ -17658,6 +18443,94 @@
         ]
       }
     },
+    "/agents/{agent_id}/triggers/{trigger_id}/slack-config": {
+      "put": {
+        "description": "Set the Slack connection, form, channels, visibility and conversation settings of an agent's SLACK_COMMAND trigger, which people run from Slack with `/seclai` or the message shortcut. Omitted fields are left unchanged.\n\nAuth & scoping: requires `X-API-Key` header or OAuth Bearer token; the trigger must belong to an agent in the key's account.",
+        "operationId": "set_slack_trigger_config_api_api_agents__agent_id__triggers__trigger_id__slack_config_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "trigger_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Trigger Id",
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/X-Account-Id"
+          },
+          {
+            "$ref": "#/components/parameters/Seclai-Version"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSlackTriggerConfigApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlackTriggerConfigApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableError"
+                }
+              }
+            },
+            "description": "A dependency is unavailable. `database_unavailable` is temporary (for example routine maintenance) and carries a `Retry-After` header, after which the request can be retried unchanged. `vector_store_unavailable` means the vector store backing an embeddings operation is not configured; it carries no `Retry-After` because it does not clear without an operator.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying. Sent only with `database_unavailable`.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Configure a SLACK_COMMAND trigger",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/agents/{agent_id}/upload-input": {
       "post": {
         "description": "Upload a file to use as input for a `dynamic_input` agent run. Any other agent rejects the upload with HTTP 400.\n\n**Size limit:** 200 MB per file.\n\nFrom `Seclai-Version: 2026-10-16` a file of any type is accepted and is `ready` at once: pass `input_upload_id` to `POST /agents/{agent_id}/runs`. Each step receives the file itself when its model reads that type, and otherwise its text (OCR, extraction or transcript), made once for the steps that need it; a type nothing reads or converts is passed on as a file only. `input` carries a `# filename` heading per file.\n\nEarlier versions accept only these extensions: avi, bmp, csv, docx, epub, flac, gif, html, jpg, json, m4a, markdown, md, mov, mp3, mp4, msg, ogg, pdf, png, ppt, pptx, svg, tiff, txt, wav, webp, xls, xlsx, xml, zip. They write each file's text into `input`, so poll `GET /agents/{agent_id}/input-uploads/{upload_id}` until `status` is `ready` before running.\n\nThe agent-input-binary janitor sweeps originals once they pass your account's agent-trace retention (the agent-traces source's retention period; free default 7 days).\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token. All resources are scoped to the caller's account.",
@@ -18683,7 +19556,7 @@
         ]
       },
       "post": {
-        "description": "Create a new alert configuration.\n\nAgent alert types: run_failed, consecutive_failures, error_rate_spike, run_burst, slow_run, credits_low_threshold, credits_runout_prediction, credits_usage_spike, non_manual_eval_failed, non_manual_eval_flagged, governance_flagged, governance_blocked, model_newer_available, model_deprecated, model_sunset.\nSource alert types: pull_failed, consecutive_pull_failures, pull_error_rate_spike.\n\nDistribution types: owner, owner_admins, selected_members. Organization accounts are normalized to owner_admins.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
+        "description": "Create a new alert configuration.\n\nAgent alert types: run_failed, consecutive_failures, error_rate_spike, run_burst, slow_run, credits_low_threshold, credits_runout_prediction, credits_usage_spike, non_manual_eval_failed, non_manual_eval_flagged, governance_flagged, governance_blocked, model_newer_available, model_deprecated, model_sunset.\nSource alert types: pull_failed, consecutive_pull_failures, pull_error_rate_spike, source_spend_limit_reached (needs source_connection_id).\n\nDistribution types: owner, owner_admins, selected_members. Organization accounts are normalized to owner_admins.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.",
         "operationId": "create_alert_config_api_alerts_configs_post",
         "parameters": [
           {
@@ -26487,7 +27360,7 @@
         ]
       },
       "put": {
-        "description": "Update a content source's configuration. Only provided fields are changed; omitted fields are left unchanged.\n\nSystem-managed sources only allow `retention_days` updates.",
+        "description": "Update a content source's configuration. Only provided fields are changed; omitted fields are left unchanged.\n\nSystem-managed sources only allow `retention_days` updates.\n\nA source with a spend limit that reaches it refuses new content with a 402 `source_spend_limit_reached` (`spend_cap_action: stop`), or deletes entries to make room (`delete`); a `delete` source whose spend already fills the limit refuses new content too.",
         "operationId": "update_source_api_sources__source_connection_id__put",
         "parameters": [
           {
@@ -28023,8 +28896,9 @@
       "2026-10-16",
       "2026-10-18",
       "2026-10-19",
-      "2026-10-21"
+      "2026-10-21",
+      "2026-10-28"
     ],
-    "latest": "2026-10-21"
+    "latest": "2026-10-28"
   }
 }

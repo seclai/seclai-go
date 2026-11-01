@@ -463,10 +463,66 @@ func sortableListQuery(opts SortableListOptions) map[string]string {
 	return q
 }
 
+// setQueryValues copies the non-empty values into q. Callers pass the keys as a
+// map literal, so every query key an endpoint sends stays written out in its
+// method, where sdksync's params audit reads it. A helper that took the values
+// positionally would hide the keys from that audit.
+func setQueryValues(q, values map[string]string) {
+	for k, v := range values {
+		if v != "" {
+			q[k] = v
+		}
+	}
+}
+
+// queryBool renders a flag that is sent only when set.
+func queryBool(b bool) string {
+	if b {
+		return "true"
+	}
+	return ""
+}
+
+// queryPositiveInt renders a count that is sent only when positive.
+func queryPositiveInt(n int) string {
+	if n > 0 {
+		return fmt.Sprintf("%d", n)
+	}
+	return ""
+}
+
 // ListAgents lists agents.
 func (c *Client) ListAgents(ctx context.Context, opts ListOptions) (*AgentListResponse, error) {
 	var out AgentListResponse
 	if err := c.Do(ctx, http.MethodGet, "/agents", listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListAgentExamplesOptions controls query parameters for [Client.ListAgentExamples].
+type ListAgentExamplesOptions struct {
+	ListOptions
+	// Query keeps only entries containing every one of these words.
+	Query string
+	// UseCase keeps only entries for this use case.
+	UseCase string
+}
+
+// ListAgentExamples lists the agent gallery: example agents to start from,
+// searchable by text and filterable by use case. Pass an entry's "key" as
+// AgentTemplate on [Client.CreateAgent], with ResourceBindings for the
+// resources it needs.
+func (c *Client) ListAgentExamples(ctx context.Context, opts ListAgentExamplesOptions) (*AgentExampleListResponse, error) {
+	q := listQuery(opts.Page, opts.Limit)
+	if opts.Query != "" {
+		q["query"] = opts.Query
+	}
+	if opts.UseCase != "" {
+		q["use_case"] = opts.UseCase
+	}
+	var out AgentExampleListResponse
+	if err := c.Do(ctx, http.MethodGet, "/agents/examples", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -983,9 +1039,38 @@ func (c *Client) GetEvaluationCriteriaSummary(ctx context.Context, criteriaID st
 }
 
 // ListEvaluationResults lists evaluation results for criteria.
+//
+// Use [Client.ListEvaluationResultsWithOptions] to filter them.
 func (c *Client) ListEvaluationResults(ctx context.Context, criteriaID string, opts ListOptions) (*EvaluationResultListResponse, error) {
+	return c.ListEvaluationResultsWithOptions(ctx, criteriaID, ListEvaluationResultsOptions{ListOptions: opts})
+}
+
+// ListEvaluationResultsOptions controls query parameters for
+// [Client.ListEvaluationResultsWithOptions].
+type ListEvaluationResultsOptions struct {
+	ListOptions
+	// Status keeps only results with this status (e.g. "passed", "failed", "error").
+	Status string
+	// FlaggedOnly keeps only flagged results.
+	FlaggedOnly bool
+	// TimeFrom keeps results from this time on (ISO 8601).
+	TimeFrom string
+	// TimeTo keeps results up to this time (ISO 8601).
+	TimeTo string
+}
+
+// ListEvaluationResultsWithOptions lists evaluation results for criteria,
+// filtered by status, flag and time range.
+func (c *Client) ListEvaluationResultsWithOptions(ctx context.Context, criteriaID string, opts ListEvaluationResultsOptions) (*EvaluationResultListResponse, error) {
+	q := listQuery(opts.Page, opts.Limit)
+	setQueryValues(q, map[string]string{
+		"status":       opts.Status,
+		"flagged_only": queryBool(opts.FlaggedOnly),
+		"time_from":    opts.TimeFrom,
+		"time_to":      opts.TimeTo,
+	})
 	var out EvaluationResultListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/results", url.PathEscape(criteriaID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/results", url.PathEscape(criteriaID)), q, nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1001,9 +1086,29 @@ func (c *Client) CreateEvaluationResult(ctx context.Context, criteriaID string, 
 }
 
 // ListCompatibleRuns lists runs compatible with evaluation criteria.
+//
+// Use [Client.ListCompatibleRunsWithOptions] to filter them by start time.
 func (c *Client) ListCompatibleRuns(ctx context.Context, criteriaID string, opts ListOptions) (*CompatibleRunListResponse, error) {
+	return c.ListCompatibleRunsWithOptions(ctx, criteriaID, ListCompatibleRunsOptions{ListOptions: opts})
+}
+
+// ListCompatibleRunsOptions controls query parameters for
+// [Client.ListCompatibleRunsWithOptions].
+type ListCompatibleRunsOptions struct {
+	ListOptions
+	// StartedAfter keeps only runs started after this time (ISO 8601 date-time).
+	StartedAfter string
+}
+
+// ListCompatibleRunsWithOptions lists runs compatible with evaluation criteria,
+// optionally only those started after a given time.
+func (c *Client) ListCompatibleRunsWithOptions(ctx context.Context, criteriaID string, opts ListCompatibleRunsOptions) (*CompatibleRunListResponse, error) {
+	q := listQuery(opts.Page, opts.Limit)
+	if opts.StartedAfter != "" {
+		q["started_after"] = opts.StartedAfter
+	}
 	var out CompatibleRunListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/compatible-runs", url.PathEscape(criteriaID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/compatible-runs", url.PathEscape(criteriaID)), q, nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1019,9 +1124,41 @@ func (c *Client) TestDraftEvaluation(ctx context.Context, agentID string, body T
 }
 
 // ListAgentEvaluationResults lists all evaluation results for an agent.
+//
+// Use [Client.ListAgentEvaluationResultsWithOptions] to filter them.
 func (c *Client) ListAgentEvaluationResults(ctx context.Context, agentID string, opts ListOptions) (*EvaluationResultWithCriteriaListResponse, error) {
+	return c.ListAgentEvaluationResultsWithOptions(ctx, agentID, ListAgentEvaluationResultsOptions{ListOptions: opts})
+}
+
+// ListAgentEvaluationResultsOptions controls query parameters for
+// [Client.ListAgentEvaluationResultsWithOptions].
+type ListAgentEvaluationResultsOptions struct {
+	ListOptions
+	// Status keeps only results with this status (e.g. "passed", "failed", "error").
+	Status string
+	// Step keeps only results for this agent step.
+	Step string
+	// FlaggedOnly keeps only flagged results.
+	FlaggedOnly bool
+	// TimeFrom keeps results from this time on (ISO 8601).
+	TimeFrom string
+	// TimeTo keeps results up to this time (ISO 8601).
+	TimeTo string
+}
+
+// ListAgentEvaluationResultsWithOptions lists an agent's evaluation results,
+// filtered by status, step, flag and time range.
+func (c *Client) ListAgentEvaluationResultsWithOptions(ctx context.Context, agentID string, opts ListAgentEvaluationResultsOptions) (*EvaluationResultWithCriteriaListResponse, error) {
+	q := listQuery(opts.Page, opts.Limit)
+	setQueryValues(q, map[string]string{
+		"status":       opts.Status,
+		"step":         opts.Step,
+		"flagged_only": queryBool(opts.FlaggedOnly),
+		"time_from":    opts.TimeFrom,
+		"time_to":      opts.TimeTo,
+	})
 	var out EvaluationResultWithCriteriaListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-results", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-results", url.PathEscape(agentID)), q, nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1041,20 +1178,79 @@ func (c *Client) ListRunEvaluationResults(ctx context.Context, agentID, runID st
 }
 
 // ListEvaluationRuns lists evaluation run summaries for an agent.
+//
+// Use [Client.ListEvaluationRunsWithOptions] to filter them.
 func (c *Client) ListEvaluationRuns(ctx context.Context, agentID string, opts ListOptions) (*EvaluationRunSummaryListResponse, error) {
+	return c.ListEvaluationRunsWithOptions(ctx, agentID, ListEvaluationRunsOptions{ListOptions: opts})
+}
+
+// ListEvaluationRunsOptions controls query parameters for
+// [Client.ListEvaluationRunsWithOptions].
+type ListEvaluationRunsOptions struct {
+	ListOptions
+	// Status keeps only runs with this status.
+	Status string
+	// Step keeps only runs for this agent step.
+	Step string
+	// TimeFrom keeps runs from this time on (ISO 8601).
+	TimeFrom string
+	// TimeTo keeps runs up to this time (ISO 8601).
+	TimeTo string
+}
+
+// ListEvaluationRunsWithOptions lists an agent's evaluation run summaries,
+// filtered by status, step and time range.
+func (c *Client) ListEvaluationRunsWithOptions(ctx context.Context, agentID string, opts ListEvaluationRunsOptions) (*EvaluationRunSummaryListResponse, error) {
+	q := listQuery(opts.Page, opts.Limit)
+	setQueryValues(q, map[string]string{
+		"status":    opts.Status,
+		"step":      opts.Step,
+		"time_from": opts.TimeFrom,
+		"time_to":   opts.TimeTo,
+	})
 	var out EvaluationRunSummaryListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-runs", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-runs", url.PathEscape(agentID)), q, nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// GetNonManualEvaluationSummary retrieves a summary of non-manual evaluation results.
+// GetNonManualEvaluationSummary retrieves a summary of non-manual evaluation
+// results, for one agent or account-wide when agentID is empty.
+//
+// Use [Client.GetNonManualEvaluationSummaryWithOptions] to set the period.
 func (c *Client) GetNonManualEvaluationSummary(ctx context.Context, agentID string) (*NonManualEvaluationSummaryResponse, error) {
+	return c.GetNonManualEvaluationSummaryWithOptions(ctx, NonManualEvaluationSummaryOptions{AgentID: agentID})
+}
+
+// NonManualEvaluationSummaryOptions controls query parameters for
+// [Client.GetNonManualEvaluationSummaryWithOptions].
+//
+// The period is StartDate through EndDate, or StartDate through today when
+// EndDate is empty; Days applies only when StartDate is empty. An EndDate
+// without a StartDate is ignored.
+type NonManualEvaluationSummaryOptions struct {
+	// AgentID scopes the summary to one agent. Empty is account-wide.
+	AgentID string
+	// Days is the look-back period in days, ending today (server default 30).
+	// Zero omits it. Ignored when StartDate is set.
+	Days int
+	// StartDate starts the period (YYYY-MM-DD). Overrides Days.
+	StartDate string
+	// EndDate ends the period (YYYY-MM-DD). Used only with StartDate.
+	EndDate string
+}
+
+// GetNonManualEvaluationSummaryWithOptions retrieves a summary of non-manual
+// evaluation results over a chosen period.
+func (c *Client) GetNonManualEvaluationSummaryWithOptions(ctx context.Context, opts NonManualEvaluationSummaryOptions) (*NonManualEvaluationSummaryResponse, error) {
 	q := map[string]string{}
-	if agentID != "" {
-		q["agent_id"] = agentID
-	}
+	setQueryValues(q, map[string]string{
+		"agent_id":   opts.AgentID,
+		"days":       queryPositiveInt(opts.Days),
+		"start_date": opts.StartDate,
+		"end_date":   opts.EndDate,
+	})
 	var out NonManualEvaluationSummaryResponse
 	if err := c.Do(ctx, http.MethodGet, "/agents/evaluation-results/non-manual-summary", q, nil, nil, &out); err != nil {
 		return nil, err
@@ -1554,6 +1750,37 @@ func (c *Client) SetEmailTriggerConfig(ctx context.Context, agentID string, trig
 	return &out, nil
 }
 
+// ── Agent Slack Triggers ──────────────────────────────────────────────────────
+
+// SetSlackTriggerConfig sets the Slack connection, form, channels, visibility
+// and conversation settings of an agent's SLACK_COMMAND trigger, which people
+// run from Slack with /seclai or the message shortcut.
+//
+// A nil field is left unchanged. To clear Form or ChannelIds, pass a non-nil
+// pointer to an empty slice; the API treats an empty list and null the same.
+// A nil MaxTurns cannot be sent, so remove the turn limit with
+// ClearSlackTriggerMaxTurns.
+func (c *Client) SetSlackTriggerConfig(ctx context.Context, agentID string, triggerID string, body SetSlackTriggerConfigRequest) (*SlackTriggerConfigResponse, error) {
+	var out SlackTriggerConfigResponse
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/slack-config", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, body, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ClearSlackTriggerMaxTurns removes the turn limit of an agent's SLACK_COMMAND
+// trigger, so a conversation may continue for any number of turns. It sends an
+// explicit null max_turns and leaves every other setting unchanged; set a limit
+// with SetSlackTriggerConfig's MaxTurns.
+func (c *Client) ClearSlackTriggerMaxTurns(ctx context.Context, agentID string, triggerID string) (*SlackTriggerConfigResponse, error) {
+	var out SlackTriggerConfigResponse
+	payload := map[string]any{"max_turns": nil}
+	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/slack-config", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, payload, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // ── Agent Email Governance ────────────────────────────────────────────────────
 
 // AgentEmailOptOutOptions controls query parameters for [Client.ListAgentEmailOptOuts].
@@ -1746,9 +1973,27 @@ func (c *Client) DeleteKnowledgeBase(ctx context.Context, knowledgeBaseID string
 // ── Memory Banks ────────────────────────────────────────────────────────────
 
 // ListMemoryBanks lists memory banks.
+//
+// Use [Client.ListMemoryBanksWithOptions] to filter them by type.
 func (c *Client) ListMemoryBanks(ctx context.Context, opts SortableListOptions) (*MemoryBankListResponse, error) {
+	return c.ListMemoryBanksWithOptions(ctx, ListMemoryBanksOptions{SortableListOptions: opts})
+}
+
+// ListMemoryBanksOptions controls query parameters for [Client.ListMemoryBanksWithOptions].
+type ListMemoryBanksOptions struct {
+	SortableListOptions
+	// Type keeps only banks of this type: "conversation" or "general".
+	Type string
+}
+
+// ListMemoryBanksWithOptions lists memory banks, optionally of one type.
+func (c *Client) ListMemoryBanksWithOptions(ctx context.Context, opts ListMemoryBanksOptions) (*MemoryBankListResponse, error) {
+	q := sortableListQuery(opts.SortableListOptions)
+	if opts.Type != "" {
+		q["type"] = opts.Type
+	}
 	var out MemoryBankListResponse
-	if err := c.doList(ctx, http.MethodGet, "/memory_banks", sortableListQuery(opts), nil, "memory_banks", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/memory_banks", q, nil, "memory_banks", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1847,9 +2092,38 @@ func (c *Client) agentsUsingMemoryBankBody(ctx context.Context, memoryBankID str
 }
 
 // GetMemoryBankStats retrieves statistics for a memory bank.
+//
+// Use [Client.GetMemoryBankStatsWithOptions] to set the period.
 func (c *Client) GetMemoryBankStats(ctx context.Context, memoryBankID string) (json.RawMessage, error) {
+	return c.GetMemoryBankStatsWithOptions(ctx, memoryBankID, MemoryBankStatsOptions{})
+}
+
+// MemoryBankStatsOptions controls query parameters for
+// [Client.GetMemoryBankStatsWithOptions].
+//
+// StartDate and EndDate override Days only when both are set; either one alone
+// is ignored and Days applies.
+type MemoryBankStatsOptions struct {
+	// Days is the look-back period in days, ending today (server default 30,
+	// 1-730). Zero omits it.
+	Days int
+	// StartDate starts the period (YYYY-MM-DD). Used only with EndDate.
+	StartDate string
+	// EndDate ends the period (YYYY-MM-DD). Used only with StartDate.
+	EndDate string
+}
+
+// GetMemoryBankStatsWithOptions retrieves statistics for a memory bank over a
+// chosen period.
+func (c *Client) GetMemoryBankStatsWithOptions(ctx context.Context, memoryBankID string, opts MemoryBankStatsOptions) (json.RawMessage, error) {
+	q := map[string]string{}
+	setQueryValues(q, map[string]string{
+		"days":       queryPositiveInt(opts.Days),
+		"start_date": opts.StartDate,
+		"end_date":   opts.EndDate,
+	})
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/stats", url.PathEscape(memoryBankID)), nil, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/stats", url.PathEscape(memoryBankID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -1906,9 +2180,31 @@ func (c *Client) GenerateMemoryBankConfig(ctx context.Context, body MemoryBankAi
 }
 
 // GetMemoryBankAiLastConversation retrieves the last AI assistant conversation for memory banks.
+//
+// Use [Client.GetMemoryBankAiLastConversationWithOptions] to page through its turns.
 func (c *Client) GetMemoryBankAiLastConversation(ctx context.Context) (*MemoryBankLastConversationResponse, error) {
+	return c.GetMemoryBankAiLastConversationWithOptions(ctx, LastConversationOptions{})
+}
+
+// LastConversationOptions pages through the turns of an AI assistant's last
+// conversation.
+type LastConversationOptions struct {
+	// Limit is the maximum number of turns (server default 5). Zero omits it.
+	Limit int
+	// Offset is the number of most recent turns to skip. Zero omits it.
+	Offset int
+}
+
+// GetMemoryBankAiLastConversationWithOptions retrieves a page of turns from the
+// last memory bank AI assistant conversation.
+func (c *Client) GetMemoryBankAiLastConversationWithOptions(ctx context.Context, opts LastConversationOptions) (*MemoryBankLastConversationResponse, error) {
+	q := map[string]string{}
+	setQueryValues(q, map[string]string{
+		"limit":  queryPositiveInt(opts.Limit),
+		"offset": queryPositiveInt(opts.Offset),
+	})
 	var out MemoryBankLastConversationResponse
-	if err := c.Do(ctx, http.MethodGet, "/memory_banks/ai-assistant/last-conversation", nil, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/memory_banks/ai-assistant/last-conversation", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1964,8 +2260,8 @@ func (c *Client) GetSource(ctx context.Context, sourceID string) (*SourceRespons
 }
 
 // UpdateSource updates a source. Only the fields set on body are sent; a nil
-// field leaves that setting unchanged. To clear the retention window, use
-// ClearSourceRetention.
+// field leaves that setting unchanged. To clear the retention window or the
+// spend limit, use [Client.ClearSourceFields].
 func (c *Client) UpdateSource(ctx context.Context, sourceID string, body UpdateSourceBody) (*SourceResponse, error) {
 	var out SourceResponse
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, body, nil, &out); err != nil {
@@ -1974,16 +2270,54 @@ func (c *Client) UpdateSource(ctx context.Context, sourceID string, body UpdateS
 	return &out, nil
 }
 
-// ClearSourceRetention removes a source's retention window, so its content is
-// kept indefinitely. It sends an explicit null retention_days and leaves every
-// other setting unchanged.
-func (c *Client) ClearSourceRetention(ctx context.Context, sourceID string) (*SourceResponse, error) {
+// SourceField names a setting of a source that [Client.ClearSourceFields] can
+// clear.
+type SourceField string
+
+const (
+	// SourceFieldRetentionDays removes the retention window, so the source's
+	// content is kept indefinitely.
+	SourceFieldRetentionDays SourceField = "retention_days"
+	// SourceFieldMaxCreditsPerPeriod removes the spend limit, so the source may
+	// commit any number of credits per billing period.
+	SourceFieldMaxCreditsPerPeriod SourceField = "max_credits_per_period"
+)
+
+// ClearSourceFields clears the named settings of a source and leaves every
+// other setting unchanged. It sends the fields as explicit nulls, which
+// [Client.UpdateSource] cannot, since it leaves a nil field out of the body:
+//
+//   - [SourceFieldRetentionDays] removes the retention window, so content is
+//     kept indefinitely.
+//   - [SourceFieldMaxCreditsPerPeriod] removes the spend limit. Set a limit
+//     with UpdateSource's MaxCreditsPerPeriod.
+//
+// It returns a [*ConfigurationError], without sending a request, when no
+// field is given or a field is not one of these constants.
+func (c *Client) ClearSourceFields(ctx context.Context, sourceID string, fields ...SourceField) (*SourceResponse, error) {
+	if len(fields) == 0 {
+		return nil, &ConfigurationError{Message: "ClearSourceFields needs at least one field to clear"}
+	}
+	payload := make(map[string]any, len(fields))
+	for _, f := range fields {
+		switch f {
+		case SourceFieldRetentionDays, SourceFieldMaxCreditsPerPeriod:
+			payload[string(f)] = nil
+		default:
+			return nil, &ConfigurationError{Message: fmt.Sprintf("ClearSourceFields cannot clear %q; use one of the SourceField constants", string(f))}
+		}
+	}
 	var out SourceResponse
-	payload := map[string]any{"retention_days": nil}
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ClearSourceRetention removes a source's retention window, so its content is
+// kept indefinitely. It is ClearSourceFields with [SourceFieldRetentionDays].
+func (c *Client) ClearSourceRetention(ctx context.Context, sourceID string) (*SourceResponse, error) {
+	return c.ClearSourceFields(ctx, sourceID, SourceFieldRetentionDays)
 }
 
 // DeleteSource deletes a source.
@@ -2291,9 +2625,28 @@ func (c *Client) DownloadContentAttachment(ctx context.Context, contentVersionID
 // ── Solutions ───────────────────────────────────────────────────────────────
 
 // ListSolutions lists solutions.
+//
+// Use [Client.ListSolutionsWithOptions] to search them by name.
 func (c *Client) ListSolutions(ctx context.Context, opts SortableListOptions) (*SolutionListResponse, error) {
+	return c.ListSolutionsWithOptions(ctx, ListSolutionsOptions{SortableListOptions: opts})
+}
+
+// ListSolutionsOptions controls query parameters for [Client.ListSolutionsWithOptions].
+type ListSolutionsOptions struct {
+	SortableListOptions
+	// Search keeps only solutions whose name contains this text, case-insensitively
+	// (1-200 characters).
+	Search string
+}
+
+// ListSolutionsWithOptions lists solutions, optionally searched by name.
+func (c *Client) ListSolutionsWithOptions(ctx context.Context, opts ListSolutionsOptions) (*SolutionListResponse, error) {
+	q := sortableListQuery(opts.SortableListOptions)
+	if opts.Search != "" {
+		q["search"] = opts.Search
+	}
 	var out SolutionListResponse
-	if err := c.Do(ctx, http.MethodGet, "/solutions", sortableListQuery(opts), nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/solutions", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2465,9 +2818,28 @@ func (c *Client) GenerateGovernanceAiPlan(ctx context.Context, body GovernanceAi
 }
 
 // ListGovernanceAiConversations lists governance AI assistant conversations.
+//
+// Use [Client.ListGovernanceAiConversationsWithOptions] to set how many.
 func (c *Client) ListGovernanceAiConversations(ctx context.Context) ([]GovernanceConversationResponse, error) {
+	return c.ListGovernanceAiConversationsWithOptions(ctx, ListGovernanceAiConversationsOptions{})
+}
+
+// ListGovernanceAiConversationsOptions controls query parameters for
+// [Client.ListGovernanceAiConversationsWithOptions].
+type ListGovernanceAiConversationsOptions struct {
+	// Limit is the number of conversations (server default 20). Zero omits it.
+	Limit int
+}
+
+// ListGovernanceAiConversationsWithOptions lists governance AI assistant
+// conversations, up to Limit.
+func (c *Client) ListGovernanceAiConversationsWithOptions(ctx context.Context, opts ListGovernanceAiConversationsOptions) ([]GovernanceConversationResponse, error) {
+	q := map[string]string{}
+	if opts.Limit > 0 {
+		q["limit"] = fmt.Sprintf("%d", opts.Limit)
+	}
 	var out []GovernanceConversationResponse
-	if err := c.doList(ctx, http.MethodGet, "/governance/ai-assistant/conversations", nil, nil, "", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/governance/ai-assistant/conversations", q, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2496,6 +2868,14 @@ type ListAlertsOptions struct {
 	Status string
 	// Severity filters alerts by severity.
 	Severity string
+	// AgentID keeps only alerts for this agent.
+	AgentID string
+	// SourceConnectionID keeps only alerts for this source connection.
+	SourceConnectionID string
+	// TimeFrom keeps alerts from this time on (ISO 8601 date-time).
+	TimeFrom string
+	// TimeTo keeps alerts up to this time (ISO 8601 date-time).
+	TimeTo string
 }
 
 // ListAlerts lists alerts.
@@ -2506,6 +2886,18 @@ func (c *Client) ListAlerts(ctx context.Context, opts ListAlertsOptions) (json.R
 	q := listQuery(opts.Page, opts.Limit)
 	if opts.Status != "" {
 		q["status"] = opts.Status
+	}
+	if opts.AgentID != "" {
+		q["agent_id"] = opts.AgentID
+	}
+	if opts.SourceConnectionID != "" {
+		q["source_connection_id"] = opts.SourceConnectionID
+	}
+	if opts.TimeFrom != "" {
+		q["time_from"] = opts.TimeFrom
+	}
+	if opts.TimeTo != "" {
+		q["time_to"] = opts.TimeTo
 	}
 	var out json.RawMessage
 	if err := c.Do(ctx, http.MethodGet, "/alerts", q, nil, nil, &out); err != nil {
@@ -2566,14 +2958,44 @@ func (c *Client) UnsubscribeFromAlert(ctx context.Context, alertID string) (json
 // the caller opts in with Options.APIVersion of 2026-07-27 or later the endpoint
 // returns the canonical {data, pagination} envelope instead, so the top-level
 // key changes.
+//
+// Use [Client.ListAlertConfigsWithOptions] to filter them.
 func (c *Client) ListAlertConfigs(ctx context.Context, opts ListOptions) (json.RawMessage, error) {
+	return c.ListAlertConfigsWithOptions(ctx, ListAlertConfigsOptions{ListOptions: opts})
+}
+
+// ListAlertConfigsOptions controls query parameters for
+// [Client.ListAlertConfigsWithOptions].
+type ListAlertConfigsOptions struct {
+	ListOptions
+	// AgentID keeps only configurations for this agent.
+	AgentID string
+	// SourceConnectionID keeps only configurations for this source connection.
+	SourceConnectionID string
+	// Scope set to "source" lists the account-level source alert configurations.
+	Scope string
+}
+
+// ListAlertConfigsWithOptions lists alert configurations, filtered by agent,
+// source connection or scope. The response shape is as for [Client.ListAlertConfigs].
+func (c *Client) ListAlertConfigsWithOptions(ctx context.Context, opts ListAlertConfigsOptions) (json.RawMessage, error) {
 	body, _, err := c.alertConfigsBody(ctx, opts)
 	return rawJSON(body, err)
 }
 
 // alertConfigsBody is the request behind [Client.ListAlertConfigs] and its typed form.
-func (c *Client) alertConfigsBody(ctx context.Context, opts ListOptions) ([]byte, *url.URL, error) {
-	return c.doBytes(ctx, http.MethodGet, "/alerts/configs", queryValues(listQuery(opts.Page, opts.Limit)), nil, nil)
+func (c *Client) alertConfigsBody(ctx context.Context, opts ListAlertConfigsOptions) ([]byte, *url.URL, error) {
+	q := listQuery(opts.Page, opts.Limit)
+	if opts.AgentID != "" {
+		q["agent_id"] = opts.AgentID
+	}
+	if opts.SourceConnectionID != "" {
+		q["source_connection_id"] = opts.SourceConnectionID
+	}
+	if opts.Scope != "" {
+		q["scope"] = opts.Scope
+	}
+	return c.doBytes(ctx, http.MethodGet, "/alerts/configs", queryValues(q), nil, nil)
 }
 
 // CreateAlertConfig creates a new alert configuration.
@@ -2611,9 +3033,33 @@ func (c *Client) DeleteAlertConfig(ctx context.Context, configID string) error {
 // ── Alert Preferences ───────────────────────────────────────────────────────
 
 // ListOrganizationAlertPreferences lists organization alert preferences.
+//
+// Use [Client.ListOrganizationAlertPreferencesWithOptions] to filter them.
 func (c *Client) ListOrganizationAlertPreferences(ctx context.Context) (*OrganizationAlertPreferenceListResponse, error) {
+	return c.ListOrganizationAlertPreferencesWithOptions(ctx, ListOrganizationAlertPreferencesOptions{})
+}
+
+// ListOrganizationAlertPreferencesOptions controls query parameters for
+// [Client.ListOrganizationAlertPreferencesWithOptions].
+type ListOrganizationAlertPreferencesOptions struct {
+	// OrganizationID keeps only preferences for this organization.
+	OrganizationID string
+	// IncludeDefaults adds the default subscribed entries for every alert type.
+	IncludeDefaults bool
+}
+
+// ListOrganizationAlertPreferencesWithOptions lists organization alert
+// preferences, optionally for one organization and with the defaults included.
+func (c *Client) ListOrganizationAlertPreferencesWithOptions(ctx context.Context, opts ListOrganizationAlertPreferencesOptions) (*OrganizationAlertPreferenceListResponse, error) {
+	q := map[string]string{}
+	if opts.OrganizationID != "" {
+		q["organization_id"] = opts.OrganizationID
+	}
+	if opts.IncludeDefaults {
+		q["include_defaults"] = "true"
+	}
 	var out OrganizationAlertPreferenceListResponse
-	if err := c.doList(ctx, http.MethodGet, "/alerts/organization-preferences/list", nil, nil, "preferences", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, "/alerts/organization-preferences/list", q, nil, "preferences", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2633,13 +3079,32 @@ func (c *Client) UpdateOrganizationAlertPreference(ctx context.Context, organiza
 // ListModelAlerts lists model alerts.
 // The endpoint declares limit/offset, not page, so opts.Page is translated —
 // previously it was ignored and every page after the first returned page 1.
+//
+// Use [Client.ListModelAlertsWithOptions] to filter them.
 func (c *Client) ListModelAlerts(ctx context.Context, opts ListOptions) (json.RawMessage, error) {
+	return c.ListModelAlertsWithOptions(ctx, ListModelAlertsOptions{ListOptions: opts})
+}
+
+// ListModelAlertsOptions controls query parameters for
+// [Client.ListModelAlertsWithOptions]. Page is translated to the endpoint's
+// offset as for [Client.ListModelAlerts].
+type ListModelAlertsOptions struct {
+	ListOptions
+	// AgentID keeps only alerts for this agent.
+	AgentID string
+	// UnreadOnly keeps only unread alerts.
+	UnreadOnly bool
+}
+
+// ListModelAlertsWithOptions lists model alerts, optionally for one agent or
+// unread only.
+func (c *Client) ListModelAlertsWithOptions(ctx context.Context, opts ListModelAlertsOptions) (json.RawMessage, error) {
 	body, _, err := c.modelAlertsBody(ctx, opts)
 	return rawJSON(body, err)
 }
 
 // modelAlertsBody is the request behind [Client.ListModelAlerts] and its typed form.
-func (c *Client) modelAlertsBody(ctx context.Context, opts ListOptions) ([]byte, *url.URL, error) {
+func (c *Client) modelAlertsBody(ctx context.Context, opts ListModelAlertsOptions) ([]byte, *url.URL, error) {
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 50
@@ -2650,6 +3115,12 @@ func (c *Client) modelAlertsBody(ctx context.Context, opts ListOptions) ([]byte,
 	}
 	if opts.Limit > 0 {
 		q["limit"] = fmt.Sprintf("%d", opts.Limit)
+	}
+	if opts.AgentID != "" {
+		q["agent_id"] = opts.AgentID
+	}
+	if opts.UnreadOnly {
+		q["unread_only"] = "true"
 	}
 	return c.doBytes(ctx, http.MethodGet, "/models/alerts", queryValues(q), nil, nil)
 }
@@ -2674,9 +3145,48 @@ func (c *Client) MarkModelAlertRead(ctx context.Context, alertID string) error {
 }
 
 // GetModelRecommendations retrieves recommendations for a model.
+//
+// Use [Client.GetModelRecommendationsWithOptions] to require capabilities.
 func (c *Client) GetModelRecommendations(ctx context.Context, modelID string) (json.RawMessage, error) {
+	return c.GetModelRecommendationsWithOptions(ctx, modelID, ModelRecommendationsOptions{})
+}
+
+// ModelRecommendationsOptions controls query parameters for
+// [Client.GetModelRecommendationsWithOptions]. A nil field is not sent.
+type ModelRecommendationsOptions struct {
+	// RequireToolUse recommends only models that support tool use.
+	RequireToolUse *bool
+	// RequireStructuredOutput recommends only models that support structured output.
+	RequireStructuredOutput *bool
+	// RequireThinking recommends only models that support thinking/reasoning.
+	RequireThinking *bool
+	// MinContextTokens is the minimum context window size in tokens.
+	MinContextTokens *int
+	// MinOutputTokens is the minimum output token limit.
+	MinOutputTokens *int
+}
+
+// GetModelRecommendationsWithOptions retrieves recommendations for a model,
+// limited to models with the required capabilities.
+func (c *Client) GetModelRecommendationsWithOptions(ctx context.Context, modelID string, opts ModelRecommendationsOptions) (json.RawMessage, error) {
+	q := map[string]string{}
+	if opts.RequireToolUse != nil {
+		q["require_tool_use"] = fmt.Sprintf("%t", *opts.RequireToolUse)
+	}
+	if opts.RequireStructuredOutput != nil {
+		q["require_structured_output"] = fmt.Sprintf("%t", *opts.RequireStructuredOutput)
+	}
+	if opts.RequireThinking != nil {
+		q["require_thinking"] = fmt.Sprintf("%t", *opts.RequireThinking)
+	}
+	if opts.MinContextTokens != nil {
+		q["min_context_tokens"] = fmt.Sprintf("%d", *opts.MinContextTokens)
+	}
+	if opts.MinOutputTokens != nil {
+		q["min_output_tokens"] = fmt.Sprintf("%d", *opts.MinOutputTokens)
+	}
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/models/%s/recommendations", url.PathEscape(modelID)), nil, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/models/%s/recommendations", url.PathEscape(modelID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2690,6 +3200,12 @@ type ListModelsOptions struct {
 	SupportsToolUse *bool
 	// SupportsThinking filters to models with extended thinking support.
 	SupportsThinking *bool
+	// SupportsInputMedia filters to models that accept this input modality: a
+	// coarse kind ("image", "audio", "video", "pdf") or a full MIME type.
+	SupportsInputMedia string
+	// SupportsOutputMedia filters to models that produce this output modality: a
+	// coarse kind ("image", "audio", "video") or a full MIME type.
+	SupportsOutputMedia string
 }
 
 // ListModels lists all enabled LLM models grouped by provider.
@@ -2703,6 +3219,12 @@ func (c *Client) ListModels(ctx context.Context, opts ListModelsOptions) ([]Prov
 	}
 	if opts.SupportsThinking != nil {
 		q["supports_thinking"] = fmt.Sprintf("%t", *opts.SupportsThinking)
+	}
+	if opts.SupportsInputMedia != "" {
+		q["supports_input_media"] = opts.SupportsInputMedia
+	}
+	if opts.SupportsOutputMedia != "" {
+		q["supports_output_media"] = opts.SupportsOutputMedia
 	}
 	var out []ProviderGroupResponse
 	if err := c.doList(ctx, http.MethodGet, "/models", q, nil, "", &out); err != nil {
@@ -3057,9 +3579,22 @@ func (c *Client) AiAssistantMemoryBank(ctx context.Context, body MemoryBankAiAss
 }
 
 // GetAiAssistantMemoryBankHistory retrieves the last AI assistant memory bank conversation.
+//
+// Use [Client.GetAiAssistantMemoryBankHistoryWithOptions] to page through its turns.
 func (c *Client) GetAiAssistantMemoryBankHistory(ctx context.Context) (*MemoryBankLastConversationResponse, error) {
+	return c.GetAiAssistantMemoryBankHistoryWithOptions(ctx, LastConversationOptions{})
+}
+
+// GetAiAssistantMemoryBankHistoryWithOptions retrieves a page of turns from the
+// last AI assistant memory bank conversation.
+func (c *Client) GetAiAssistantMemoryBankHistoryWithOptions(ctx context.Context, opts LastConversationOptions) (*MemoryBankLastConversationResponse, error) {
+	q := map[string]string{}
+	setQueryValues(q, map[string]string{
+		"limit":  queryPositiveInt(opts.Limit),
+		"offset": queryPositiveInt(opts.Offset),
+	})
 	var out MemoryBankLastConversationResponse
-	if err := c.Do(ctx, http.MethodGet, "/ai-assistant/memory-bank/last-conversation", nil, nil, nil, &out); err != nil {
+	if err := c.Do(ctx, http.MethodGet, "/ai-assistant/memory-bank/last-conversation", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

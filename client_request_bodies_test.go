@@ -42,6 +42,7 @@ var requestBodies = map[string]any{
 	"PlaygroundCreateRequest":                                        generated.PlaygroundCreateRequest{},
 	"SetAcceptedAttachmentsRequest":                                  generated.SetAcceptedAttachmentsRequest{},
 	"SetAutoBlockModeRequest":                                        generated.SetAutoBlockModeRequest{},
+	"SetSlackTriggerConfigApiRequest":                                generated.SetSlackTriggerConfigApiRequest{},
 	"StandaloneTestCompactionRequest":                                generated.StandaloneTestCompactionRequest{},
 	"StartSourceEmbeddingMigrationRequest":                           generated.StartSourceEmbeddingMigrationRequest{},
 	"TestCompactionRequest":                                          generated.TestCompactionRequest{},
@@ -412,5 +413,38 @@ func TestClient_ClearEvaluationCriteriaFields_Rejects(t *testing.T) {
 		if rec.method != "" {
 			t.Fatalf("%s: the request must not be sent", name)
 		}
+	}
+}
+
+func TestClient_UpdateAgent_RunLimits(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", `{"id":"a_1","name":"n","description":null,"created_at":"2026-10-30T00:00:00Z","updated_at":"2026-10-30T00:00:00Z","max_runs_per_day":100,"max_runs_total":null}`)
+	perDay, clear := 100, true
+	got, err := c.UpdateAgent(context.Background(), "a_1", UpdateAgentRequest{MaxRunsPerDay: &perDay, SetMaxRunsTotal: &clear})
+	if err != nil {
+		t.Fatalf("UpdateAgent: %v", err)
+	}
+	// set_max_runs_total with max_runs_total omitted removes that limit.
+	if string(rec.rawBody) != `{"max_runs_per_day":100,"set_max_runs_total":true}` {
+		t.Fatalf("unexpected body %s", rec.rawBody)
+	}
+	if got.MaxRunsPerDay == nil || *got.MaxRunsPerDay != 100 || got.MaxRunsTotal != nil {
+		t.Fatalf("unexpected limits %+v", got)
+	}
+}
+
+func TestClient_CreateAgent_FromTemplateDecodesCreatedResources(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", `{"id":"a_1","name":"Triage","description":null,"created_at":"2026-10-30T00:00:00Z","updated_at":"2026-10-30T00:00:00Z","created_resources":{"tickets":"kb_9"},"solution_id":"sol_1"}`)
+	template, create := "triage", true
+	got, err := c.CreateAgent(context.Background(), CreateAgentRequest{Name: "Triage", AgentTemplate: &template, CreateMissingResources: &create})
+	if err != nil {
+		t.Fatalf("CreateAgent: %v", err)
+	}
+	if rec.body["agent_template"] != "triage" || rec.body["create_missing_resources"] != true {
+		t.Fatalf("unexpected body %s", rec.rawBody)
+	}
+	if got.CreatedResources == nil || (*got.CreatedResources)["tickets"] != "kb_9" || got.SolutionId == nil || *got.SolutionId != "sol_1" {
+		t.Fatalf("unexpected response %+v", got)
 	}
 }

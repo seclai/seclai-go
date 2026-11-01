@@ -93,12 +93,43 @@ const (
 	Undecodable     SkippedAttachmentReason = "undecodable"
 )
 
+// Defines values for SlackReplyVisibility.
+const (
+	Channel SlackReplyVisibility = "channel"
+	Private SlackReplyVisibility = "private"
+)
+
+// Defines values for SlackTriggerActivation.
+const (
+	ChannelOptIn SlackTriggerActivation = "channel_opt_in"
+	Everywhere   SlackTriggerActivation = "everywhere"
+)
+
+// Defines values for SlackTriggerScope.
+const (
+	BotChannels      SlackTriggerScope = "bot_channels"
+	SelectedChannels SlackTriggerScope = "selected_channels"
+)
+
 // Defines values for SourceIndexMode.
 const (
 	SourceIndexModeBalanced        SourceIndexMode = "balanced"
 	SourceIndexModeCustom          SourceIndexMode = "custom"
 	SourceIndexModeFastAndCheap    SourceIndexMode = "fast_and_cheap"
 	SourceIndexModeSlowAndThorough SourceIndexMode = "slow_and_thorough"
+)
+
+// Defines values for SpendCapAction.
+const (
+	Delete SpendCapAction = "delete"
+	Stop   SpendCapAction = "stop"
+)
+
+// Defines values for SpendCapDeleteOrder.
+const (
+	LargestFirst    SpendCapDeleteOrder = "largest_first"
+	OldestAdded     SpendCapDeleteOrder = "oldest_added"
+	OldestPublished SpendCapDeleteOrder = "oldest_published"
 )
 
 // Defines values for DocsSearchApiDocsSearchGetParamsMode.
@@ -233,9 +264,17 @@ type AgentEmailOptOutResponse struct {
 //	THOROUGH  → "Slow and thorough"
 type AgentEvaluationTier string
 
+// AgentExampleListResponse defines model for AgentExampleListResponse.
+type AgentExampleListResponse struct {
+	Data []interface{} `json:"data"`
+
+	// Pagination Pagination information.
+	Pagination PaginationResponse `json:"pagination"`
+}
+
 // AgentExportResponse Portable JSON snapshot of an agent definition.
 type AgentExportResponse struct {
-	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, created_at, updated_at.
+	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, max_credits_per_run, max_credits_per_period, max_runs_per_hour, max_runs_per_day, max_runs_total, created_at, updated_at.
 	Agent map[string]interface{} `json:"agent"`
 
 	// AlertConfigs Alert configurations.
@@ -394,6 +433,9 @@ type AgentRunStepResponse struct {
 	// CreditsUsed Credits consumed by this step across every attempt it made. Some charges made outside any step, such as governance screening of the run's input, count toward the run's total but no step's. The timestamps above and the tool calls below describe the latest attempt only.
 	CreditsUsed float32 `json:"credits_used"`
 
+	// Decision The arm an `if_else` or `switch` step took: `then` or `else`, or the case name or `else`. Null for other step types, until the step has decided, and when a `switch` took no arm.
+	Decision *string `json:"decision"`
+
 	// DurationSeconds Duration of the step attempt in seconds.
 	DurationSeconds *float32 `json:"duration_seconds"`
 
@@ -403,7 +445,7 @@ type AgentRunStepResponse struct {
 	// Input Input text provided to the step, if any.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step that produced it output files and is not a `for_each`.
 	Input *string `json:"input"`
 
-	// Output Output text produced by the step, if any; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step output files and is not a `for_each`.
+	// Output Output text produced by the step, if any; its files are in `attachments`.  Below `Seclai-Version: 2026-09-30`, the manifest JSON when the step output files and is not a `for_each`.  For an `if_else` or `switch`, the result of the arm it took (its input when that arm is empty or it took none); below `Seclai-Version: 2026-10-28`, the `{"branch": ...}` marker naming that arm, with no `attachments`.
 	Output *string `json:"output"`
 
 	// OutputContentType Content type of the step output, if any.
@@ -488,6 +530,9 @@ type AgentSummaryResponse struct {
 	// CreatedAt ISO 8601 creation timestamp.
 	CreatedAt string `json:"created_at"`
 
+	// CreatedResources On a create from an `agent_template`: {slot: resource_id} for each resource `create_missing_resources` created.
+	CreatedResources *map[string]string `json:"created_resources"`
+
 	// DefaultEvaluationTier Default evaluation tier: fast, balanced, or thorough.
 	DefaultEvaluationTier *string `json:"default_evaluation_tier"`
 
@@ -512,8 +557,23 @@ type AgentSummaryResponse struct {
 	// ImportWarnings One entry per item dropped or substituted during import. Present only on endpoints that accept agent_definition; null on non-import calls; [] when the import had no skips.
 	ImportWarnings *[]ImportSkipResponse `json:"import_warnings"`
 
+	// MaxCreditsPerPeriod Credit limit per billing period; null when none.
+	MaxCreditsPerPeriod *float32 `json:"max_credits_per_period"`
+
+	// MaxCreditsPerRun Credit limit per run; null when none.
+	MaxCreditsPerRun *float32 `json:"max_credits_per_run"`
+
 	// MaxRetries Max retries for eval_and_retry mode.
 	MaxRetries *int `json:"max_retries,omitempty"`
+
+	// MaxRunsPerDay Runs per day limit; null when none.
+	MaxRunsPerDay *int `json:"max_runs_per_day"`
+
+	// MaxRunsPerHour Runs per hour limit; null when none.
+	MaxRunsPerHour *int `json:"max_runs_per_hour"`
+
+	// MaxRunsTotal Limit on runs in total; null when none.
+	MaxRunsTotal *int `json:"max_runs_total"`
 
 	// Name Agent name.
 	Name string `json:"name"`
@@ -532,6 +592,9 @@ type AgentSummaryResponse struct {
 
 	// SamplingConfig Sampling configuration for sample_and_flag mode.
 	SamplingConfig *map[string]interface{} `json:"sampling_config"`
+
+	// SolutionId On a create from an `agent_template` that created resources: the solution grouping the agent with them.
+	SolutionId *string `json:"solution_id"`
 
 	// TriggerId ID of the agent's trigger, for the `/agents/{agent_id}/triggers/{trigger_id}/…` endpoints such as `accepted-attachments` and `email-config`.
 	TriggerId *string `json:"trigger_id"`
@@ -1405,7 +1468,7 @@ type EmailSourceRejectionResponse struct {
 	// Id Unique identifier of the refusal.
 	Id string `json:"id"`
 
-	// Reason Why it was refused: sender_not_allowed, unauthenticated_sender, unreadable_from, sender_blocked, spam, virus, unsafe_content, rate_limited, account_not_chargeable or empty_message; or, for a message the source received before, what became of the earlier one: repeat_stored, repeat_held, repeat_deleted or repeat_in_progress.
+	// Reason Why it was refused: sender_not_allowed, unauthenticated_sender, unreadable_from, sender_blocked, spam, virus, unsafe_content, rate_limited, account_not_chargeable, spend_limit_reached or empty_message; or, for a message the source received before, what became of the earlier one: repeat_stored, repeat_held, repeat_deleted or repeat_in_progress.
 	Reason string `json:"reason"`
 
 	// Recipient The source address it was sent to.
@@ -2384,13 +2447,39 @@ type ServiceUnavailableErrorErrorCode string
 
 // SetAcceptedAttachmentsRequest defines model for SetAcceptedAttachmentsRequest.
 type SetAcceptedAttachmentsRequest struct {
-	// AcceptedAttachments The input attachments the trigger accepts; ``null`` accepts any files (one attachment named ``files``). Only ``dynamic_input`` and ``email_received`` triggers take files.
+	// AcceptedAttachments The input attachments the trigger accepts; ``null`` accepts any files (one attachment named ``files``). Only ``dynamic_input``, ``email_received`` and ``slack_command`` triggers take files.
 	AcceptedAttachments *[]AcceptedAttachmentSlot `json:"accepted_attachments"`
 }
 
 // SetAutoBlockModeRequest Set the account's governance auto-block mode (shared REST request).
 type SetAutoBlockModeRequest struct {
 	Mode string `json:"mode"`
+}
+
+// SetSlackTriggerConfigApiRequest Omitted fields are left unchanged.
+type SetSlackTriggerConfigApiRequest struct {
+	Activation *SlackTriggerActivation `json:"activation,omitempty"`
+
+	// AllowDms Runnable in the app's own DMs.
+	AllowDms   *bool     `json:"allow_dms,omitempty"`
+	ChannelIds *[]string `json:"channel_ids,omitempty"`
+
+	// Form Form fields `{key, label, type, required, hint, choices, max_length}`. `type`: short_text, long_text, number, single_choice, multi_choice, yes_no, date, slack_user or slack_channel. Each value reaches the run as `{{metadata.<key>}}`.
+	Form                *[]map[string]interface{} `json:"form,omitempty"`
+	IncludeInvokerEmail *bool                     `json:"include_invoker_email,omitempty"`
+
+	// Input The trigger's input template. Each `{{metadata.<key>}}` in it must be a form field key or a platform key; it is checked together with `form`.
+	Input    *string `json:"input,omitempty"`
+	MaxTurns *int    `json:"max_turns,omitempty"`
+
+	// McpClientId The account's connected Slack (Bot) MCP client.
+	McpClientId              *openapi_types.UUID   `json:"mcp_client_id,omitempty"`
+	NotifyFailureAfterAnswer *bool                 `json:"notify_failure_after_answer,omitempty"`
+	Scope                    *SlackTriggerScope    `json:"scope,omitempty"`
+	StartWithoutForm         *bool                 `json:"start_without_form,omitempty"`
+	TurnsAnyone              *bool                 `json:"turns_anyone,omitempty"`
+	TurnsEnabled             *bool                 `json:"turns_enabled,omitempty"`
+	Visibility               *SlackReplyVisibility `json:"visibility,omitempty"`
 }
 
 // SkippedAttachmentReason defines model for SkippedAttachmentReason.
@@ -2408,6 +2497,38 @@ type SkippedAttachmentResponse struct {
 	// SizeBytes Decoded size in bytes.
 	SizeBytes *int `json:"size_bytes"`
 }
+
+// SlackReplyVisibility defines model for SlackReplyVisibility.
+type SlackReplyVisibility string
+
+// SlackTriggerActivation defines model for SlackTriggerActivation.
+type SlackTriggerActivation string
+
+// SlackTriggerConfigApiResponse defines model for SlackTriggerConfigApiResponse.
+type SlackTriggerConfigApiResponse struct {
+	Activation          string                   `json:"activation"`
+	AgentId             openapi_types.UUID       `json:"agent_id"`
+	AllowDms            bool                     `json:"allow_dms"`
+	ChannelIds          []string                 `json:"channel_ids"`
+	Form                []map[string]interface{} `json:"form"`
+	IncludeInvokerEmail bool                     `json:"include_invoker_email"`
+	MaxTurns            *int                     `json:"max_turns"`
+	McpClientId         *openapi_types.UUID      `json:"mcp_client_id"`
+
+	// MissingScopes Scopes the Slack connection lacks for optional features.
+	MissingScopes            []string           `json:"missing_scopes"`
+	NotifyFailureAfterAnswer bool               `json:"notify_failure_after_answer"`
+	Scope                    string             `json:"scope"`
+	SlackTeamId              *string            `json:"slack_team_id"`
+	StartWithoutForm         bool               `json:"start_without_form"`
+	TriggerId                openapi_types.UUID `json:"trigger_id"`
+	TurnsAnyone              bool               `json:"turns_anyone"`
+	TurnsEnabled             bool               `json:"turns_enabled"`
+	Visibility               string             `json:"visibility"`
+}
+
+// SlackTriggerScope defines model for SlackTriggerScope.
+type SlackTriggerScope string
 
 // SolutionSourceConnectionResponse defines model for SolutionSourceConnectionResponse.
 type SolutionSourceConnectionResponse struct {
@@ -2506,7 +2627,7 @@ type SourceContentStatusResponse struct {
 	// ExtractedMediaLimit The bound that was reached, when extracted_media_capped is true and the stop was a bound — a number of fetch attempts, of seconds, of bytes, or of media listed. Null when extraction was not capped, or when it stopped because the container could not be read rather than because a bound fired.
 	ExtractedMediaLimit *int `json:"extracted_media_limit"`
 
-	// HeldForReview An ENFORCE governance policy blocked this item at import. It is held for review and is not retrievable: resolving its blocking evaluations releases it into the source, and it is purged when the hold window ends.
+	// HeldForReview An ENFORCE governance policy blocked this item at import. It is held for review and is not retrievable: resolving its blocking evaluations releases it into the source; left unresolved, it is purged when the hold window ends.
 	HeldForReview *bool `json:"held_for_review,omitempty"`
 
 	// IndexedAt Timestamp when the item finished indexing and became retrievable. `null` until then.
@@ -2521,7 +2642,10 @@ type SourceContentStatusResponse struct {
 	// PulledAt Timestamp when the item was uploaded or pulled.
 	PulledAt string `json:"pulled_at"`
 
-	// SourceConnectionContentVersionId ID to pass to `GET /contents/{id}`. `null` until the item has finished indexing — an item that is still processing, or that failed, has no retrievable content and keeps this `null`.
+	// ReleaseWaitingReason Set on a held item review approved whose release was refused: why it waits, the account being unable to pay for it or the source's spend limit having no room for it. Its release is retried; null until one is refused.
+	ReleaseWaitingReason *string `json:"release_waiting_reason"`
+
+	// SourceConnectionContentVersionId ID to pass to `GET /contents/{id}`. `null` while the item has no retrievable content.
 	SourceConnectionContentVersionId *string `json:"source_connection_content_version_id"`
 
 	// Title Title of the content item.
@@ -2657,6 +2781,9 @@ type SourceResponse struct {
 	//     CUSTOM: Caller supplies embedding model, dimensions, and chunk config.
 	IndexMode *SourceIndexMode `json:"index_mode,omitempty"`
 
+	// MaxCreditsPerPeriod The source's spend limit: credits it may commit per billing period. Null when it has none.
+	MaxCreditsPerPeriod *float32 `json:"max_credits_per_period"`
+
 	// MediaTypes Media kinds in a web page's main content that are attached to the page's item and indexed (subset of ['images', 'video']). On a website or RSS source 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files.
 	MediaTypes *[]string `json:"media_types,omitempty"`
 
@@ -2685,7 +2812,14 @@ type SourceResponse struct {
 	Retention *int `json:"retention"`
 
 	// SourceType Type of the source connection.
-	SourceType string `json:"source_type"`
+	SourceType     string          `json:"source_type"`
+	SpendCapAction *SpendCapAction `json:"spend_cap_action,omitempty"`
+
+	// SpendCapDeleteOrder Which entries a DELETE cap removes first.
+	SpendCapDeleteOrder *SpendCapDeleteOrder `json:"spend_cap_delete_order,omitempty"`
+
+	// SpendCapReached True while the spend limit refuses uploads and email to this source.
+	SpendCapReached *bool `json:"spend_cap_reached,omitempty"`
 
 	// SystemManaged Indicates if this source is automatically managed by the system (e.g., agent traces).
 	SystemManaged *bool `json:"system_managed,omitempty"`
@@ -2696,6 +2830,12 @@ type SourceResponse struct {
 	// Url URL of the source connection.
 	Url *string `json:"url"`
 }
+
+// SpendCapAction defines model for SpendCapAction.
+type SpendCapAction string
+
+// SpendCapDeleteOrder Which entries a DELETE cap removes first.
+type SpendCapDeleteOrder string
 
 // StandaloneTestCompactionRequest Request body for testing a compaction prompt *without* an existing bank.
 //
@@ -2962,6 +3102,9 @@ type UpdateSourceBody struct {
 	// FeedAttachments Kinds of file listed beside a feed item's content to attach to the item and index, on an RSS source. Subset of ['enclosures', 'item_image', 'media_rss']; any other value is refused. [] attaches none. Applies to items added after it changes. Omit the field to leave it unchanged.
 	FeedAttachments *[]string `json:"feed_attachments,omitempty"`
 
+	// MaxCreditsPerPeriod Spend limit: the credits this source may commit per billing period — what the account was charged for it this period plus the storage of what it holds until the period ends. Send null to remove the limit; omit to leave it unchanged.
+	MaxCreditsPerPeriod *float32 `json:"max_credits_per_period,omitempty"`
+
 	// MediaTypes Media kinds in a web page's main content to attach to the page's item and index, on a website or RSS source. Subset of ['images', 'video']. From `Seclai-Version: 2026-10-13` any other value, and any kind on another source type, is refused with a 400; older versions drop an unknown value and store the rest. A kind the source's embedder cannot index is stored and not indexed (see `supported_input_media` on GET /models/embedders). [] attaches no media from web pages. 'images' also covers the images inside PDF, DOCX, PPTX and XLSX files. Applies to pages and documents added after it changes.
 	MediaTypes *[]string `json:"media_types,omitempty"`
 
@@ -2972,7 +3115,11 @@ type UpdateSourceBody struct {
 	Polling *string `json:"polling,omitempty"`
 
 	// RetentionDays New retention period in days — content older than this is deleted permanently. Send null to clear the window: content is then kept indefinitely. Omit the field to leave it unchanged.
-	RetentionDays *int `json:"retention_days,omitempty"`
+	RetentionDays  *int            `json:"retention_days,omitempty"`
+	SpendCapAction *SpendCapAction `json:"spend_cap_action,omitempty"`
+
+	// SpendCapDeleteOrder Which entries a DELETE cap removes first.
+	SpendCapDeleteOrder *SpendCapDeleteOrder `json:"spend_cap_delete_order,omitempty"`
 }
 
 // UploadAgentInputApiResponse defines model for UploadAgentInputApiResponse.
@@ -3145,8 +3292,11 @@ type RoutersApiAgentsCreateAgentRequest struct {
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, replaces any template-derived workflow and pre-fills metadata/trigger fields the request does not specify explicitly. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
 	AgentDefinition *map[string]interface{} `json:"agent_definition,omitempty"`
 
-	// AgentTemplate Template to initialize the agent from. Values: blank, retrieval_example, simple_qa, summarizer, json_extractor, content_change_notifier, scheduled_report, webhook_pipeline.
+	// AgentTemplate Agent gallery entry to start from: a `key` from GET /agents/examples, or `blank`. The keys retrieval_example and simple_qa remain accepted for their gallery entries.
 	AgentTemplate *string `json:"agent_template,omitempty"`
+
+	// CreateMissingResources For an `agent_template`: create each creatable resource slot left out of `resource_bindings`, and group the agent with them in a new solution. When false, an unbound slot the template needs is an error.
+	CreateMissingResources *bool `json:"create_missing_resources,omitempty"`
 
 	// Description Optional description.
 	Description *string `json:"description,omitempty"`
@@ -3157,7 +3307,10 @@ type RoutersApiAgentsCreateAgentRequest struct {
 	// Name Name for the new agent.
 	Name string `json:"name"`
 
-	// TriggerType Trigger type: dynamic_input, template_input, schedule, new_content, email_received.
+	// ResourceBindings For an `agent_template`: the existing resource to use for each of the template's resource slots, as {slot: resource_id}. GET /agents/examples lists each template's slots.
+	ResourceBindings *map[string]openapi_types.UUID `json:"resource_bindings,omitempty"`
+
+	// TriggerType Defaults to dynamic_input, or to the template's own trigger type for an `agent_template` without `agent_definition`.
 	TriggerType *string `json:"trigger_type,omitempty"`
 }
 
@@ -3199,6 +3352,9 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, agent metadata fields the request does not set explicitly are taken from the payload, and the agent's workflow is replaced from `agent.definition`. The previous version is preserved in history. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
 	AgentDefinition *map[string]interface{} `json:"agent_definition,omitempty"`
 
+	// ApplyImportRunLimits With `agent_definition`, also replace the agent's run limits with the payload's (a null there removes a limit). Off by default: the agent keeps its limits.
+	ApplyImportRunLimits *bool `json:"apply_import_run_limits,omitempty"`
+
 	// DefaultEvaluationTier Default evaluation tier: 'fast', 'balanced', or 'thorough'.
 	DefaultEvaluationTier *string `json:"default_evaluation_tier,omitempty"`
 
@@ -3211,8 +3367,23 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 	// EvaluationMode Evaluation mode: 'output_expectation', 'eval_and_retry', or 'sample_and_flag'.
 	EvaluationMode *string `json:"evaluation_mode,omitempty"`
 
+	// MaxCreditsPerPeriod Credit limit per billing period of the paying account: once reached, runs stop at their next step and new runs are refused.
+	MaxCreditsPerPeriod *float32 `json:"max_credits_per_period,omitempty"`
+
+	// MaxCreditsPerRun Credit limit per run: a run that reaches it is stopped before its next step.
+	MaxCreditsPerRun *float32 `json:"max_credits_per_run,omitempty"`
+
 	// MaxRetries Max retries for eval_and_retry mode (1-10).
 	MaxRetries *int `json:"max_retries,omitempty"`
+
+	// MaxRunsPerDay Runs per day; at most the plan's run quota.
+	MaxRunsPerDay *int `json:"max_runs_per_day,omitempty"`
+
+	// MaxRunsPerHour Runs per hour; at most the plan's run quota.
+	MaxRunsPerHour *int `json:"max_runs_per_hour,omitempty"`
+
+	// MaxRunsTotal Runs in total; once reached, new runs are refused.
+	MaxRunsTotal *int `json:"max_runs_total,omitempty"`
 
 	// Name New name for the agent.
 	Name *string `json:"name,omitempty"`
@@ -3232,6 +3403,21 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 
 	// SetDefaultEvaluationTier When true and default_evaluation_tier is omitted, clears the tier to null (system default).
 	SetDefaultEvaluationTier *bool `json:"set_default_evaluation_tier,omitempty"`
+
+	// SetMaxCreditsPerPeriod When true and max_credits_per_period is omitted, removes the limit.
+	SetMaxCreditsPerPeriod *bool `json:"set_max_credits_per_period,omitempty"`
+
+	// SetMaxCreditsPerRun When true and max_credits_per_run is omitted, removes the limit.
+	SetMaxCreditsPerRun *bool `json:"set_max_credits_per_run,omitempty"`
+
+	// SetMaxRunsPerDay When true and max_runs_per_day is omitted, removes the limit.
+	SetMaxRunsPerDay *bool `json:"set_max_runs_per_day,omitempty"`
+
+	// SetMaxRunsPerHour When true and max_runs_per_hour is omitted, removes the limit.
+	SetMaxRunsPerHour *bool `json:"set_max_runs_per_hour,omitempty"`
+
+	// SetMaxRunsTotal When true and max_runs_total is omitted, removes the limit.
+	SetMaxRunsTotal *bool `json:"set_max_runs_total,omitempty"`
 
 	// SetPromptModelAutoRollbackTriggers When true and prompt_model_auto_rollback_triggers is omitted, clears the list to null (revert to system defaults).
 	SetPromptModelAutoRollbackTriggers *bool `json:"set_prompt_model_auto_rollback_triggers,omitempty"`
@@ -4194,6 +4380,27 @@ type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetP
 	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
+// ListAgentExamplesApiAgentsExamplesGetParams defines parameters for ListAgentExamplesApiAgentsExamplesGet.
+type ListAgentExamplesApiAgentsExamplesGetParams struct {
+	// Query Words every match must contain.
+	Query *string `form:"query,omitempty" json:"query,omitempty"`
+
+	// UseCase Only entries for this use case.
+	UseCase *string `form:"use_case,omitempty" json:"use_case,omitempty"`
+
+	// Page Page number
+	Page *int `form:"page,omitempty" json:"page,omitempty"`
+
+	// Limit Items per page
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
 // ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams defines parameters for ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet.
 type ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams struct {
 	// AgentId Filter to a single agent's rejections
@@ -4545,6 +4752,15 @@ type SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmen
 
 // SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams defines parameters for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut.
 type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams defines parameters for SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut.
+type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 
@@ -6042,6 +6258,9 @@ type SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmen
 // SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody defines body for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut for application/json ContentType.
 type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody = RoutersApiAgentsSetEmailTriggerConfigRequest
 
+// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody defines body for SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut for application/json ContentType.
+type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody = SetSlackTriggerConfigApiRequest
+
 // ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody defines body for ApiAiFeedbackApiAiAssistantFeedbackPost for application/json ContentType.
 type ApiAiFeedbackApiAiAssistantFeedbackPostJSONRequestBody = RoutersApiAiAssistantAiAssistantFeedbackRequest
 
@@ -6379,6 +6598,9 @@ type ClientInterface interface {
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGet(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAgentExamplesApiAgentsExamplesGet request
+	ListAgentExamplesApiAgentsExamplesGet(ctx context.Context, params *ListAgentExamplesApiAgentsExamplesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet request
 	ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -6506,6 +6728,11 @@ type ClientInterface interface {
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBody(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody request with any body
+	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPost request
 	ApiUploadAgentInputApiAgentsAgentIdUploadInputPost(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7248,6 +7475,18 @@ func (c *Client) GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManua
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListAgentExamplesApiAgentsExamplesGet(ctx context.Context, params *ListAgentExamplesApiAgentsExamplesGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentExamplesApiAgentsExamplesGetRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetRequest(c.Server, params)
 	if err != nil {
@@ -7802,6 +8041,30 @@ func (c *Client) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailC
 
 func (c *Client) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutRequest(c.Server, agentId, triggerId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequestWithBody(c.Server, agentId, triggerId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequest(c.Server, agentId, triggerId, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -11280,6 +11543,129 @@ func NewGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 	return req, nil
 }
 
+// NewListAgentExamplesApiAgentsExamplesGetRequest generates requests for ListAgentExamplesApiAgentsExamplesGet
+func NewListAgentExamplesApiAgentsExamplesGetRequest(server string, params *ListAgentExamplesApiAgentsExamplesGetParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/examples")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Query != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "query", runtime.ParamLocationQuery, *params.Query); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.UseCase != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "use_case", runtime.ParamLocationQuery, *params.UseCase); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page", runtime.ParamLocationQuery, *params.Page); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetRequest generates requests for ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet
 func NewListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetRequest(server string, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams) (*http.Request, error) {
 	var err error
@@ -13935,6 +14321,86 @@ func NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutR
 	}
 
 	operationPath := fmt.Sprintf("/agents/%s/triggers/%s/email-config", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequest calls the generic SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut builder with application/json body
+func NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequest(server string, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequestWithBody(server, agentId, triggerId, params, "application/json", bodyReader)
+}
+
+// NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequestWithBody generates requests for SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut with any type of body
+func NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequestWithBody(server string, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "trigger_id", runtime.ParamLocationPath, triggerId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/triggers/%s/slack-config", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -24015,6 +24481,9 @@ type ClientWithResponsesInterface interface {
 	// GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse request
 	GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetWithResponse(ctx context.Context, params *GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetParams, reqEditors ...RequestEditorFn) (*GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse, error)
 
+	// ListAgentExamplesApiAgentsExamplesGetWithResponse request
+	ListAgentExamplesApiAgentsExamplesGetWithResponse(ctx context.Context, params *ListAgentExamplesApiAgentsExamplesGetParams, reqEditors ...RequestEditorFn) (*ListAgentExamplesApiAgentsExamplesGetResponse, error)
+
 	// ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse request
 	ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse, error)
 
@@ -24142,6 +24611,11 @@ type ClientWithResponsesInterface interface {
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithBodyWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error)
 
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error)
+
+	// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse request with any body
+	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error)
+
+	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error)
 
 	// ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request
 	ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse(ctx context.Context, agentId string, params *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostParams, reqEditors ...RequestEditorFn) (*ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse, error)
@@ -25013,6 +25487,30 @@ func (r GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryG
 	return 0
 }
 
+type ListAgentExamplesApiAgentsExamplesGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentExampleListResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentExamplesApiAgentsExamplesGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentExamplesApiAgentsExamplesGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -25821,6 +26319,30 @@ func (r SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutR
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SlackTriggerConfigApiResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -29151,6 +29673,15 @@ func (c *ClientWithResponses) GetNonManualEvaluationSummaryApiAgentsEvaluationRe
 	return ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetResponse(rsp)
 }
 
+// ListAgentExamplesApiAgentsExamplesGetWithResponse request returning *ListAgentExamplesApiAgentsExamplesGetResponse
+func (c *ClientWithResponses) ListAgentExamplesApiAgentsExamplesGetWithResponse(ctx context.Context, params *ListAgentExamplesApiAgentsExamplesGetParams, reqEditors ...RequestEditorFn) (*ListAgentExamplesApiAgentsExamplesGetResponse, error) {
+	rsp, err := c.ListAgentExamplesApiAgentsExamplesGet(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentExamplesApiAgentsExamplesGetResponse(rsp)
+}
+
 // ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse request returning *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse
 func (c *ClientWithResponses) ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse(ctx context.Context, params *ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetParams, reqEditors ...RequestEditorFn) (*ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse, error) {
 	rsp, err := c.ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGet(ctx, params, reqEditors...)
@@ -29559,6 +30090,23 @@ func (c *ClientWithResponses) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTr
 		return nil, err
 	}
 	return ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse(rsp)
+}
+
+// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse request with arbitrary body returning *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse
+func (c *ClientWithResponses) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error) {
+	rsp, err := c.SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody(ctx, agentId, triggerId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error) {
+	rsp, err := c.SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut(ctx, agentId, triggerId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse(rsp)
 }
 
 // ApiUploadAgentInputApiAgentsAgentIdUploadInputPostWithResponse request returning *ApiUploadAgentInputApiAgentsAgentIdUploadInputPostResponse
@@ -31736,6 +32284,46 @@ func ParseGetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummar
 	return response, nil
 }
 
+// ParseListAgentExamplesApiAgentsExamplesGetResponse parses an HTTP response from a ListAgentExamplesApiAgentsExamplesGetWithResponse call
+func ParseListAgentExamplesApiAgentsExamplesGetResponse(rsp *http.Response) (*ListAgentExamplesApiAgentsExamplesGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentExamplesApiAgentsExamplesGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentExampleListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse parses an HTTP response from a ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetWithResponse call
 func ParseListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse(rsp *http.Response) (*ListInboundEmailRejectionsApiApiAgentsInboundEmailRejectionsGetResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -33061,6 +33649,46 @@ func ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPu
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest EmailTriggerConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse parses an HTTP response from a SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithResponse call
+func ParseSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse(rsp *http.Response) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SlackTriggerConfigApiResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
