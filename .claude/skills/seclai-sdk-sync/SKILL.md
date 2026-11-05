@@ -97,8 +97,8 @@ schema, and splits the result by how much it costs you:
 - **SHAPE MISMATCH** (error) — the client commits to a list and the endpoint
   returns an object, or the reverse. This throws at deserialization; a shipped
   SDK is already broken. This is the 2026-07 envelope change.
-- **NAME DIFFERS** (warning) — same shape, different type name. All four SDKs
-  drop the spec's `Model` and `Api` affixes by convention, so this tier is mostly
+- **NAME DIFFERS** (warning) — same shape, different type name. The SDKs' own
+  type names often drop the spec's `Model` and `Api` affixes, so this tier is mostly
   noise by design. Keep it out of CI with `--quiet-renamed`.
 - **UNTYPED** (warning) — the spec names a schema and the client returns
   `JsonElement` / `json.RawMessage` / `unknown` / `JSONValue`. Not a defect, but
@@ -223,6 +223,30 @@ the scanner and add a test, then rerun. A statement the pattern also matches
 Only exported Go methods are surface. A lowercase method is unreachable outside
 the package, so a change to one breaks no caller.
 
+**Go struct fields are surface too.** seclai-go's request/response types are
+aliases (`type SetSlackTriggerConfigRequest =
+generated.SetSlackTriggerConfigApiRequest`) of oapi-codegen structs, and
+`generated` is a public package, so a field dropped by regeneration breaks
+callers while every method signature is unchanged. `surface` diffs the exported
+fields of exported structs in package `seclai` (read through the alias) and in
+`generated/`, and the names of their other exported types, constants and
+variables (an enum value the spec drops removes a generated constant): a removed
+field, type, constant or variable is REMOVED; a changed field type, or a changed
+declared type of a constant or variable, is BREAKING; an added one is ADDED. For
+a non-struct type only the first line of its definition is compared (`string`,
+an alias's target, `interface {`), so a change after the first line (a method of
+a multi-line interface) is not seen. An alias to an exported struct in `seclai`
+or `generated/` is compared by its fields, so re-pointing it at a struct with
+the same fields is not seen either; if the old target is removed, its REMOVED
+line still catches that. An alias to a struct in another package (`type File =
+openapi_types.File`) is compared by its target's name only. Tags and comments
+are ignored, in nested structs too. A struct it cannot read, or one embedding an
+unexported struct, is UNREADABLE, as for a method head. Methods on generated
+types (union accessors such as `AsValidationErrorLoc0`) are not read. It found
+one shipped break: v1.8.0 renamed `generated.InsufficientCreditsDetail.Error`
+and `generated.InsufficientCreditsResponse.Detail`. C# has the same blind spot
+for model properties, and it is not covered.
+
 An optional parameter inserted *mid-list* is graded breaking, not a warning: in
 C# a positional `M(id, token)` then tries to bind `token` to the new parameter.
 Use an overload rather than growing a parameter list.
@@ -244,12 +268,22 @@ both revisions.
 
 Only seclai-csharp: everywhere else regeneration keeps models in step. Use
 `--since <rev>`, which limits the report to properties a schema **gained** since
-that rev. Without it you get every long-standing coverage gap — 27 for
-seclai-csharp, none of them actionable, which is how a gate gets muted.
+that rev. Without it you get every long-standing coverage gap, which is how a
+gate gets muted.
 
-It cannot see models whose schema is declared inline rather than as a named
-component; it prints how many are unchecked for that reason. Two of the six
-models left stale in 2026-07 were in that blind spot, so treat the count as real.
+A class is matched to its schema by name with the module prefix and the `Api` /
+`Model` affixes dropped (`SlackTriggerConfigApiResponse` is
+`SlackTriggerConfigResponse`), and by the
+client's own methods: the class a method returns, or takes as its body, models
+that operation's schema. That links `ContentFileUploadResponse` and picks which
+`FileUploadResponse` a class is. Until 2026-11 an affixed class was never
+matched, so `--since` did not report the Slack `alias` addition. A name that
+still matches several schemas is listed as AMBIGUOUS and checked only for the
+properties they all declare.
+
+It cannot see models with no named schema (an inline body, an SSE event, a
+client-side options class); it names them as unchecked. Two of the six models
+left stale in 2026-07 were in that blind spot, so read the list.
 
 ## `docexamples` — compile the README
 
@@ -275,7 +309,7 @@ cover README snippets, and two shipped PRs contained examples that could not com
 | --- | --- | --- | --- |
 | seclai-python | generated + hand-written wrappers | yes | `make generate`, then black |
 | seclai-javascript | types generated, methods hand-written | yes | `npm run generate` |
-| seclai-go | hand-written | yes | |
+| seclai-go | types generated, methods hand-written | yes | `make generate`; `types.go` aliases the `generated/` structs |
 | seclai-csharp | hand-rolled from the start | **no** | no codegen library was suitable; still at near-full parity — sync it like the others |
 | seclai-cli | wraps `@seclai/sdk` | no | coverage question is command-to-SDK-method |
 | seclai-mcp | no client source | no | |
@@ -308,7 +342,11 @@ For repos without a bundled spec, point at one:
      generator formats with ruff but the repo commits black, so raw output shows
      ~240 changed files that collapse to ~60 real ones.
    - javascript: `npm run generate` (no churn; types only).
-   - go / csharp: nothing to regenerate.
+   - go: `make generate` (`go generate ./...`, directives in `generated/gen.go`):
+     `cmd/specfix` converts the 3.1 spec to 3.0, then oapi-codegen v2.4.1 writes
+     `generated/seclai.gen.go`. To keep a field the spec removed, compiling and
+     marked deprecated, add it to `retainedRequestFields` in `cmd/specfix`.
+   - csharp: nothing to regenerate; hand-written models are what `models` checks.
 4. **`parity`** to list what is missing. Implement every path, not just the ones
    that look interesting — binary/stream endpoints with no JSON schema are the
    ones that get skipped.

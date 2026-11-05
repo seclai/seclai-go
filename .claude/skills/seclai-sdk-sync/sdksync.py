@@ -2258,6 +2258,189 @@ def _texts_at(repo: Path, rev: str | None, sub: str, suffix: str) -> list[str]:
     return out
 
 
+def _go_package_texts(repo: Path, rev: str | None, sub: str) -> list[str]:
+    """The non-test `.go` files directly in `sub` (one Go package), at `rev` or
+    in the working tree. Listed at the rev itself, so a file deleted since the
+    tag still contributes its types to the baseline."""
+    if rev is None:
+        d = repo / sub
+        return [f.read_text(encoding="utf-8", errors="replace")
+                for f in sorted(d.glob("*.go")) if not f.name.endswith("_test.go")]
+    prefix = "" if sub in ("", ".") else sub.rstrip("/") + "/"
+    ls = subprocess.run(["git", "-C", str(repo), "ls-tree", "--name-only", rev, "--", prefix or "."],
+                        capture_output=True, text=True)
+    out = []
+    for name in ls.stdout.split():
+        if name.endswith(".go") and not name.endswith("_test.go") and "/" not in name[len(prefix):]:
+            p = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{name}"],
+                               capture_output=True, text=True)
+            if p.returncode == 0:
+                out.append(p.stdout)
+    return out
+
+
+_GO_TYPE_RE = re.compile(r"^type[ \t]+([A-Za-z_]\w*)(?:\[[^\]\n]*\])?[ \t]+", re.M)
+_GO_FIELD_RE = re.compile(r"^([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+(\S.*)$", re.S)
+_GO_EMBED_RE = re.compile(r"^\*?([A-Za-z_]\w*\.)?([A-Za-z_]\w*)(?:\[.*\])?$", re.S)
+
+
+def _go_struct_members(body: str) -> list[str] | None:
+    """A struct body split into its field declarations, at depth 0: a nested
+    `struct { ... }` or `map[K]V` stays one member. None when it does not balance."""
+    out, cur, depth, j = [], [], 0, 0
+    while j < len(body):
+        ch = body[j]
+        if ch in "\"'`":
+            end = (body.find("`", j + 1) + 1 or None) if ch == "`" else _quoted_end(body, j)
+            if end is None:
+                return None
+            cur.append(body[j:end])
+            j = end
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+            if depth < 0:
+                return None
+        if ch in "\n;" and depth == 0:
+            out.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(ch)
+        j += 1
+    out.append("".join(cur).strip())
+    return None if depth else [m for m in out if m]
+
+
+def go_struct_fields(text: str) -> tuple[dict[str, dict[str, str] | str], list[str]]:
+    """(declarations, unreadable) for one Go package's source.
+
+    A declaration maps an EXPORTED name to {exported field: type} for a struct,
+    to the alias target string (`generated.X`) for `type A = B`, to "type T"
+    for any other type (`type Scope string` -> "type string"), and to
+    "const T" / "var T" for a package constant or variable, T its declared type
+    if any. A struct tag is dropped, nested ones too: retagging
+    changes the wire, not what compiles. An embedded field is named by its type,
+    as Go names it. A struct whose body does not balance, holds a member read as
+    neither a field nor an embedding, or embeds an unexported struct (whose
+    promoted fields this scan cannot list) is unreadable.
+    """
+    text = strip_comments(text, "//", "go")
+    decls: dict[str, dict[str, str] | str] = {}
+    # A grouped `type ( ... )` block is not read; say so rather than drop it.
+    unreadable: list[str] = ["type ( ... ) block"
+                             for _ in re.finditer(r"^type[ \t]*\(", text, re.M)]
+    for m in re.finditer(r"^(const|var)\b[ \t]*(\()?", text, re.M):
+        kind = m.group(1)
+        if m.group(2):
+            body = balanced_slice(text, m.end() - 1, "(", ")")
+            members = _go_struct_members(body[1:-1]) if body is not None else None
+            if members is None:
+                unreadable.append(f"{kind} ( ... ) block")
+                continue
+        else:
+            members = [text[m.end():].split("\n", 1)[0]]
+        last = ""
+        for mem in members:
+            left, eq, _ = mem.partition("=")
+            names, typ = re.match(r"\s*([\w\s,]*?\w)(?:\s+([^,\s].*?))?\s*$", left).groups()
+            if kind == "const" and not eq and not typ:
+                typ = last          # Go repeats the previous spec's type and value
+            last = typ or ""
+            for n in re.split(r"\s*,\s*", names):
+                if n[0].isupper():
+                    decls[n] = _norm(f"{kind} {typ or ''}")
+    for m in _GO_TYPE_RE.finditer(text):
+        name, rest = m.group(1), text[m.end():]
+        if not name[0].isupper():
+            continue
+        if rest.startswith("="):
+            decls[name] = _norm(rest[1:].split("\n", 1)[0])
+            continue
+        if not re.match(r"struct\s*\{", rest):
+            # `type Scope string`, interfaces, func types: the first line of the
+            # underlying type, so `string` -> `int` is a change.
+            decls[name] = _norm("type " + rest.split("\n", 1)[0])
+            continue
+        body = balanced_slice(text, m.end())
+        members = _go_struct_members(body) if body is not None else None
+        if members is None:
+            unreadable.append(f"type {name} struct")
+            continue
+        fields: dict[str, str] = {}
+        ok = True
+        for mem in members:
+            mem = re.sub(r"\s*`[^`]*`\s*$|\s*\"(?:[^\"\\]|\\.)*\"\s*$", "", mem)
+            e = _GO_EMBED_RE.match(mem)
+            f = _GO_FIELD_RE.match(mem)
+            if e and not f:
+                if not e.group(1) and e.group(2)[0].islower():
+                    ok = False
+                    break
+                fields[e.group(2)] = "embedded " + _norm(mem)
+            elif f:
+                for fname in re.split(r"\s*,\s*", f.group(1)):
+                    fields[fname] = _norm(re.sub(r"\s*`[^`]*`", "", f.group(2)))
+            else:
+                ok = False
+                break
+        if not ok:
+            unreadable.append(f"type {name} struct")
+            continue
+        decls[name] = {k: v for k, v in fields.items() if k[0].isupper()}
+    return decls, unreadable
+
+
+def _go_kind(entry: str) -> str:
+    """What a `go_field_surface` entry declares: "type", "const", "var" or "field".
+    A field's type text cannot start with these keywords; "struct" alone is a type."""
+    word = entry.split(" ", 1)[0]
+    return "type" if entry == "struct" or word == "type" else word if word in ("const", "var") else "field"
+
+
+def go_field_surface(seclai_texts: list[str], generated_texts: list[str]
+                     ) -> tuple[dict[str, str], list[str]]:
+    """(surface, unreadable) for package seclai (as `X`) and `generated/` (as
+    `generated.X`): `Type` -> "struct" and `Type.Field` -> field type for every
+    exported struct, `Name` -> its `go_struct_fields` value for every other
+    exported declaration, and "type = target" for any other alias. An alias to
+    an exported struct in either package (`type Req = generated.ReqApi`) is
+    listed with the fields it resolves to, since that is what its callers set.
+    """
+    pk: dict[str, dict] = {}
+    unreadable: list[str] = []
+    for prefix, texts in (("", seclai_texts), ("generated.", generated_texts)):
+        decls = {}
+        for t in texts:
+            d, u = go_struct_fields(t)
+            decls.update(d)
+            unreadable += [f"{n} in package {prefix.rstrip('.') or 'seclai'}" for n in u]
+        pk[prefix] = decls
+
+    def resolve(prefix: str, name: str, seen: tuple = ()) -> dict | None:
+        d = pk[prefix].get(name)
+        if isinstance(d, dict) or d is None or name in seen:
+            return d if isinstance(d, dict) else None
+        if d.startswith("generated."):
+            return resolve("generated.", d[len("generated."):], seen + (name,))
+        if "." in d or not re.fullmatch(r"\w+", d):
+            return None   # another package, or not a plain name: not ours to read
+        return resolve(prefix, d, seen + (name,))
+
+    out: dict[str, str] = {}
+    for prefix, decls in pk.items():
+        for name, d in decls.items():
+            fields = resolve(prefix, name)
+            if fields is None:
+                out[prefix + name] = d if _go_kind(d) != "field" else f"type = {d}"
+                continue
+            out[prefix + name] = "struct"
+            for f, t in fields.items():
+                out[f"{prefix}{name}.{f}"] = t
+    return out, unreadable
+
+
 def cmd_surface(args) -> int:
     """Diff the public API surface against a released tag.
 
@@ -2312,11 +2495,31 @@ def cmd_surface(args) -> int:
     added = sorted(set(new) - set(old))
     changed = [k for k in sorted(set(old) & set(new)) if old[k] - new[k]]
 
-    print(f"{repo.name} [{lang}] — {len(old)} public method(s) at {args.rev}, {len(new)} now")
+    # Go: exported struct fields too. The request/response types are aliases of
+    # oapi-codegen structs in the public `generated` package, so removing or
+    # retyping a field breaks callers while every method signature is unchanged.
+    old_f, new_f = {}, {}
+    if lang == "go":
+        old_f, old_fu = go_field_surface(_go_package_texts(repo, args.rev, "."),
+                                         _go_package_texts(repo, args.rev, "generated"))
+        new_f, new_fu = go_field_surface(_go_package_texts(repo, None, "."),
+                                         _go_package_texts(repo, None, "generated"))
+        unreadable += [(args.rev, n) for n in old_fu] + [("now", n) for n in new_fu]
+        gone_types = {k for k in old_f if old_f[k] == "struct" and k not in new_f}
+        for k in sorted(set(old_f) - set(new_f)):
+            if k in gone_types or k.rsplit(".", 1)[0] not in gone_types:
+                removed.append(f"{k} ({_go_kind(old_f[k])})")
+        added += [f"{k} ({_go_kind(new_f[k])})" for k in sorted(set(new_f) - set(old_f))
+                  if _go_kind(new_f[k]) != "field" or k.rsplit(".", 1)[0] in old_f]
+
+    fields_note = (f"; {sum(v == 'struct' for v in old_f.values())} exported struct type(s) "
+                   f"at {args.rev}, {sum(v == 'struct' for v in new_f.values())} now") if lang == "go" else ""
+    print(f"{repo.name} [{lang}] — {len(old)} public method(s) at {args.rev}, {len(new)} now{fields_note}")
 
     if unreadable:
-        print(f"\nUNREADABLE ({len(unreadable)}) — public method heads this scan could not "
-              "read; they are missing from the surface, so a change to them would go "
+        print(f"\nUNREADABLE ({len(unreadable)}) — public method heads, or Go declarations, "
+              "this scan could not read; they are missing from the surface, so a change "
+              "to them would go "
               "unreported. Fix the scanner (and add a test) before trusting this result:")
         for rev, n in unreadable:
             print(f"   {n}  (at {rev})")
@@ -2332,14 +2535,19 @@ def cmd_surface(args) -> int:
         if len(gone) == 1 and len(now) == 1:
             sev, label = classify_change(lang, gone[0], now[0], ts_decls)
         (breaks if sev == "break" else warns).append((k, label, gone, now))
+    for k in sorted(set(old_f) & set(new_f)):
+        if old_f[k] != new_f[k]:
+            what = ("field type changed" if _go_kind(old_f[k]) == _go_kind(new_f[k]) == "field"
+                    else "declaration changed")
+            breaks.append((k, what, [(old_f[k], None)], [(new_f[k], None)]))
 
     def show(rows: list) -> None:
         for k, label, gone, now in rows:
             print(f"   {k} — {label}")
             for ret, params in gone:
-                print(f"       was: {ret} ({params[:100]})")
+                print(f"       was: {ret}" + ("" if params is None else f" ({params[:100]})"))
             for ret, params in now:
-                print(f"       now: {ret} ({params[:100]})")
+                print(f"       now: {ret}" + ("" if params is None else f" ({params[:100]})"))
 
     if breaks:
         print(f"\nBREAKING ({len(breaks)}) — a released signature no longer works:")
@@ -2356,7 +2564,7 @@ def cmd_surface(args) -> int:
               "alongside it, or bump the major.")
         return 1
     if unreadable:
-        print(f"\n{len(unreadable)} unreadable method head(s) — the result above is incomplete.")
+        print(f"\n{len(unreadable)} unreadable declaration(s) — the result above is incomplete.")
         return 1
     print("\nno breaking change — every released signature still works")
     return 0
@@ -2405,6 +2613,21 @@ def git_location(spec: Path, fallback: Path) -> tuple[Path, str]:
         die(f"{full} resolves outside its own work tree {root}; --since cannot read it")
 
 
+def affix_free(name: str) -> str:
+    """A schema name with its module qualification and `Api`/`Model` affixes
+    dropped, as seclai-csharp names its hand-written models:
+    `routers__api__agents__UpdateAgentRequest` -> `UpdateAgentRequest`,
+    `SlackTriggerConfigApiResponse` -> `SlackTriggerConfigResponse`,
+    `CloudDriveResponseModel` -> `CloudDriveResponse`. Only a trailing `Model`
+    and an `Api` before the last word go, so `EmbeddingModelListResponse`,
+    `ApiVersionResponse` and `UpdateApiVersionRequest` keep theirs. `models`
+    matches classes by it.
+    """
+    name = short_label(name)
+    name = re.sub(r"(?<=[a-z0-9])Model$", "", name)
+    return re.sub(r"(?<=[a-z0-9])Api(?=[A-Z][a-z0-9]*$)", "", name)
+
+
 def spec_schema_index(spec: dict) -> dict[str, list[tuple[str, set[str]]]]:
     """Short schema name -> [(full name, property names)].
 
@@ -2414,9 +2637,89 @@ def spec_schema_index(spec: dict) -> dict[str, list[tuple[str, set[str]]]]:
     """
     index: dict[str, list[tuple[str, set[str]]]] = {}
     for full, sch in (spec.get("components", {}).get("schemas") or {}).items():
-        short = full.rsplit("__", 1)[-1]
-        index.setdefault(short, []).append((full, set(sch.get("properties") or {})))
+        index.setdefault(short_label(full), []).append((full, set(sch.get("properties") or {})))
     return index
+
+
+def _element(label: str) -> tuple[bool, str]:
+    m = re.match(r"^array<(.+)>$", label)
+    return (True, m.group(1)) if m else (False, label)
+
+
+def operation_models(repo: Path, lang: str, spec: dict, classes: set[str]) -> dict[str, dict[str, set[str]]]:
+    """Model class -> {full schema name -> client methods} from the client itself.
+
+    A method that returns class X for an operation whose response is schema S,
+    or takes X as a parameter where the operation's request body is S, says X
+    models S. That is the client's own declaration, so it settles which of two
+    same-named schemas (`routers__api__sources__FileUploadResponse` and
+    `routers__api__contents__FileUploadResponse`) a class is, and links a class
+    named nothing like its schema (`ContentFileUploadResponse`). A list on one
+    side and an object on the other links nothing: that is a `returns` finding.
+    """
+    cfg = LANGS.get(lang)
+    if not cfg or "return_head_re" not in cfg:
+        return {}
+    ops = {}
+    for raw, item in spec.get("paths", {}).items():
+        for verb, op in item.items():
+            if verb in ("get", "post", "put", "patch", "delete"):
+                ops[(verb.upper(), normalise(raw))] = op
+    links: dict[str, dict[str, set[str]]] = {}
+
+    def link(cls: str, label: str, mname: str) -> None:
+        if cls in classes and "<" not in label and label not in ("object", "none", "unknown"):
+            links.setdefault(cls, {}).setdefault(label, set()).add(mname)
+
+    texts = [f.read_text(encoding="utf-8", errors="replace") for f in source_files(repo, cfg)]
+    for mname, body, call, _request_body, _helper in request_blocks(texts, cfg):
+        op = ops.get(call)
+        if op is None:
+            continue
+        declared, unread = read_block_return(body, cfg)
+        if declared and not unread:
+            got_arr, got = _element(normalise_type(declared, lang))
+            for code in ("200", "201", "202"):
+                if code in op.get("responses", {}):
+                    want_arr, want = _element(_schema_label(_json_schema(op, "response", code)))
+                    if got_arr == want_arr:
+                        link(got, want, mname)
+                    break
+        req = _schema_label(_json_schema(op, "request"))
+        anchor = re.search(cfg["method_re"], body)
+        sliced = _after_params(body, body.find("(", anchor.end() - 1)) if anchor else None
+        if sliced and req not in ("none", "object"):
+            types = {a.split()[0] for a in split_args(sliced[0]) if a.split()}
+            for t in types & classes:
+                link(t, req, mname)
+    return links
+
+
+def match_models(classes: set[str], spec: dict,
+                 links: dict[str, dict[str, set[str]]]) -> dict[str, list[str]]:
+    """Model class -> the full schema names it may model ([] when none).
+
+    By name first: the exact short name, else the `affix_free` spelling,
+    ignoring case (`HttpValidationError` is `HTTPValidationError`). A
+    class the client links to operations (`operation_models`) is narrowed to
+    the named candidates it is used for; when it is used for none of them, its
+    links replace them. More than one result is ambiguous and is reported so;
+    picking one would check a model against a schema it may not be.
+    """
+    fulls = list((spec.get("components", {}).get("schemas") or {}))
+    exact: dict[str, list[str]] = {}
+    loose: dict[str, list[str]] = {}
+    for full in fulls:
+        exact.setdefault(short_label(full), []).append(full)
+        loose.setdefault(affix_free(full).lower(), []).append(full)
+    out = {}
+    for cls in classes:
+        named = exact.get(cls) or loose.get(affix_free(cls).lower()) or []
+        used = set(links.get(cls, {}))
+        if used:
+            named = sorted(used & set(named)) or sorted(used)
+        out[cls] = named
+    return out
 
 
 def cmd_models(args) -> int:
@@ -2435,7 +2738,8 @@ def cmd_models(args) -> int:
         return 0
 
     spec = load_spec(args.rev, args.spec, repo)
-    index = spec_schema_index(spec)
+    props = {full: set(sch.get("properties") or {})
+             for full, sch in (spec.get("components", {}).get("schemas") or {}).items()}
 
     # `--since` narrows the report to properties the schema GAINED since a rev.
     # Without it the C# models show 27 findings, every one a coverage gap that
@@ -2445,63 +2749,77 @@ def cmd_models(args) -> int:
     gained: dict[str, set[str]] | None = None
     if args.since:
         spec_repo, rel = git_location(Path(args.spec), repo)
-        before = spec_schema_index(load_spec(args.since, rel, spec_repo))
+        old = load_spec(args.since, rel, spec_repo)
+        was_full = {f: set(s.get("properties") or {})
+                    for f, s in (old.get("components", {}).get("schemas") or {}).items()}
+        was_short = spec_schema_index(old)
         gained = {}
-        for short, cands in index.items():
-            now = set.union(*(p for _, p in cands))
-            was = set.union(*(p for _, p in before[short])) if short in before else set()
+        for full, now in props.items():
+            # A schema that only gained or lost its module qualification since
+            # the rev is the same schema: compare it with its old short name.
+            was = was_full.get(full)
+            if was is None:
+                was = set().union(*(p for _, p in was_short.get(short_label(full), [])))
             if now - was:
-                gained[short] = now - was
+                gained[full] = now - was
 
     files = sorted(repo.glob(cfg["glob"]))
     scope = f", {len(gained)} schema(s) changed since {args.since}" if gained is not None else ""
-    print(f"{repo.name} [{lang}] — {len(files)} model file(s), {len(index)} spec schema names{scope}")
+    print(f"{repo.name} [{lang}] — {len(files)} model file(s), {len(props)} spec schemas{scope}")
 
-    missing, extra, unmatched = [], [], []
+    models: dict[str, set[str]] = {}
     for f in files:
         text = f.read_text(encoding="utf-8", errors="replace")
         m = re.search(cfg["class_re"], text)
-        if not m:
-            continue
-        cls = m.group(1)
-        have = set(re.findall(cfg["prop_re"], text))
-        cands = index.get(cls)
+        if m:
+            models[m.group(1)] = set(re.findall(cfg["prop_re"], text))
+    matches = match_models(set(models), spec, operation_models(repo, lang, spec, set(models)))
+
+    missing, extra, unmatched, ambiguous = [], [], [], []
+    for cls in sorted(models):
+        have, cands = models[cls], matches[cls]
         if not cands:
             unmatched.append(cls)
             continue
+        if len(cands) > 1:
+            ambiguous.append((cls, cands))
         # With more than one candidate, only properties common to all of them are
         # unambiguously missing. A gate that guesses is a gate that gets muted.
-        want = set.intersection(*(p for _, p in cands))
+        want = set.intersection(*(props[c] for c in cands))
         if gained is not None:
-            want &= gained.get(cls, set())
+            want &= set().union(*(gained.get(c, set()) for c in cands))
         gone = want - have
         if gone:
-            missing.append((cls, sorted(gone), [n for n, _ in cands]))
+            missing.append((cls, sorted(gone), cands))
         if len(cands) == 1 and gained is None:
-            surplus = have - cands[0][1]
+            surplus = have - props[cands[0]]
             if surplus:
                 extra.append((cls, sorted(surplus)))
 
     if missing:
         print(f"\nMISSING PROPERTIES ({len(missing)}) — the spec declares these and the model does not:")
-        for cls, props, full in missing:
+        for cls, gone, full in missing:
             where = f"  [{', '.join(full)}]" if full != [cls] else ""
-            print(f"   {cls}{where}\n       {', '.join(props)}")
+            print(f"   {cls}{where}\n       {', '.join(gone)}")
     if extra:
         print(f"\nWARN — EXTRA PROPERTIES ({len(extra)}) — in the model, not in the schema:")
-        for cls, props in extra:
-            print(f"   {cls}: {', '.join(props)}")
-    if unmatched and not args.quiet_unmatched and gained is None:
-        print(f"\nWARN — NOT IN SPEC ({len(unmatched)}) — model classes with no matching schema:")
-        print("   " + ", ".join(sorted(unmatched)))
+        for cls, surplus in extra:
+            print(f"   {cls}: {', '.join(surplus)}")
+    if ambiguous:
+        print(f"\nWARN — AMBIGUOUS ({len(ambiguous)}) — the class matches several schemas and "
+              "nothing narrows it to one; only properties all of them declare are checked:")
+        for cls, cands in ambiguous:
+            print(f"   {cls}: {', '.join(cands)}")
 
     if unmatched:
         # Not a finding: the spec declares some request bodies inline rather than
         # as a named component, so CreateSourceRequest and UpdateSourceRequest —
         # both of which WERE left stale in 2026-07 — have nothing to match
-        # against. Say so, so the count is never read as full coverage.
+        # against. Say so, and name them, so the count is never read as full
+        # coverage.
         print(f"\n   note: {len(unmatched)} model class(es) have no named schema "
-              f"and are unchecked (inline request bodies land here).")
+              f"and are unchecked (inline request bodies land here)"
+              + ("." if args.quiet_unmatched else ":\n   " + ", ".join(unmatched)))
 
     if missing:
         print(f"\n{len(missing)} model(s) behind the spec.")
@@ -2560,7 +2878,7 @@ def main() -> int:
                    help="only report properties the schema gained since this spec rev "
                         "(the sync gate; without it every long-standing gap is listed)")
     p.add_argument("--quiet-unmatched", action="store_true",
-                   help="suppress the model-classes-with-no-schema report")
+                   help="count the model classes with no schema without naming them")
     p.set_defaults(func=cmd_models)
 
     p = sub.add_parser("spec-diff", help="paths/schemas added, removed or changed between revisions")
