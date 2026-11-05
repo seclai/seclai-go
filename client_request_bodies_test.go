@@ -41,6 +41,7 @@ var requestBodies = map[string]any{
 	"MarkConversationTurnRequest":                                    generated.MarkConversationTurnRequest{},
 	"PlaygroundCreateRequest":                                        generated.PlaygroundCreateRequest{},
 	"SetAcceptedAttachmentsRequest":                                  generated.SetAcceptedAttachmentsRequest{},
+	"SetMetadataKeysRequest":                                         generated.SetMetadataKeysRequest{},
 	"SetAutoBlockModeRequest":                                        generated.SetAutoBlockModeRequest{},
 	"SetSlackTriggerConfigApiRequest":                                generated.SetSlackTriggerConfigApiRequest{},
 	"StandaloneTestCompactionRequest":                                generated.StandaloneTestCompactionRequest{},

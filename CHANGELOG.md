@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.10.0] - 2026-11-05
+
+### Changed
+
+- Move `APIVersionLatest` to `2026-11-04`, which opts a client on it into two versions. A definition or sampling-rule write other than an import that references a metadata key no trigger declares is refused rather than declaring the key optional, with a 400 from `UpdateAgentDefinition` and a 422 from `UpdateAgent` setting `SamplingConfig` (`2026-11-02`); declare keys with `SetMetadataKeys` first. Evaluation mode `eval_and_retry`, a new evaluation-criteria `step_id` that is not a `display_result` or `streaming_result` step, and `retry_triggered: true` on a recorded evaluation result are refused with a 400, where older versions store `eval_and_retry` as `sample_and_flag` and accept any `step_id` (`2026-11-04`)
+- Deprecate `Input` on `SetSlackTriggerConfigRequest`. The API ignores it from 2026-11-04 and no longer declares it; the field is kept so existing code compiles, and is sent only when set. A Slack run's input is the text typed after `/seclai <alias>`, or the message the shortcut was used on; set the name with `Alias`
+- Sync the bundled OpenAPI spec, adding 2 paths and 9 schemas, and regenerate the `generated` package from it
+
+### Added
+
+- Add `GetMetadataKeys` and `SetMetadataKeys` to read and replace the run metadata keys an agent's trigger declares, which steps reference as `{{metadata.<key>}}`, with `SetMetadataKeysRequest`, `MetadataKeysResponse`, `MetadataKeyDeclaration`, `DeclarableMetadataKey` and `MetadataOrigin`. `SetMetadataKeys` replaces the whole declaration, and sends a nil `MetadataKeys` as `[]`
+- Add `GetKnowledgeBaseMetadataKeyStats` for the item-metadata keys seen in a knowledge base's content over all time and the last 30 and 7 days, with each key's item count and most frequent values, as `KnowledgeBaseMetadataKeyStatsResponse`, `MetadataKeyWindowResponse`, `MetadataKeyCountResponse` and `MetadataValueCountResponse`
+- Add `Alias` to `SetSlackTriggerConfigRequest` and `SlackTriggerConfigResponse`, the name people type after `/seclai` to run the agent
+- Add `ResultReportedAt` to `AgentRunResponse`, when the run reported success; from then on its `Output` is the run's answer and does not change
+- Add the `APIVersion20261102` and `APIVersion20261104` constants
+
+### Fixed
+
+- Send IDs in request paths escaped once. Every method escaped an ID and then escaped it again, so an ID containing a space, `/`, `%` or a non-ASCII character reached the API as, for example, `a%25201` instead of `a%201` and was not found; an ID of `.` or `..` is now sent as `%2E` or `%2E%2E`, so it is not taken as a dot segment. `Do` likewise sends an `apiPath` that is already escaped as given, which it used to escape again; a `%` that does not start an escape is still sent as `%25`
+
 ## [1.9.0] - 2026-10-31
 
 ### Changed
@@ -239,6 +259,7 @@ _Stable release. No functional changes since 0.0.2._
 
 _Initial release._
 
+[1.10.0]: https://github.com/seclai/seclai-go/releases/tag/v1.10.0
 [1.9.0]: https://github.com/seclai/seclai-go/releases/tag/v1.9.0
 [1.8.0]: https://github.com/seclai/seclai-go/releases/tag/v1.8.0
 [1.7.1]: https://github.com/seclai/seclai-go/releases/tag/v1.7.1

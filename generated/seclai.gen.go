@@ -47,6 +47,20 @@ const (
 	Zip     ExportFormat = "zip"
 )
 
+// Defines values for MetadataKeyWindowResponseWindow.
+const (
+	AllTime    MetadataKeyWindowResponseWindow = "all_time"
+	Last30Days MetadataKeyWindowResponseWindow = "last_30_days"
+	Last7Days  MetadataKeyWindowResponseWindow = "last_7_days"
+)
+
+// Defines values for MetadataOrigin.
+const (
+	Custom MetadataOrigin = "custom"
+	Source MetadataOrigin = "source"
+	System MetadataOrigin = "system"
+)
+
 // Defines values for PendingProcessingCompletedFailedStatus.
 const (
 	PendingProcessingCompletedFailedStatusCompleted        PendingProcessingCompletedFailedStatus = "completed"
@@ -228,7 +242,7 @@ type AgentDefinitionResponse struct {
 	// ChangeId Current change ID (use as expected_change_id when updating).
 	ChangeId string `json:"change_id"`
 
-	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, gate, retry, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, if_else, switch, and others.
+	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, if_else, switch, and others.
 	Definition map[string]interface{} `json:"definition"`
 
 	// SchemaVersion Agent schema version.
@@ -286,7 +300,7 @@ type AgentExportResponse struct {
 	// EvaluationCriteria Evaluation criteria for agent steps.
 	EvaluationCriteria *[]map[string]interface{} `json:"evaluation_criteria"`
 
-	// ExportVersion Schema version of the export format (currently "5").
+	// ExportVersion Schema version of the export format (currently "6").
 	ExportVersion string `json:"export_version"`
 
 	// ExportedAt ISO-8601 timestamp of when the export was generated.
@@ -351,7 +365,7 @@ type AgentRunRequest struct {
 	// InputUploadIds IDs of multiple previously uploaded files. Each upload gets a heading in ``input`` (before ``Seclai-Version: 2026-10-16``, followed by its extracted text); each upload reaches steps as a separate file (before ``Seclai-Version: 2026-10-16``, a text upload in the open ``files`` attachment is written into ``input`` instead). Steps choose files as described under ``input_upload_id``. The batch must fit the trigger's ``accepted_attachments``; a mismatch returns HTTP 400 listing what does not fit.  Mutually exclusive with ``input_upload_id`` (two spellings of the same batch), but may be combined with ``input`` — the prompt text leads and the per-file sections follow, so "a photo plus a sentence about it" needs no synthetic text upload. Max 20 uploads per run.
 	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids,omitempty"`
 
-	// Metadata Metadata to make available for string substitution expressions in agent tasks.
+	// Metadata Metadata for string substitution in agent tasks. Each key must be one the agent's trigger declares (or sets); a run that sends another custom key, or lacks a required one, is refused with HTTP 400.
 	Metadata *map[string]JsonValue `json:"metadata,omitempty"`
 
 	// Priority If true, the agent run will be treated as priority execution.
@@ -381,13 +395,13 @@ type AgentRunResponse struct {
 	// FlaggedPolicies Governance policies that produced at least one FLAG verdict during this run.  Deduplicated by policy id.
 	FlaggedPolicies *[]RoutersApiAgentsGovernancePolicyRefResponse `json:"flagged_policies,omitempty"`
 
-	// GovernanceInputStatus Result of the governance input evaluation: safe, blocked, skipped, or timed_out.
+	// GovernanceInputStatus Result of the governance input evaluation: pending, safe, blocked, skipped, timed_out, or error.
 	GovernanceInputStatus *string `json:"governance_input_status"`
 
 	// GovernanceInputWaitMs Milliseconds spent waiting for governance input evaluation.
 	GovernanceInputWaitMs *int `json:"governance_input_wait_ms"`
 
-	// HitlWaitMs Cumulative milliseconds the run was parked waiting for a human decision on a human_in_the_loop step.  Subtracted from active duration in run-detail and duration-stats responses.
+	// HitlWaitMs Sum over the run's human_in_the_loop steps of each one's wait for a decision, in milliseconds.  Waits that overlap are each counted in full, so the sum can exceed the run's duration.
 	HitlWaitMs *int `json:"hitl_wait_ms"`
 
 	// Input Input provided to the agent for this run.
@@ -405,6 +419,9 @@ type AgentRunResponse struct {
 	// Priority Indicates if the run was treated as a priority execution.
 	Priority bool `json:"priority"`
 
+	// ResultReportedAt When the run reported success: for an agent whose `report_success` is `on_result`, once its result step published, or once its run started if it has no result step; else when the run completed.  From then on `output` is the run's answer and never changes; stop polling here if you only need the answer.  `status` still follows every step, so a run can report success and later fail.  Null until the run reports, for a run that failed before reporting, and for runs that ended before this field existed.
+	ResultReportedAt *time.Time `json:"result_reported_at"`
+
 	// RunId Unique identifier for the agent run.
 	RunId string `json:"run_id"`
 
@@ -418,7 +435,7 @@ type AgentRunResponse struct {
 	// TracePurgedAt When this run's trace content was deleted under the account's agent-trace retention window.  Non-null means `input`, `output` and every step's and tool call's I/O are null **by design** and will never be available again — the run aged out, it did not fail.  A tool call's `error` may be null as well, so a failed tool call can report its status without a message.  Branch on this rather than on a null `output`: a run that genuinely produced nothing looks identical.  Status, timing and credits remain accurate.
 	TracePurgedAt *time.Time `json:"trace_purged_at"`
 
-	// WaitMs Cumulative milliseconds the run was parked on standard-mode wait steps.  Subtracted from active duration in run-detail and duration-stats responses, exactly like hitl_wait_ms.  Priority waits block inline and are not counted here.
+	// WaitMs Sum over the run's standard-mode wait steps of each one's wait, in milliseconds.  Waits that overlap are each counted in full.  Priority waits block inline and are not counted here.
 	WaitMs *int `json:"wait_ms"`
 }
 
@@ -479,7 +496,7 @@ type AgentRunStreamRequest struct {
 	// InputUploadIds IDs of multiple previously uploaded files. See the non-streaming endpoint for full semantics, including fitting the trigger's ``accepted_attachments`` (else HTTP 400) and combining the batch with ``input`` prompt text. Max 20.
 	InputUploadIds *[]openapi_types.UUID `json:"input_upload_ids,omitempty"`
 
-	// Metadata Metadata to make available for string substitution expressions in agent tasks.
+	// Metadata Metadata for string substitution in agent tasks. Each key must be one the agent's trigger declares (or sets); a run that sends another custom key, or lacks a required one, is refused with HTTP 400.
 	Metadata *map[string]JsonValue `json:"metadata,omitempty"`
 
 	// ReplayOfRunId Re-run reusing a prior run's uploaded input files (re-resolved server-side from the source run, which must belong to this account and agent). A fresh upload batch takes precedence. Files the trigger's ``accepted_attachments`` no longer accepts are left out.
@@ -548,7 +565,7 @@ type AgentSummaryResponse struct {
 	// DisabledReason Why the agent is paused: 'manual' or 'email_overload'.
 	DisabledReason *string `json:"disabled_reason"`
 
-	// EvaluationMode Evaluation mode: output_expectation, eval_and_retry, or sample_and_flag.
+	// EvaluationMode Evaluation mode: output_expectation or sample_and_flag.
 	EvaluationMode *string `json:"evaluation_mode,omitempty"`
 
 	// Id Unique agent identifier.
@@ -563,7 +580,7 @@ type AgentSummaryResponse struct {
 	// MaxCreditsPerRun Credit limit per run; null when none.
 	MaxCreditsPerRun *float32 `json:"max_credits_per_run"`
 
-	// MaxRetries Max retries for eval_and_retry mode.
+	// MaxRetries Deprecated: has no effect.
 	MaxRetries *int `json:"max_retries,omitempty"`
 
 	// MaxRunsPerDay Runs per day limit; null when none.
@@ -581,13 +598,13 @@ type AgentSummaryResponse struct {
 	// PromptModelAutoRollbackEnabled Whether automatic rollback is enabled for upgraded models.
 	PromptModelAutoRollbackEnabled *bool `json:"prompt_model_auto_rollback_enabled,omitempty"`
 
-	// PromptModelAutoRollbackTriggers Failure signals that trigger rollback. Defaults to agent_eval_fail, governance_block, agent_run_failed when null.
+	// PromptModelAutoRollbackTriggers Failure signals that trigger rollback. Defaults to governance_block, agent_run_failed when null.
 	PromptModelAutoRollbackTriggers *[]string `json:"prompt_model_auto_rollback_triggers"`
 
 	// PromptModelAutoUpgradeStrategy Auto-upgrade strategy: none, early_adopter, middle_of_road, cautious_adopter.
 	PromptModelAutoUpgradeStrategy *string `json:"prompt_model_auto_upgrade_strategy,omitempty"`
 
-	// RetryOnFailure Whether to retry on evaluation failure.
+	// RetryOnFailure Deprecated: has no effect.
 	RetryOnFailure *bool `json:"retry_on_failure,omitempty"`
 
 	// SamplingConfig Sampling configuration for sample_and_flag mode.
@@ -1152,7 +1169,8 @@ type CreateAlertConfigRequest struct {
 
 // CreateEvaluationCriteriaRequest Request body for creating an evaluation criteria.
 //
-// The evaluation mode, retry settings, and sample frequency are set at the
+// step_id names the display_result or streaming_result step to score. The
+// evaluation mode and sample frequency are set at the
 // agent level, not per-criteria.
 type CreateEvaluationCriteriaRequest struct {
 	Description      *string `json:"description,omitempty"`
@@ -1177,9 +1195,13 @@ type CreateEvaluationResultRequest struct {
 	AgentStepRunId *openapi_types.UUID     `json:"agent_step_run_id,omitempty"`
 	Details        *map[string]interface{} `json:"details,omitempty"`
 	Flagged        *bool                   `json:"flagged,omitempty"`
-	RetryCount     *int                    `json:"retry_count,omitempty"`
-	RetryTriggered *bool                   `json:"retry_triggered,omitempty"`
-	Score          *float32                `json:"score,omitempty"`
+
+	// RetryCount Deprecated: has no effect on any count.
+	RetryCount *int `json:"retry_count,omitempty"`
+
+	// RetryTriggered Retired; true returns 400 from Seclai-Version 2026-11-04.
+	RetryTriggered *bool    `json:"retry_triggered,omitempty"`
+	Score          *float32 `json:"score,omitempty"`
 
 	// Status Result status of a single evaluation run.
 	Status EvaluationStatus `json:"status"`
@@ -1346,6 +1368,16 @@ type CreateSourceBody struct {
 
 	// UrlId URL record ID (required for rss/website sources).
 	UrlId *string `json:"url_id,omitempty"`
+}
+
+// DeclarableMetadataKey defines model for DeclarableMetadataKey.
+type DeclarableMetadataKey struct {
+	// AlwaysPresent Whether every run carries this key.
+	AlwaysPresent bool   `json:"always_present"`
+	Key           string `json:"key"`
+
+	// Origin Who writes a run metadata key (docs/architecture/run-metadata.md, Q2).
+	Origin MetadataOrigin `json:"origin"`
 }
 
 // DmarcFailingSourceResponse defines model for DmarcFailingSourceResponse.
@@ -1597,20 +1629,24 @@ type EvaluationCriteriaResponse struct {
 	Description *string            `json:"description"`
 	Enabled     bool               `json:"enabled"`
 
-	// EvaluationMode Runtime behavior mode. output_expectation (manual validation), eval_and_retry (every run + retry), sample_and_flag (sampled monitoring).
+	// EvaluationMode Runtime behavior mode. output_expectation (manual validation), sample_and_flag (sampled monitoring).
 	EvaluationMode    string                  `json:"evaluation_mode"`
 	EvaluationPrompt  *string                 `json:"evaluation_prompt"`
 	EvaluationTier    *string                 `json:"evaluation_tier"`
 	ExpectationConfig *map[string]interface{} `json:"expectation_config"`
 	Id                openapi_types.UUID      `json:"id"`
-	MaxRetries        int                     `json:"max_retries"`
+
+	// MaxRetries Deprecated: has no effect.
+	MaxRetries int `json:"max_retries"`
 
 	// PassThreshold Score cutoff for pass/fail, inclusive (0.0 to 1.0).
-	PassThreshold  float32        `json:"pass_threshold"`
-	ResultSummary  map[string]int `json:"result_summary"`
-	RetryOnFailure bool           `json:"retry_on_failure"`
-	StepId         *string        `json:"step_id"`
-	UpdatedAt      string         `json:"updated_at"`
+	PassThreshold float32        `json:"pass_threshold"`
+	ResultSummary map[string]int `json:"result_summary"`
+
+	// RetryOnFailure Deprecated: has no effect.
+	RetryOnFailure bool    `json:"retry_on_failure"`
+	StepId         *string `json:"step_id"`
+	UpdatedAt      string  `json:"updated_at"`
 }
 
 // EvaluationResultListResponse Paginated list of evaluation results.
@@ -1633,10 +1669,14 @@ type EvaluationResultResponse struct {
 	EvaluatedAt string                  `json:"evaluated_at"`
 
 	// Flagged True when the result was flagged for human review.
-	Flagged        bool               `json:"flagged"`
-	Id             openapi_types.UUID `json:"id"`
-	RetryCount     int                `json:"retry_count"`
-	RetryTriggered bool               `json:"retry_triggered"`
+	Flagged bool               `json:"flagged"`
+	Id      openapi_types.UUID `json:"id"`
+
+	// RetryCount Deprecated.
+	RetryCount int `json:"retry_count"`
+
+	// RetryTriggered Deprecated.
+	RetryTriggered bool `json:"retry_triggered"`
 
 	// Score LLM-assigned quality score between 0.0 (worst) and 1.0 (best).
 	Score *float32 `json:"score"`
@@ -1677,10 +1717,14 @@ type EvaluationResultWithCriteriaResponse struct {
 	EvaluatedAt string                  `json:"evaluated_at"`
 
 	// Flagged True when the result was flagged for human review.
-	Flagged        bool               `json:"flagged"`
-	Id             openapi_types.UUID `json:"id"`
-	RetryCount     int                `json:"retry_count"`
-	RetryTriggered bool               `json:"retry_triggered"`
+	Flagged bool               `json:"flagged"`
+	Id      openapi_types.UUID `json:"id"`
+
+	// RetryCount Deprecated.
+	RetryCount int `json:"retry_count"`
+
+	// RetryTriggered Deprecated.
+	RetryTriggered bool `json:"retry_triggered"`
 
 	// Score LLM-assigned quality score between 0.0 (worst) and 1.0 (best).
 	Score *float32 `json:"score"`
@@ -1850,7 +1894,7 @@ type GenerateStepConfigRequest struct {
 	// StepId ID of the specific step to refine. Omit for new steps.
 	StepId *string `json:"step_id,omitempty"`
 
-	// StepType The step type to generate config for (e.g. 'regex_replace', 'gate', 'text', 'prompt_call', 'retrieval').
+	// StepType The step type to generate config for (e.g. 'regex_replace', 'if_else', 'text', 'prompt_call', 'retrieval').
 	StepType string `json:"step_type"`
 
 	// UserInput Natural language description of what the step should do.
@@ -2059,6 +2103,12 @@ type KnowledgeBaseListResponseModel struct {
 	Total int `json:"total"`
 }
 
+// KnowledgeBaseMetadataKeyStatsResponse defines model for KnowledgeBaseMetadataKeyStatsResponse.
+type KnowledgeBaseMetadataKeyStatsResponse struct {
+	KnowledgeBaseId string                      `json:"knowledge_base_id"`
+	Windows         []MetadataKeyWindowResponse `json:"windows"`
+}
+
 // KnowledgeBaseResponseModel Response model for a single knowledge base.
 type KnowledgeBaseResponseModel struct {
 	// CreatedAt ISO-8601 creation timestamp.
@@ -2240,6 +2290,78 @@ type MemoryBankResponseModel struct {
 
 	// UpdatedAt ISO-8601 last-update timestamp.
 	UpdatedAt string `json:"updated_at"`
+}
+
+// MetadataKeyCountResponse defines model for MetadataKeyCountResponse.
+type MetadataKeyCountResponse struct {
+	// DistinctValues How many different values it takes.
+	DistinctValues int `json:"distinct_values"`
+
+	// Items Items in the window carrying the key.
+	Items int `json:"items"`
+
+	// Key The item-metadata key.
+	Key string `json:"key"`
+
+	// TopValues Its 5 most frequent values, most frequent first.
+	TopValues []MetadataValueCountResponse `json:"top_values"`
+}
+
+// MetadataKeyDeclaration defines model for MetadataKeyDeclaration.
+type MetadataKeyDeclaration struct {
+	// Key Steps reference the key as ``{{metadata.<key>}}``.
+	Key string `json:"key"`
+
+	// Origin Who writes a run metadata key (docs/architecture/run-metadata.md, Q2).
+	Origin MetadataOrigin `json:"origin"`
+
+	// Required A caller-started run without this key is refused. Only a ``custom`` key can be required.
+	Required *bool `json:"required,omitempty"`
+}
+
+// MetadataKeyWindowResponse defines model for MetadataKeyWindowResponse.
+type MetadataKeyWindowResponse struct {
+	// Keys Keys seen in the window, most frequent first.
+	Keys []MetadataKeyCountResponse `json:"keys"`
+
+	// Since The window's start; null for all time.
+	Since *time.Time `json:"since"`
+
+	// TotalItems Items in the window.
+	TotalItems int                             `json:"total_items"`
+	Window     MetadataKeyWindowResponseWindow `json:"window"`
+}
+
+// MetadataKeyWindowResponseWindow defines model for MetadataKeyWindowResponse.Window.
+type MetadataKeyWindowResponseWindow string
+
+// MetadataKeysResponse defines model for MetadataKeysResponse.
+type MetadataKeysResponse struct {
+	// AcceptsAnySourceKey True for content triggers, which may declare any item-metadata key.
+	AcceptsAnySourceKey bool               `json:"accepts_any_source_key"`
+	AgentId             openapi_types.UUID `json:"agent_id"`
+
+	// DeclarableKeys The system and source keys this trigger's type can declare.
+	DeclarableKeys []DeclarableMetadataKey `json:"declarable_keys"`
+
+	// MetadataKeys The keys the agent's steps may reference. Static trigger metadata and Slack form fields are declared custom keys too, and are not repeated here.
+	MetadataKeys []MetadataKeyDeclaration `json:"metadata_keys"`
+	TriggerId    openapi_types.UUID       `json:"trigger_id"`
+
+	// Warnings Set by a PUT that changes the declaration: agents whose `call_agent` mapping no longer fits it. Always empty on GET.
+	Warnings *[]string `json:"warnings,omitempty"`
+}
+
+// MetadataOrigin Who writes a run metadata key (docs/architecture/run-metadata.md, Q2).
+type MetadataOrigin string
+
+// MetadataValueCountResponse defines model for MetadataValueCountResponse.
+type MetadataValueCountResponse struct {
+	// Items Items carrying this value.
+	Items int `json:"items"`
+
+	// Value The value as text, cut to 100 characters; an object is shown as {…} and a list as […].
+	Value string `json:"value"`
 }
 
 // ModalityRateResponse Per-modality rate for an LLM that prices image/audio/video output
@@ -2456,19 +2578,27 @@ type SetAutoBlockModeRequest struct {
 	Mode string `json:"mode"`
 }
 
+// SetMetadataKeysRequest defines model for SetMetadataKeysRequest.
+type SetMetadataKeysRequest struct {
+	// MetadataKeys The whole declaration; replaces the trigger's current one.
+	MetadataKeys []MetadataKeyDeclaration `json:"metadata_keys"`
+}
+
 // SetSlackTriggerConfigApiRequest Omitted fields are left unchanged.
 type SetSlackTriggerConfigApiRequest struct {
 	Activation *SlackTriggerActivation `json:"activation,omitempty"`
+
+	// Alias The name people type after `/seclai` to run this agent: lowercase letters, digits and hyphens, starting with a letter, unique in the Slack workspace. Generated from the agent's name when not set or empty.
+	Alias *string `json:"alias,omitempty"`
 
 	// AllowDms Runnable in the app's own DMs.
 	AllowDms   *bool     `json:"allow_dms,omitempty"`
 	ChannelIds *[]string `json:"channel_ids,omitempty"`
 
-	// Form Form fields `{key, label, type, required, hint, choices, max_length}`. `type`: short_text, long_text, number, single_choice, multi_choice, yes_no, date, slack_user or slack_channel. Each value reaches the run as `{{metadata.<key>}}`.
+	// Form Form fields `{key, label, type, required, hint, choices, max_length}`. `type`: short_text, long_text, number, single_choice, multi_choice, yes_no, date, slack_user or slack_channel. Each value reaches the run as `{{metadata.<key>}}`, not in the run's input, which is the text after `/seclai <alias>` or the message the shortcut was used on, and its files.
 	Form                *[]map[string]interface{} `json:"form,omitempty"`
 	IncludeInvokerEmail *bool                     `json:"include_invoker_email,omitempty"`
-
-	// Input The trigger's input template. Each `{{metadata.<key>}}` in it must be a form field key or a platform key; it is checked together with `form`.
+	// Deprecated: Ignored by the API since 2026-11-04; set Alias to choose the name people type after /seclai.
 	Input    *string `json:"input,omitempty"`
 	MaxTurns *int    `json:"max_turns,omitempty"`
 
@@ -2506,8 +2636,11 @@ type SlackTriggerActivation string
 
 // SlackTriggerConfigApiResponse defines model for SlackTriggerConfigApiResponse.
 type SlackTriggerConfigApiResponse struct {
-	Activation          string                   `json:"activation"`
-	AgentId             openapi_types.UUID       `json:"agent_id"`
+	Activation string             `json:"activation"`
+	AgentId    openapi_types.UUID `json:"agent_id"`
+
+	// Alias The name people type after `/seclai` to run this agent.
+	Alias               *string                  `json:"alias"`
 	AllowDms            bool                     `json:"allow_dms"`
 	ChannelIds          []string                 `json:"channel_ids"`
 	Form                []map[string]interface{} `json:"form"`
@@ -2998,7 +3131,7 @@ type UpdateApiVersionRequest struct {
 
 // UpdateEvaluationCriteriaRequest Request body for updating an evaluation criteria.
 //
-// Retry settings and sample frequency are set at the agent level.
+// The evaluation mode and sample frequency are set at the agent level.
 type UpdateEvaluationCriteriaRequest struct {
 	Description      *string `json:"description,omitempty"`
 	Enabled          *bool   `json:"enabled,omitempty"`
@@ -3364,7 +3497,7 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 	// EntityRemap Optional UUID-substitution map applied to the imported workflow before save (same shape as on POST /agents).
 	EntityRemap *map[string]string `json:"entity_remap,omitempty"`
 
-	// EvaluationMode Evaluation mode: 'output_expectation', 'eval_and_retry', or 'sample_and_flag'.
+	// EvaluationMode Evaluation mode: 'output_expectation' or 'sample_and_flag'. From Seclai-Version 2026-11-04 'eval_and_retry' returns 400; earlier versions store it as 'sample_and_flag'.
 	EvaluationMode *string `json:"evaluation_mode,omitempty"`
 
 	// MaxCreditsPerPeriod Credit limit per billing period of the paying account: once reached, runs stop at their next step and new runs are refused.
@@ -3373,7 +3506,7 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 	// MaxCreditsPerRun Credit limit per run: a run that reaches it is stopped before its next step.
 	MaxCreditsPerRun *float32 `json:"max_credits_per_run,omitempty"`
 
-	// MaxRetries Max retries for eval_and_retry mode (1-10).
+	// MaxRetries Deprecated: accepted and has no effect.
 	MaxRetries *int `json:"max_retries,omitempty"`
 
 	// MaxRunsPerDay Runs per day; at most the plan's run quota.
@@ -3391,11 +3524,11 @@ type RoutersApiAgentsUpdateAgentRequest struct {
 	// PromptModelAutoRollbackEnabled Enable or disable automatic rollback for upgraded models.
 	PromptModelAutoRollbackEnabled *bool `json:"prompt_model_auto_rollback_enabled,omitempty"`
 
-	// PromptModelAutoRollbackTriggers Failure signals that trigger rollback: agent_eval_fail, governance_flag, governance_block, agent_run_failed.
+	// PromptModelAutoRollbackTriggers Failure signals that trigger rollback: governance_flag, governance_block, agent_run_failed. agent_eval_fail is accepted and never fires; in the list, a run with a failed evaluation is never picked as the rollback target.
 	PromptModelAutoRollbackTriggers *[]string                       `json:"prompt_model_auto_rollback_triggers,omitempty"`
 	PromptModelAutoUpgradeStrategy  *PromptModelAutoUpgradeStrategy `json:"prompt_model_auto_upgrade_strategy,omitempty"`
 
-	// RetryOnFailure Whether to retry on evaluation failure.
+	// RetryOnFailure Deprecated: accepted and has no effect.
 	RetryOnFailure *bool `json:"retry_on_failure,omitempty"`
 
 	// SamplingConfig Sampling configuration for sample_and_flag mode. Format: {combinator: 'and'|'or', rules: [...]}.
@@ -4759,6 +4892,24 @@ type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutPara
 	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
 }
 
+// GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetParams defines parameters for GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGet.
+type GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams defines parameters for SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPut.
+type SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
 // SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams defines parameters for SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut.
 type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
@@ -5378,6 +5529,15 @@ type GetKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdGetParams struct {
 
 // UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams defines parameters for UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut.
 type UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams struct {
+	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
+	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
+
+	// SeclaiVersion Opt into dated, backward-incompatible API changes (format YYYY-MM-DD). When omitted, the account's pinned baseline version is used and responses keep their legacy shapes. Send a date on or after a change's release to adopt it — e.g. `2026-07-27` enables rejection of undeclared query parameters (422) and the canonical `{data, pagination}` envelope (pagination = `{page, limit, total, pages, has_next, has_prev}`) on every list endpoint that previously returned a bare array, a flat `{data, total, page, limit}`, a `{configs, total}`, or another per-resource key.
+	SeclaiVersion *SeclaiVersion `json:"Seclai-Version,omitempty"`
+}
+
+// GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetParams defines parameters for GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGet.
+type GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetParams struct {
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
 
@@ -6258,6 +6418,9 @@ type SetAcceptedAttachmentsApiApiAgentsAgentIdTriggersTriggerIdAcceptedAttachmen
 // SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody defines body for SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut for application/json ContentType.
 type SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody = RoutersApiAgentsSetEmailTriggerConfigRequest
 
+// SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutJSONRequestBody defines body for SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPut for application/json ContentType.
+type SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutJSONRequestBody = SetMetadataKeysRequest
+
 // SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody defines body for SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut for application/json ContentType.
 type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody = SetSlackTriggerConfigApiRequest
 
@@ -6729,6 +6892,14 @@ type ClientInterface interface {
 
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPut(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGet request
+	GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGet(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithBody request with any body
+	SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithBody(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPut(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, body SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody request with any body
 	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -6943,6 +7114,9 @@ type ClientInterface interface {
 	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGet request
+	GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGet(ctx context.Context, knowledgeBaseId string, params *GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetMeApiMeGet request
 	GetMeApiMeGet(ctx context.Context, params *GetMeApiMeGetParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8051,6 +8225,42 @@ func (c *Client) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailC
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGet(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetRequest(c.Server, agentId, triggerId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithBody(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutRequestWithBody(c.Server, agentId, triggerId, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPut(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, body SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutRequest(c.Server, agentId, triggerId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequestWithBody(c.Server, agentId, triggerId, params, contentType, body)
 	if err != nil {
@@ -8977,6 +9187,18 @@ func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBody(
 
 func (c *Client) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPut(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequest(c.Server, knowledgeBaseId, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGet(ctx context.Context, knowledgeBaseId string, params *GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetRequest(c.Server, knowledgeBaseId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -14366,6 +14588,153 @@ func NewSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutR
 	return req, nil
 }
 
+// NewGetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetRequest generates requests for GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGet
+func NewGetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetRequest(server string, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "trigger_id", runtime.ParamLocationPath, triggerId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/triggers/%s/metadata-keys", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutRequest calls the generic SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPut builder with application/json body
+func NewSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutRequest(server string, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, body SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutRequestWithBody(server, agentId, triggerId, params, "application/json", bodyReader)
+}
+
+// NewSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutRequestWithBody generates requests for SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPut with any type of body
+func NewSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutRequestWithBody(server string, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "agent_id", runtime.ParamLocationPath, agentId)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "trigger_id", runtime.ParamLocationPath, triggerId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/triggers/%s/metadata-keys", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequest calls the generic SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPut builder with application/json body
 func NewSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutRequest(server string, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, body SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -18692,6 +19061,66 @@ func NewUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutRequestWithBody(se
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XAccountId != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam0)
+		}
+
+		if params.SeclaiVersion != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Seclai-Version", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetRequest generates requests for GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGet
+func NewGetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetRequest(server string, knowledgeBaseId string, params *GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "knowledge_base_id", runtime.ParamLocationPath, knowledgeBaseId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/knowledge_bases/%s/metadata-key-stats", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -24612,6 +25041,14 @@ type ClientWithResponsesInterface interface {
 
 	SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutWithResponse(ctx context.Context, agentId string, triggerId string, params *SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutParams, body SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse, error)
 
+	// GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetWithResponse request
+	GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetParams, reqEditors ...RequestEditorFn) (*GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse, error)
+
+	// SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithBodyWithResponse request with any body
+	SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithBodyWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse, error)
+
+	SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, body SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse, error)
+
 	// SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse request with any body
 	SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error)
 
@@ -24826,6 +25263,9 @@ type ClientWithResponsesInterface interface {
 	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithBodyWithResponse(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
 
 	UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutWithResponse(ctx context.Context, knowledgeBaseId string, params *UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutParams, body UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse, error)
+
+	// GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetWithResponse request
+	GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetWithResponse(ctx context.Context, knowledgeBaseId string, params *GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetParams, reqEditors ...RequestEditorFn) (*GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse, error)
 
 	// GetMeApiMeGetWithResponse request
 	GetMeApiMeGetWithResponse(ctx context.Context, params *GetMeApiMeGetParams, reqEditors ...RequestEditorFn) (*GetMeApiMeGetResponse, error)
@@ -26325,6 +26765,54 @@ func (r SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutR
 	return 0
 }
 
+type GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MetadataKeysResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MetadataKeysResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -27724,6 +28212,30 @@ func (r UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse) Status()
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *KnowledgeBaseMetadataKeyStatsResponse
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
+}
+
+// Status returns HTTPResponse.Status
+func (r GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -30092,6 +30604,32 @@ func (c *ClientWithResponses) SetEmailTriggerConfigApiApiAgentsAgentIdTriggersTr
 	return ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPutResponse(rsp)
 }
 
+// GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetWithResponse request returning *GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse
+func (c *ClientWithResponses) GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetParams, reqEditors ...RequestEditorFn) (*GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse, error) {
+	rsp, err := c.GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGet(ctx, agentId, triggerId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse(rsp)
+}
+
+// SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithBodyWithResponse request with arbitrary body returning *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse
+func (c *ClientWithResponses) SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithBodyWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse, error) {
+	rsp, err := c.SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithBody(ctx, agentId, triggerId, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutParams, body SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutJSONRequestBody, reqEditors ...RequestEditorFn) (*SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse, error) {
+	rsp, err := c.SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPut(ctx, agentId, triggerId, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse(rsp)
+}
+
 // SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse request with arbitrary body returning *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse
 func (c *ClientWithResponses) SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBodyWithResponse(ctx context.Context, agentId openapi_types.UUID, triggerId openapi_types.UUID, params *SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error) {
 	rsp, err := c.SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithBody(ctx, agentId, triggerId, params, contentType, body, reqEditors...)
@@ -30773,6 +31311,15 @@ func (c *ClientWithResponses) UpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseI
 		return nil, err
 	}
 	return ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp)
+}
+
+// GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetWithResponse request returning *GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse
+func (c *ClientWithResponses) GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetWithResponse(ctx context.Context, knowledgeBaseId string, params *GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetParams, reqEditors ...RequestEditorFn) (*GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse, error) {
+	rsp, err := c.GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGet(ctx, knowledgeBaseId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse(rsp)
 }
 
 // GetMeApiMeGetWithResponse request returning *GetMeApiMeGetResponse
@@ -33673,6 +34220,86 @@ func ParseSetEmailTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdEmailConfigPu
 	return response, nil
 }
 
+// ParseGetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse parses an HTTP response from a GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetWithResponse call
+func ParseGetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse(rsp *http.Response) (*GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MetadataKeysResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse parses an HTTP response from a SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutWithResponse call
+func ParseSetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse(rsp *http.Response) (*SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetMetadataKeysApiApiAgentsAgentIdTriggersTriggerIdMetadataKeysPutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MetadataKeysResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse parses an HTTP response from a SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutWithResponse call
 func ParseSetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse(rsp *http.Response) (*SetSlackTriggerConfigApiApiAgentsAgentIdTriggersTriggerIdSlackConfigPutResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -35932,6 +36559,46 @@ func ParseUpdateKnowledgeBaseApiKnowledgeBasesKnowledgeBaseIdPutResponse(rsp *ht
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest KnowledgeBaseResponseModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest HTTPValidationError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailableError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse parses an HTTP response from a GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetWithResponse call
+func ParseGetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse(rsp *http.Response) (*GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetKnowledgeBaseMetadataKeyStatsApiKnowledgeBasesKnowledgeBaseIdMetadataKeyStatsGetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest KnowledgeBaseMetadataKeyStatsResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

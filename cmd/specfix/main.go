@@ -33,6 +33,7 @@ func main() {
 	}
 
 	fix(doc)
+	retainRemovedRequestFields(doc)
 	omitUnsetRequestFields(doc)
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -299,5 +300,59 @@ func omitUnsetRequestFields(doc any) {
 				walk(media["schema"])
 			}
 		}
+	}
+}
+
+// retainedRequestField is a request-body property the API no longer declares
+// but a released SDK version exposed. Go has no way to deprecate a struct field
+// other than keeping it, and the request types in package seclai are aliases of
+// the generated structs, so dropping a property from the spec would remove the
+// field and break every caller that sets it.
+type retainedRequestField struct {
+	schema, property string
+	def              map[string]any
+}
+
+// retainedRequestFields lists the removed properties to keep generating. Each
+// is marked deprecated, so oapi-codegen writes a "Deprecated:" comment that
+// editors and staticcheck surface. Remove an entry at the next major version.
+var retainedRequestFields = []retainedRequestField{
+	{
+		// Released in v1.9.0; the API ignores it since version 2026-11-04.
+		schema:   "SetSlackTriggerConfigApiRequest",
+		property: "input",
+		def: map[string]any{
+			"type":                "string",
+			"nullable":            true,
+			"deprecated":          true,
+			"x-deprecated-reason": "Ignored by the API since 2026-11-04; set Alias to choose the name people type after /seclai.",
+		},
+	},
+}
+
+// retainRemovedRequestFields adds each of retainedRequestFields back to its
+// schema, unless the spec already declares it. Call it after fix and before
+// omitUnsetRequestFields, so a nullable property is tagged omitempty.
+func retainRemovedRequestFields(doc any) {
+	root, _ := doc.(map[string]any)
+	comps, _ := root["components"].(map[string]any)
+	schemas, _ := comps["schemas"].(map[string]any)
+	for _, f := range retainedRequestFields {
+		schema, ok := schemas[f.schema].(map[string]any)
+		if !ok {
+			continue
+		}
+		props, ok := schema["properties"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, exists := props[f.property]; exists {
+			continue
+		}
+		def := make(map[string]any, len(f.def))
+		for k, v := range f.def {
+			def[k] = v
+		}
+		props[f.property] = def
 	}
 }

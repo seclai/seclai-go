@@ -329,6 +329,35 @@ func TestClient_SetSlackTriggerConfig(t *testing.T) {
 	}
 }
 
+func TestClient_SetSlackTriggerConfig_Alias(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", `{"alias":"triage","visibility":"private"}`)
+	got, err := c.SetSlackTriggerConfig(context.Background(), "a_1", "t_1", SetSlackTriggerConfigRequest{Alias: ptr("triage")})
+	if err != nil {
+		t.Fatalf("SetSlackTriggerConfig: %v", err)
+	}
+	if string(rec.rawBody) != `{"alias":"triage"}` {
+		t.Fatalf("body %s", rec.rawBody)
+	}
+	if got.Alias == nil || *got.Alias != "triage" {
+		t.Fatalf("unexpected alias %v", got.Alias)
+	}
+}
+
+// Input was removed from the spec after v1.9.0 shipped it. The field stays so
+// existing callers compile; it is sent only when set, and the API ignores it.
+func TestClient_SetSlackTriggerConfig_DeprecatedInputStillCompiles(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", `{}`)
+	//nolint:staticcheck // deprecated field kept for compatibility; still covered
+	if _, err := c.SetSlackTriggerConfig(context.Background(), "a_1", "t_1", SetSlackTriggerConfigRequest{Input: ptr("{{metadata.topic}}")}); err != nil {
+		t.Fatalf("SetSlackTriggerConfig: %v", err)
+	}
+	if string(rec.rawBody) != `{"input":"{{metadata.topic}}"}` {
+		t.Fatalf("body %s", rec.rawBody)
+	}
+}
+
 func TestClient_SetSlackTriggerConfig_ZeroValueIsEmptyObject(t *testing.T) {
 	var rec requestRecorder
 	c := newRecordingServer(t, &rec, 200, "application/json", `{}`)

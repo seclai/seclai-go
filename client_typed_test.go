@@ -764,7 +764,7 @@ func TestClient_GetAgentRun(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"completed"}`)
+		_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"completed","result_reported_at":"2026-11-04T10:00:00Z"}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -775,6 +775,9 @@ func TestClient_GetAgentRun(t *testing.T) {
 	}
 	if resp.RunId != "run_1" {
 		t.Fatalf("expected run_1, got %q", resp.RunId)
+	}
+	if resp.ResultReportedAt == nil || resp.ResultReportedAt.Hour() != 10 {
+		t.Fatalf("expected result_reported_at, got %v", resp.ResultReportedAt)
 	}
 }
 
@@ -2569,7 +2572,7 @@ func TestAPIVersionConstants_TrackTheSpec(t *testing.T) {
 		APIVersion20260701, APIVersion20260727, APIVersion20260803, APIVersion20260821,
 		APIVersion20260928, APIVersion20260930, APIVersion20261003, APIVersion20261005,
 		APIVersion20261013, APIVersion20261016, APIVersion20261018, APIVersion20261019,
-		APIVersion20261021, APIVersion20261028,
+		APIVersion20261021, APIVersion20261028, APIVersion20261102, APIVersion20261104,
 	}
 	if strings.Join(KnownAPIVersions, ",") != strings.Join(known, ",") {
 		t.Fatalf("KnownAPIVersions %v does not list every constant %v", KnownAPIVersions, known)

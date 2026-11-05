@@ -232,3 +232,43 @@ func TestOmitUnsetRequestFields_MarksOptionalNullableRequestProperties(t *testin
 		t.Fatalf("response-only schema must be left alone")
 	}
 }
+
+func TestRetainRemovedRequestFields_RestoresDeprecatedSlackInput(t *testing.T) {
+	input := []byte(`{
+		"components": {"schemas": {"SetSlackTriggerConfigApiRequest": {
+			"type": "object",
+			"properties": {"alias": {"type": "string", "nullable": true}}
+		}}},
+		"paths": {"/x": {"put": {"requestBody": {"content": {"application/json": {
+			"schema": {"$ref": "#/components/schemas/SetSlackTriggerConfigApiRequest"}
+		}}}}}}
+	}`)
+	var doc any
+	if err := json.Unmarshal(input, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	retainRemovedRequestFields(doc)
+	omitUnsetRequestFields(doc)
+
+	props := doc.(map[string]any)["components"].(map[string]any)["schemas"].(map[string]any)["SetSlackTriggerConfigApiRequest"].(map[string]any)["properties"].(map[string]any)
+	in, ok := props["input"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected input restored, got %v", props)
+	}
+	if in["deprecated"] != true || in["x-omitempty"] != true || in["type"] != "string" {
+		t.Fatalf("expected deprecated, omitempty string, got %v", in)
+	}
+}
+
+func TestRetainRemovedRequestFields_KeepsADeclaredProperty(t *testing.T) {
+	declared := map[string]any{"type": "string", "description": "from the spec"}
+	doc := map[string]any{"components": map[string]any{"schemas": map[string]any{
+		"SetSlackTriggerConfigApiRequest": map[string]any{
+			"properties": map[string]any{"input": declared},
+		},
+	}}}
+	retainRemovedRequestFields(doc)
+	if declared["deprecated"] != nil {
+		t.Fatalf("expected the spec's own property left alone, got %v", declared)
+	}
+}
