@@ -153,35 +153,72 @@ diff called 21 JavaScript changes breaking when none were:
 
 - **REMOVED / BREAKING** (error) — a released signature no longer works: method
   gone, parameter list changed, or a return type changed in a static language.
-- **WARN** — compatible but worth checking: a *trailing* optional parameter
-  (source compatible; flagged as binary breaking for C#), `unknown` narrowed to a
-  concrete type in TypeScript (safe), an optional member added to an inline
-  TypeScript options object such as `opts: { signal?: AbortSignal } = {}` (never
-  to an empty `{}`, which accepts any value the new type may reject; every
-  other member unchanged or only widened to accept `undefined`, the parameter's
-  name and its default unchanged; usually source
-  compatible, but a caller passing a non-literal object that already carries a
-  same-named property of another type — `const o = { signal: "abc" }` — no
-  longer compiles, since excess-property checks only cover literals), an
-  optional options-object member widened to accept `undefined`
-  (`x?: T` -> `x?: T | undefined`; source compatible), a TypeScript parameter
-  type wrapped in `Omit<T, "k">` (usually source compatible: an object literal
-  that sets an omitted key no longer compiles) or `Partial<T>` (source
-  compatible), a TypeScript options parameter retyped to another **named** type
-  whose members, resolved from the declarations under `src/` at the tag and in
-  the working tree (interfaces, `extends`, aliases, `&`, `Omit`, `Pick`,
-  `Partial`), keep every old member with the same optionality and type and add
-  only optional ones — a member whose type names a local type counts as
-  unchanged only if that type's declaration is identical at both revisions, and
-  a type that does not resolve (generic, import, indexed access, union) stays
-  breaking — a required Python or TypeScript parameter made optional in place
-  (`id: str` -> `id: str | None = None`, `id: string` -> `id?: string`; same
-  name and position, positional stays positional, type unchanged or only widened
-  by `None`/`undefined`; not graded this way for C#), or a Python return
-  annotation (not enforced — but confirm the runtime value did not change too).
+- **WARN** — compatible but worth checking. One line per kind:
+  - **Trailing optional parameter**: source compatible, but flagged as binary
+    breaking for C#.
+  - **`unknown` narrowed** to a concrete TypeScript return type, keeping its
+    wrapper: `unknown` to any type, `unknown[]` to `X[]` or `Array<X>`,
+    `Promise<unknown>` to `Promise<X>`, `Promise<unknown[]>` to
+    `Promise<X[]>`. Changing the wrapper (`unknown[]` to `Promise<X>`) breaks
+    callers that `.map` or `await`, so it stays BREAKING, as does an
+    `unknown` anywhere else (a callback parameter, a type-parameter
+    constraint, `Record<string, unknown>`).
+  - **Options-object member added**: an optional member added to an inline
+    TypeScript options object such as `opts: { signal?: AbortSignal } = {}`, with
+    every other member, the parameter's name and its default unchanged. Usually
+    source compatible, but a caller passing a non-literal object that already
+    has a same-named property of another type (`const o = { signal: "abc" }`) no
+    longer compiles, since excess-property checks only cover literals. Never
+    graded this way for an empty `{}`, which accepts values the new type rejects.
+  - **Widened to `undefined`**: an optional options-object member `x?: T` ->
+    `x?: T | undefined`. Source compatible. A callback whose *return* type gained
+    `| undefined` is not this, and stays breaking.
+  - **`Omit<T, "k">`**: a TypeScript parameter type wrapped in it. Usually source
+    compatible; an object literal that sets an omitted key no longer compiles.
+  - **`Partial<T>`**: a TypeScript parameter type wrapped in it. Source compatible.
+  - **Retyped to another named type**: a TypeScript options parameter whose new
+    type, resolved from the declarations under `src/` at the tag and in the
+    working tree (interfaces, `extends`, aliases, `&`, `Omit`, `Pick`, `Partial`),
+    keeps every old member with the same optionality and type and adds only
+    optional ones. A member whose type names a local type counts as unchanged
+    only if that declaration is identical at both revisions. A type that does
+    not resolve (generic, import, indexed access, union) stays breaking.
+  - **Required parameter made optional in place**: Python `id: str` ->
+    `id: str | None = None`, TypeScript `id: string` -> `id?: string`. Same name
+    and position, positional stays positional, type unchanged or only widened by
+    `None`/`undefined`. Not graded this way for C#.
+  - **Python return annotation changed**: not enforced, but confirm the runtime
+    value did not change too.
+
   The parameter-level kinds combine: each old parameter must be unchanged or
   changed in one of these ways, and any added parameter must be optional and at
   the end.
+
+A reformat is not a change: parameter lists are compared as their split,
+whitespace-normalised members, so a trailing comma added when prettier or black
+wraps a signature is invisible. Python's bare `*` is kept, since making a
+parameter keyword-only does break callers.
+
+The return type is read up to the `{` that opens the body, at bracket depth 0,
+so a lone Go `error`, a TypeScript constructor with no annotation,
+`Promise<{ id: string }>`, a generic prettier wraps onto its own lines, and a
+conditional type (`T extends U ? { a: 1 } : never`) are all read whole. An async
+generator (`async *runStreamingAgent(`) is a method like any other, and a
+generic method's type parameters (`paginate<T extends Page>(`, wrapped or
+holding a `() => void`) are recorded with its return type: changing one, or
+its constraint, is BREAKING ("type parameters changed"). Until
+2026-10-31 a regex read it instead, and 27 seclai-go methods returning a lone
+value, plus the TypeScript constructor, were invisible: removing one reported
+"no breaking change".
+
+A head the scan matches but cannot read — type parameters or a return type it
+never closes, a parameter list that does not balance — is reported as
+**UNREADABLE** and fails the run, at either revision, even when nothing changed.
+Before, such a method was silently left out of the surface and its removal
+reported "no breaking change"; every scanner bug found in the 2026-10 reviews
+was that. Now an unfamiliar shape costs a look instead of a missed break: fix
+the scanner and add a test, then rerun. A statement the pattern also matches
+(`setup(x);` at class-member indent) is not a method and is not listed.
 
 Only exported Go methods are surface. A lowercase method is unreachable outside
 the package, so a change to one breaks no caller.
@@ -350,7 +387,6 @@ local conventions (`searchDocs` / `search_docs` / `SearchDocs`).
 
 ## Release
 
-The version comes from the merge commit message, read by `seclai/github-tag-action`
-with `DEFAULT_BUMP: patch`. A sync that adds endpoints needs `#minor` in a commit
-message (not the PR title), or it ships as a patch and the changelog heading
-will not match the tag.
+A sync that adds endpoints needs a `#minor` bump; where the keyword goes and how
+the squash commit carries it is in the `seclai-changelog` skill, "Determine the
+version".
