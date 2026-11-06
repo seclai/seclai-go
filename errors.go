@@ -56,10 +56,10 @@ func (e *APIValidationError) Error() string {
 // StreamingError indicates a failure during an SSE streaming operation.
 //
 // When [Client.RunStreamingAgentAndWaitWithOptions] with ErrorOnIncomplete
-// times out, or its stream ends or breaks before the done event, Run holds the
-// latest snapshot it read: the result event's run if one arrived (its Output
-// is the answer), else the init one, else nil. Unwrap gives the cause, such as
-// [context.DeadlineExceeded], so errors.Is works on it.
+// times out, or its stream ends or breaks, after the stream has opened and
+// before the done event, Run holds the latest snapshot it read: the result
+// event's run if one arrived (its Output is the answer), else the init one,
+// else nil. Unwrap gives the underlying cause.
 type StreamingError struct {
 	// Message describes what went wrong.
 	Message string

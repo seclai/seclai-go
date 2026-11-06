@@ -411,9 +411,9 @@ _ = client.DeleteAgentRun(ctx, "run_id")
 
 The SDK provides two streaming patterns over the SSE `/runs/stream` endpoint.
 
-**Block until done** — returns the final `done` payload. It reads only the run payloads, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events. By default, if the stream ends before `done`, it returns the latest run it saw with a nil error: the `result` event's run if one arrived (`ResultReportedAt` is set and `Output` is the answer), else the `init` one. That run may not have finished, for example after a cut stream, so check its `Status` and `ResultReportedAt`. A timeout or a broken stream returns the bare error, with that latest run beside it: `ctx`'s deadline gives an error that satisfies `errors.Is(err, context.DeadlineExceeded)`, and the HTTP client's `Timeout` its request or read error. `ctx.Err()` tells you whether `ctx` itself ended.
+**Block until done** — returns the final `done` payload. It reads only the run payloads, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events. By default, if the stream ends before `done`, it returns the latest run it saw with a nil error: the `result` event's run if one arrived (`ResultReportedAt` is set and `Output` is the answer), else the `init` one. That run may not have finished, for example after a cut stream, so check its `Status` and `ResultReportedAt`. A timeout or a broken stream returns the error, with that latest run beside it.
 
-Whichever bound passes first ends the wait: `ctx`'s deadline (60s by default when `ctx` has none), or the HTTP client's `Timeout`, 30s with the default client ([#21](https://github.com/seclai/seclai-go/issues/21)):
+Whichever bound passes first ends the wait: `ctx`'s deadline (60s by default when `ctx` has none), or the HTTP client's `Timeout` (30s with the default client; see `Options.HTTPClient`):
 
 ```go
 // If ctx has no deadline, the SDK applies a default timeout.
@@ -423,7 +423,7 @@ run, err := client.RunStreamingAgentAndWait(ctx, "agent_id", seclai.AgentRunStre
 })
 ```
 
-We recommend `RunStreamingAgentAndWaitWithOptions` with `ErrorOnIncomplete`, which becomes the default in the next major version. It never returns an unfinished run as if it were final: a timeout, or a stream that ends or breaks before `done`, returns a `*StreamingError` whose `Run` holds the latest snapshot (the same run is returned beside it). On `ctx`'s deadline the error still satisfies `errors.Is(err, context.DeadlineExceeded)`, and cancelling `ctx` returns the snapshot with `ctx.Err()`. The HTTP client's `Timeout` cutting the stream is reported as a broken stream, not a timeout.
+We recommend `RunStreamingAgentAndWaitWithOptions` with `ErrorOnIncomplete`, which becomes the default in the next major version. It never returns an unfinished run as if it were final: a timeout, or a stream that ends or breaks before `done`, after the stream has opened returns a `*StreamingError` whose `Run` holds the latest snapshot (the same run is returned beside it). Cancelling `ctx` returns the latest snapshot with `ctx.Err()` instead.
 
 Add `ReturnOnResult` to return as soon as the run reports its result, without waiting for `done`. The run may still be in progress: its `Status` may not be terminal and the run can still fail, so check `ResultReportedAt`, not `Status`. On a timeout or a cut stream, read the answer from the error's `Run`:
 
@@ -464,10 +464,7 @@ if err := <-errCh; err != nil {
 For environments where SSE is not practical, poll for a completed run. When
 `ctx` ends during the wait between polls, the last polled run is returned with
 `ctx.Err()`. When a poll's `GetAgentRun` fails, the last polled run is
-returned with that fetch's error; a failed starting `RunAgent` returns nil.
-`ctx.Err()` tells you whether `ctx` itself ended. An error while reading a
-response body is not always reported as such; see
-[#21](https://github.com/seclai/seclai-go/issues/21). Set
+returned with that fetch's error; a failed starting `RunAgent` returns nil. Set
 `ReturnOnResult` to return as soon as the run has reported its result
 (`ResultReportedAt` is set). The run may still be in progress: its `Status`
 may not be terminal and the run can still fail, so check `ResultReportedAt`,

@@ -101,9 +101,9 @@ type Options struct {
 	APIVersion string
 
 	// HTTPClient is used for requests. Defaults to a client with a 30s timeout.
-	// Its Timeout, the 30s default included, also bounds reading a stream, so
-	// pass a client without a Timeout for streams that run longer (see
-	// https://github.com/seclai/seclai-go/issues/21).
+	// Its Timeout, the 30s default included, also bounds reading a stream.
+	// How timeouts and body-read errors are reported is being reworked; see
+	// https://github.com/seclai/seclai-go/issues/21.
 	HTTPClient *http.Client
 }
 
@@ -1357,10 +1357,10 @@ type RunStreamingAgentAndWaitOptions struct {
 	ReturnOnResult bool
 	// ErrorOnIncomplete returns a [*StreamingError] carrying the latest
 	// snapshot in its Run, rather than the released behaviour, whenever the
-	// wait ends without the run it was waiting for: on a timeout, or when the
-	// stream ends or breaks first. It will become the default in the next
-	// major version. The HTTP client's own Timeout cutting the stream is
-	// reported as a broken stream, not a timeout.
+	// wait ends without the run it was waiting for after the stream has
+	// opened: on a timeout, or when the stream ends or breaks first.
+	// Cancelling ctx returns the latest snapshot with ctx.Err() instead. It
+	// will become the default in the next major version.
 	ErrorOnIncomplete bool
 }
 
@@ -1386,23 +1386,16 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 //   - By default (the released behaviour), a stream that ends returns the
 //     latest snapshot with a nil error, though the run may not have finished:
 //     check its Status and ResultReportedAt. With no snapshot it returns a
-//     [*StreamingError]. A timeout or a broken stream returns the bare error
-//     with the latest snapshot beside it. ctx's deadline gives an error that
-//     satisfies errors.Is(err, context.DeadlineExceeded), and the HTTP
-//     client's Timeout gives its request or read error.
+//     [*StreamingError]. A timeout or a broken stream returns the error with
+//     the latest snapshot beside it.
 //   - With opts.ErrorOnIncomplete, recommended and the default from the next
-//     major version, each of these returns the latest snapshot together with a
-//     [*StreamingError] whose Run is that snapshot. On ctx's deadline the
-//     error also satisfies errors.Is(err, context.DeadlineExceeded). The HTTP
-//     client's Timeout cutting the stream is reported as a broken stream, not
-//     a timeout.
-//
-// ctx.Err() tells you whether ctx itself ended.
+//     major version, a timeout, or a stream that ends or breaks, after the
+//     stream has opened returns the latest snapshot together with a
+//     [*StreamingError] whose Run is that snapshot.
 //
 // Whichever bound passes first ends the wait: ctx's deadline (60s by default
-// when ctx has none), or the HTTP client's Timeout, 30s with the default
-// client (see [Options.HTTPClient] and
-// https://github.com/seclai/seclai-go/issues/21).
+// when ctx has none), or the HTTP client's Timeout (30s with the default
+// client; see [Options.HTTPClient]).
 //
 // body.IncludeReasoning is not sent: this method reads only the run snapshots,
 // so reasoning events would be streamed only to be discarded while counting
@@ -1754,9 +1747,7 @@ type RunAgentAndPollOptions struct {
 // When ctx ends during the wait between polls, the last run polled is
 // returned with ctx.Err(). When a poll's GetAgentRun fails, the last run
 // polled is returned with that fetch's error; a failed starting RunAgent
-// returns nil. ctx.Err() tells you whether ctx itself ended. An error while
-// reading a response body is not always reported as such; see
-// https://github.com/seclai/seclai-go/issues/21.
+// returns nil.
 func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body AgentRunRequest, opts *RunAgentAndPollOptions) (*AgentRunResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
