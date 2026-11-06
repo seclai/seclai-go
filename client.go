@@ -100,11 +100,7 @@ type Options struct {
 	// {data, pagination} envelope.
 	APIVersion string
 
-	// HTTPClient is used for requests, the streaming methods included, as it
-	// is: its Timeout covers reading a response body, so it also bounds a
-	// stream. Defaults to a client with a 30s timeout, except that the
-	// streaming methods then use one with no Timeout, which waits at most 30s
-	// for the response headers and leaves the rest of the stream to ctx.
+	// HTTPClient is used for requests. Defaults to a client with a 30s timeout.
 	HTTPClient *http.Client
 }
 
@@ -114,8 +110,6 @@ type Client struct {
 	baseURL        *url.URL
 	defaultHeaders map[string]string
 	httpClient     *http.Client
-	// streamHTTPClient sends the streaming requests.
-	streamHTTPClient *http.Client
 
 	allowUnknownAPIVersion bool
 	escapedDoPaths         bool
@@ -186,15 +180,8 @@ func NewClient(opts Options) (*Client, error) {
 	}
 
 	hc := opts.HTTPClient
-	streamHC := hc
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
-		// The default Timeout covers reading the body and would cut a stream,
-		// so streams get no Timeout, only a bound on waiting for headers;
-		// ctx bounds the rest. A caller's HTTPClient is used as it is.
-		tr := http.DefaultTransport.(*http.Transport).Clone()
-		tr.ResponseHeaderTimeout = 30 * time.Second
-		streamHC = &http.Client{Transport: tr}
 	}
 	state.httpClient = hc
 
@@ -243,7 +230,6 @@ func NewClient(opts Options) (*Client, error) {
 		baseURL:                parsed,
 		defaultHeaders:         defHeaders,
 		httpClient:             hc,
-		streamHTTPClient:       streamHC,
 		allowUnknownAPIVersion: opts.AllowUnknownAPIVersion,
 		escapedDoPaths:         opts.EscapedDoPaths,
 	}
@@ -1444,7 +1430,7 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 
-	resp, err := c.streamHTTPClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1637,7 +1623,7 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "text/event-stream")
 
-		resp, err := c.streamHTTPClient.Do(req)
+		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			errCh <- err
 			return
@@ -1752,9 +1738,9 @@ type RunAgentAndPollOptions struct {
 // with opts.IncludeStepOutputs, which that response lacks, a response that
 // would end the poll is fetched again at once with step outputs, and that
 // snapshot is checked instead. The context controls the overall timeout. When
-// it ends, the last run polled is returned with ctx.Err(), even if it ends
-// during a GetAgentRun; when a GetAgentRun fails otherwise, the last run is
-// returned with that error. Either way its RunId is kept.
+// it ends, the last run polled is returned with ctx.Err(), also when it ends
+// a GetAgentRun; when a GetAgentRun fails otherwise, the last run is returned
+// with that error. Either way its RunId is kept.
 func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body AgentRunRequest, opts *RunAgentAndPollOptions) (*AgentRunResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -1802,7 +1788,7 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 
 		next, err := c.GetAgentRun(ctx, run.RunId, getOpts)
 		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
 				return run, ctxErr
 			}
 			return run, err
