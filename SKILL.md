@@ -29,6 +29,15 @@ what it ruled out. Weigh every finding against that. A finding that re-opens a
 decision already made in this PR or an earlier round is answered by citing the
 decision, not by changing the code back.
 
+**A spec-sync PR changes only what the spec diff changed**, plus backlog the user
+agreed to before the review. A Proven finding about behaviour that is already in the
+last release goes to an issue, however cheap the fix looks, and the thread links it;
+other classes keep their §1 disposition. A Contract finding on prose this PR wrote is
+still fixed here.
+
+**Read `rules.md` next to this file** (each SDK `CLAUDE.md` imports it). Its
+cold-review gate runs on your response diff before you reply (§7).
+
 ## 1. Classify each finding
 
 | Class | Test | Disposition |
@@ -110,6 +119,12 @@ Name the signal, name the requirement or design that is unclear, propose the way
 out (often: make the failure mode loud, so latent cases become visible false
 alarms; or split the adjacent work), and let the user decide.
 
+**The default way out is to freeze the mechanism.** When a fix to a mechanism (a
+helper's timeout, fallback, retry or error rules) needs a fix, and both changed
+behaviour, propose that this PR stop changing it: later findings on it go to one
+issue listing every affected repo, and a fix that created a regression is reverted
+rather than fixed forward.
+
 After the first round, review only the delta since the last reviewed commit, not
 `HEAD~1..HEAD` counted by hand.
 
@@ -122,13 +137,22 @@ surface for the next round. If a fix seems to need one, stop and say so.
 **Do not widen scope to make a test easy.** Supporting a shape no SDK has, because a
 test needed it, is new work with its own review rounds.
 
+**A fix that adds or changes a mechanism is a new change, not a repair**: a new
+option, timeout, fallback, retry, client or error type. Do not write it in answer to
+a finding. Write down what it must do for each case (each way a stream or poll ends,
+and its outcome, per SDK), agree it with the user, then implement it in every SDK
+at once, in its own PR unless the user puts it in this one. Without that, each review round re-derives the design and finds the next
+edge case.
+
 **A test added for a finding must fail without the fix.** Undo the fix, watch the
-test fail, restore it. Say that you did.
+test fail, restore it. Say that you did. That proves the fix does what it says, not
+that it is right; when the cold-review gate runs, its Break prompt checks the second.
 
 ## 7. Replies and threads
 
-- One reply per thread, posted after the gates pass. The user commits and pushes,
-  so say the change is in the working tree.
+- One reply per thread, posted after lint, tests and the cold-review gate on the
+  response diff (`rules.md`) pass. The user commits and pushes, so say the change is in
+  the working tree.
 - **Resolve only after the user reports the push** and
   `gh pr view --json headRefOid` shows the new head, and only threads you changed.
   A pushback, a doubt, or a question for the user stays open unless the user says to
@@ -144,7 +168,8 @@ Lead with the class counts and how many findings changed behaviour. For example:
 "9 findings: 2 proven, 4 latent, 1 contract, 2 opinion; 2 changed behaviour". When
 none changed behaviour, say so in the first line: that is the stop condition. Then
 list the pushbacks and doubts before the fixes. Report the classes you assigned,
-not the ones the review claimed. End with:
+not the ones the review claimed. Say what the cold-review gate found on the
+response diff. End with:
 
 ```
 Findings that change behaviour: N
@@ -152,4 +177,5 @@ Sibling SDKs checked: N of 4 — fixed in N
 Pushed back / asked: N
 Below the bar: N — said on the thread
 Fixes verified by undoing them: N of N
+Cold-review gate on the response diff: N findings, N changed behaviour | skipped (<10 lines)
 ```
