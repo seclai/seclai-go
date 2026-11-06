@@ -1359,7 +1359,8 @@ type RunStreamingAgentAndWaitOptions struct {
 	// snapshot in its Run, rather than the released behaviour, whenever the
 	// wait ends without the run it was waiting for after the stream has
 	// opened: on a timeout, or when the stream ends or breaks first.
-	// Cancelling ctx returns the latest snapshot with ctx.Err() instead. It
+	// Cancelling ctx after the stream has opened returns the latest snapshot
+	// with ctx.Err() instead. It
 	// will become the default in the next major version.
 	ErrorOnIncomplete bool
 }
