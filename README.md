@@ -423,7 +423,7 @@ run, err := client.RunStreamingAgentAndWait(ctx, "agent_id", seclai.AgentRunStre
 })
 ```
 
-We recommend `RunStreamingAgentAndWaitWithOptions` with `ErrorOnIncomplete`, which becomes the default in the next major version. It never returns an unfinished run as if it were final: after the stream has opened, a timeout, or a stream that ends or breaks before `done`, returns a `*StreamingError` whose `Run` holds the latest snapshot (the same run is returned beside it), and cancelling `ctx` returns the latest snapshot with `ctx.Err()` instead.
+We recommend `RunStreamingAgentAndWaitWithOptions` with `ErrorOnIncomplete`, which becomes the default in the next major version. It never returns an unfinished run as if it were final. Once the stream has opened, a timeout or a stream that ends or breaks before `done` returns a `*StreamingError` whose `Run` holds the latest snapshot (the same run is returned beside it), and cancelling `ctx` returns the latest snapshot with `ctx.Err()` instead.
 
 Add `ReturnOnResult` to return as soon as the run reports its result, without waiting for `done`. The run may still be in progress: its `Status` may not be terminal and the run can still fail, so check `ResultReportedAt`, not `Status`. On a timeout or a cut stream, read the answer from the error's `Run`:
 

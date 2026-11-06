@@ -1390,9 +1390,10 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 //     [*StreamingError]. A timeout or a broken stream returns the error with
 //     the latest snapshot beside it.
 //   - With opts.ErrorOnIncomplete, recommended and the default from the next
-//     major version, a timeout, or a stream that ends or breaks, after the
-//     stream has opened returns the latest snapshot together with a
-//     [*StreamingError] whose Run is that snapshot.
+//     major version: once the stream has opened, a timeout or a stream that
+//     ends or breaks returns the latest snapshot together with a
+//     [*StreamingError] whose Run is that snapshot, and cancelling ctx returns
+//     the latest snapshot with ctx.Err() instead.
 //
 // Whichever bound passes first ends the wait: ctx's deadline (60s by default
 // when ctx has none), or the HTTP client's Timeout (30s with the default
