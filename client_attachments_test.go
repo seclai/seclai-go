@@ -142,16 +142,27 @@ func TestClient_SetMetadataKeys(t *testing.T) {
 	}
 }
 
-func TestClient_SetMetadataKeys_NilClearsTheDeclaration(t *testing.T) {
-	var rec requestRecorder
-	c := newRecordingServer(t, &rec, 200, "application/json", testMetadataKeys)
-
-	if _, err := c.SetMetadataKeys(context.Background(), "a_1", "t_1", SetMetadataKeysRequest{}); err != nil {
-		t.Fatalf("SetMetadataKeys: %v", err)
-	}
-	// metadata_keys is required and not nullable, so a nil slice must go out as [].
-	if string(rec.rawBody) != `{"metadata_keys":[]}` {
-		t.Fatalf("expected an empty list, got %s", rec.rawBody)
+// A nil MetadataKeys is sent as null, so a zero-value request gets the API's
+// 422 instead of clearing every declared key; an empty slice clears them.
+func TestClient_SetMetadataKeys_NilIsSentAsNull(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		keys []MetadataKeyDeclaration
+		want string
+	}{
+		{"nil", nil, `{"metadata_keys":null}`},
+		{"empty", []MetadataKeyDeclaration{}, `{"metadata_keys":[]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var rec requestRecorder
+			c := newRecordingServer(t, &rec, 200, "application/json", testMetadataKeys)
+			if _, err := c.SetMetadataKeys(context.Background(), "a_1", "t_1", SetMetadataKeysRequest{MetadataKeys: tc.keys}); err != nil {
+				t.Fatalf("SetMetadataKeys: %v", err)
+			}
+			if string(rec.rawBody) != tc.want {
+				t.Fatalf("body %s, want %s", rec.rawBody, tc.want)
+			}
+		})
 	}
 }
 

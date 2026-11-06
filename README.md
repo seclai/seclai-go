@@ -411,7 +411,7 @@ _ = client.DeleteAgentRun(ctx, "run_id")
 
 The SDK provides two streaming patterns over the SSE `/runs/stream` endpoint.
 
-**Block until done** — returns the final `done` payload or returns an error on timeout. It reads only that payload, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events:
+**Block until done** — returns the final `done` payload or returns an error on timeout. If the stream ends before `done`, it returns the `result` event's run, sent once the run has reported its result (`ResultReportedAt` is set and `Output` is the answer), or else the `init` one. It reads only those payloads, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events:
 
 ```go
 // If ctx has no deadline, the SDK applies a default timeout.
@@ -421,7 +421,7 @@ run, err := client.RunStreamingAgentAndWait(ctx, "agent_id", seclai.AgentRunStre
 })
 ```
 
-**Channel-based** — yields every SSE event as `AgentRunEvent`:
+**Channel-based** — yields every SSE event as `AgentRunEvent`. Take the run's answer from the `result` event; the `done` event's `Status` says whether the whole run succeeded, which can still fail after its result:
 
 ```go
 events, errCh := client.RunStreamingAgent(ctx, "agent_id", seclai.AgentRunStreamRequest{
@@ -437,7 +437,9 @@ if err := <-errCh; err != nil {
 
 ### Polling
 
-For environments where SSE is not practical, poll for a completed run:
+For environments where SSE is not practical, poll for a completed run. Set
+`ReturnOnResult` to return as soon as the run has reported its result
+(`ResultReportedAt` is set), while later steps may still run:
 
 ```go
 result, err := client.RunAgentAndPoll(ctx, "agent_id", seclai.AgentRunRequest{
@@ -503,9 +505,11 @@ if _, err := client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id", seclai
 Declare the run metadata keys an agent's trigger provides. Steps reference one
 as `{{metadata.<key>}}`, and a caller-started run that sends an undeclared
 custom key, or lacks a required one, is refused with a 400. `SetMetadataKeys`
-replaces the whole declaration; the API answers 400 when the agent still
-references a key no trigger of its branch declares. A nil `Required` is
-treated as false, and only a `custom` key can be required.
+replaces the whole declaration, so declare a custom key with it before sending
+that key in a run's `Metadata`; the API answers 400 when the agent still
+references a key no trigger of its branch declares. An empty, non-nil
+`MetadataKeys` clears the declaration; a nil one is refused with a 422. A nil
+`Required` is treated as false, and only a `custom` key can be required.
 
 <!-- sdksync:check -->
 ```go
@@ -1331,7 +1335,10 @@ if err != nil {
 
 ## Low-level access
 
-Use `client.Do()` for direct API requests:
+Use `client.Do()` for direct API requests. `apiPath` is sent as given: escape
+IDs in it with `url.PathEscape`, and a `%XX` in it is kept as an escape. `.` and
+`..` segments are resolved before sending, and `url.PathEscape` leaves them as
+they are, so reject an ID of `.` or `..` (or write its dots as `%2E`):
 
 ```go
 var result MyType

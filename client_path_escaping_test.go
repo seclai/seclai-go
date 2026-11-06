@@ -2,6 +2,7 @@ package seclai
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -108,6 +109,10 @@ func TestClient_Do_PathHandling(t *testing.T) {
 		{"", "/agents//x/./y/../z", "/agents/x/z"},     // literal dot segments cleaned
 		{"/api/", "/agents/", "/api/agents/"},          // base prefix with trailing slash
 		{"/api", "/agents/a%2F1", "/api/agents/a%2F1"}, // %2F is not a separator
+		// Escaped and raw characters mixed: the escapes the caller wrote are kept.
+		{"", "/agents/a%2F1/x y", "/agents/a%2F1/x%20y"},
+		{"", "/agents/é%2F1", "/agents/%C3%A9%2F1"},
+		{"", "/agents/a%2F1?b", "/agents/a%2F1%3Fb"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.prefix+" "+tc.apiPath, func(t *testing.T) {
@@ -123,9 +128,65 @@ func TestClient_Do_PathHandling(t *testing.T) {
 }
 
 func TestPathSegment(t *testing.T) {
-	for in, want := range map[string]string{"": "", ".": "%2E", "..": "%2E%2E", "...": "...", "a b": "a%20b", "a/b": "a%2Fb"} {
+	for in, want := range map[string]string{".": "%2E", "..": "%2E%2E", "...": "...", "a b": "a%20b", "a/b": "a%2Fb"} {
 		if got := pathSegment(in); got != want {
 			t.Errorf("pathSegment(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A blank ID would leave an empty segment that path.Clean collapses into
+// another endpoint ("/agents//runs" is "/agents/runs"), so every route refuses
+// it with a *ConfigurationError before sending anything.
+func TestClient_BlankPathIDIsRefused(t *testing.T) {
+	c, seen := pathServer(t, "", `{}`)
+	ctx := context.Background()
+	calls := map[string]func(id string) error{
+		"GetAgent": func(id string) error { _, err := c.GetAgent(ctx, id); return err },
+		"ListAgentRuns": func(id string) error {
+			_, err := c.ListAgentRuns(ctx, id, ListAgentRunsOptions{})
+			return err
+		},
+		"GetEvaluationCriteria": func(id string) error { _, err := c.GetEvaluationCriteria(ctx, id); return err },
+		"SetMetadataKeys trigger": func(id string) error {
+			_, err := c.SetMetadataKeys(ctx, "a_1", id, SetMetadataKeysRequest{MetadataKeys: []MetadataKeyDeclaration{}})
+			return err
+		},
+		"DownloadSourceExport": func(id string) error {
+			resp, err := c.DownloadSourceExport(ctx, "s_1", id)
+			if err == nil {
+				resp.Body.Close()
+			}
+			return err
+		},
+		"UploadFileToContent": func(id string) error {
+			_, err := c.UploadFileToContent(ctx, id, UploadFileRequest{File: []byte("x"), FileName: "f.txt"})
+			return err
+		},
+		"RunStreamingAgentAndWait": func(id string) error {
+			_, err := c.RunStreamingAgentAndWait(ctx, id, AgentRunStreamRequest{})
+			return err
+		},
+		"RunStreamingAgent": func(id string) error {
+			events, errs := c.RunStreamingAgent(ctx, id, AgentRunStreamRequest{})
+			for range events {
+			}
+			return <-errs
+		},
+	}
+	for name, call := range calls {
+		for _, id := range []string{"", "  "} {
+			t.Run(name+"/"+id, func(t *testing.T) {
+				*seen = nil
+				err := call(id)
+				var cfg *ConfigurationError
+				if !errors.As(err, &cfg) {
+					t.Fatalf("err = %v, want *ConfigurationError", err)
+				}
+				if len(*seen) != 0 {
+					t.Fatalf("sent %v, want no request", *seen)
+				}
+			})
 		}
 	}
 }

@@ -271,9 +271,14 @@ func (c *Client) applyAuth(ctx context.Context, req *http.Request) error {
 // Do makes a low-level request to the Seclai API.
 //
 // apiPath is joined to the base URL's path and sent as given, so escape any
-// IDs in it with url.PathEscape ("/agents/" + url.PathEscape(id)). A "%" that
-// does not start a %XX escape is sent as %25, and characters that are not
-// allowed in a path, such as a space, are escaped.
+// IDs in it with url.PathEscape ("/agents/" + url.PathEscape(id)). A %XX in
+// apiPath is taken as an escape already made and sent unchanged, a "%" that
+// does not start one is sent as %25, and characters that are not allowed in a
+// path, such as a space, are escaped.
+//
+// "." and ".." segments are resolved before sending, and url.PathEscape leaves
+// them as they are: "/agents/" + url.PathEscape("..") is sent as "/". Reject an
+// ID of "." or "..", or write its dots as %2E, before building apiPath.
 //
 // For JSON responses, out is decoded from JSON when non-nil.
 // For non-2xx responses, an *APIStatusError or *APIValidationError is returned.
@@ -320,7 +325,10 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 		}
 	}
 
-	reqURL := c.buildURLValues(apiPath, query)
+	reqURL, err := c.buildURLValues(apiPath, query)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	var reqBody io.Reader
 	if body != nil {
@@ -814,7 +822,8 @@ func (c *Client) GetMetadataKeys(ctx context.Context, agentID, triggerID string)
 
 // SetMetadataKeys replaces the run metadata keys an agent's trigger declares.
 // body.MetadataKeys is the whole declaration: a key left out is no longer
-// declared, and a nil MetadataKeys is sent as [] and clears it. A
+// declared. Pass an empty, non-nil slice to clear it; a nil MetadataKeys is
+// sent as null, which the API refuses with 422. A
 // caller-started run that sends an undeclared custom key, or lacks a required
 // one, is refused with HTTP 400.
 //
@@ -822,9 +831,6 @@ func (c *Client) GetMetadataKeys(ctx context.Context, agentID, triggerID string)
 // branch declares. Warnings on the response lists agents whose call_agent
 // mapping no longer fits the new declaration.
 func (c *Client) SetMetadataKeys(ctx context.Context, agentID, triggerID string, body SetMetadataKeysRequest) (*MetadataKeysResponse, error) {
-	if body.MetadataKeys == nil {
-		body.MetadataKeys = []MetadataKeyDeclaration{}
-	}
 	var out MetadataKeysResponse
 	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/metadata-keys", pathSegment(agentID), pathSegment(triggerID)), nil, body, nil, &out); err != nil {
 		return nil, err
@@ -856,7 +862,10 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	reqURL := c.buildURL(apiPath, query)
+	reqURL, err := c.buildURL(apiPath, query)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, method, reqURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -1300,6 +1309,9 @@ func (c *Client) GetNonManualEvaluationSummaryWithOptions(ctx context.Context, o
 //
 // This method calls POST /agents/{agent_id}/runs/stream and consumes Server-Sent Events (SSE).
 // It returns when the stream emits an `event: done` message whose `data:` field contains the final run payload.
+// If the stream ends before `done`, it returns the last run snapshot it saw: the
+// `event: result` one, sent once the run has reported its result (ResultReportedAt
+// is set and Output is the answer), or else the `event: init` one.
 //
 // Timeout behavior is controlled by ctx (for example, use context.WithTimeout). If ctx has no deadline,
 // a default 60s timeout is applied.
@@ -1318,7 +1330,10 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 		defer cancel()
 	}
 
-	reqURL := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", pathSegment(agentID)), nil)
+	reqURL, err := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", pathSegment(agentID)), nil)
+	if err != nil {
+		return nil, err
+	}
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -1368,7 +1383,7 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 			return nil, false
 		}
 
-		if currentEvent == "init" || currentEvent == "done" {
+		if currentEvent == "init" || currentEvent == "result" || currentEvent == "done" {
 			var parsed AgentRunResponse
 			if err := json.Unmarshal([]byte(data), &parsed); err == nil {
 				lastSeen = &parsed
@@ -1427,7 +1442,10 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 
 // AgentRunEvent is a single event from an SSE agent run stream.
 type AgentRunEvent struct {
-	// Event is the SSE event type (e.g. "init", "update", "done").
+	// Event is the SSE event type (e.g. "init", "update", "result", "done").
+	// "result" carries the run once it has reported its result
+	// (ResultReportedAt is set and Output is the answer); it comes before
+	// "done", possibly while later steps still run.
 	Event string
 	// Data is the raw JSON data payload.
 	Data string
@@ -1437,7 +1455,9 @@ type AgentRunEvent struct {
 
 // RunStreamingAgent runs an agent in priority mode and returns a channel that
 // yields SSE events as they arrive. The channel is closed when the stream ends
-// or when ctx is cancelled.
+// or when ctx is cancelled. Take the run's answer from the "result" event's
+// Run; the "done" event's Run is the terminal snapshot, and its Status says
+// whether the whole run succeeded, which can still fail after its result.
 //
 // The caller should range over the returned channel:
 //
@@ -1460,7 +1480,11 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 			ctx = context.Background()
 		}
 
-		reqURL := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", pathSegment(agentID)), nil)
+		reqURL, err := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", pathSegment(agentID)), nil)
+		if err != nil {
+			errCh <- err
+			return
+		}
 		b, err := json.Marshal(body)
 		if err != nil {
 			errCh <- err
@@ -1583,10 +1607,16 @@ type RunAgentAndPollOptions struct {
 	PollInterval time.Duration
 	// IncludeStepOutputs requests step details in the final result.
 	IncludeStepOutputs bool
+	// ReturnOnResult returns as soon as a snapshot has ResultReportedAt set:
+	// its Output is the run's answer and does not change, though later steps
+	// may still run and the run can still fail. When false, polling continues
+	// until the run is completed or failed.
+	ReturnOnResult bool
 }
 
 // RunAgentAndPoll runs an agent and polls until it reaches a terminal status
-// (completed or failed). The context controls the overall timeout.
+// (completed or failed), or, with opts.ReturnOnResult, until it has reported
+// its result. The context controls the overall timeout.
 func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body AgentRunRequest, opts *RunAgentAndPollOptions) (*AgentRunResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -1598,12 +1628,13 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 	}
 
 	interval := 2 * time.Second
-	var includeSteps bool
+	var includeSteps, returnOnResult bool
 	if opts != nil {
 		if opts.PollInterval > 0 {
 			interval = opts.PollInterval
 		}
 		includeSteps = opts.IncludeStepOutputs
+		returnOnResult = opts.ReturnOnResult
 	}
 
 	var getOpts *GetAgentRunOptions
@@ -1617,6 +1648,9 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 	for {
 		switch run.Status {
 		case "completed", "failed":
+			return run, nil
+		}
+		if returnOnResult && run.ResultReportedAt != nil {
 			return run, nil
 		}
 
@@ -1666,7 +1700,10 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 		mimeType = strings.TrimSpace(mime.TypeByExtension(filepath.Ext(req.FileName)))
 	}
 
-	reqURL := c.buildURL(apiPath, nil)
+	reqURL, err := c.buildURL(apiPath, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -1681,10 +1718,7 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 		}
 		_ = w.WriteField("metadata", string(b))
 	}
-	var (
-		fw  io.Writer
-		err error
-	)
+	var fw io.Writer
 	if mimeType != "" {
 		fileName := strings.ReplaceAll(req.FileName, "\"", "")
 		h := make(textproto.MIMEHeader)
@@ -1756,9 +1790,6 @@ func (c *Client) UploadInlineTextToSource(ctx context.Context, sourceConnectionI
 
 // UploadFileToContent replaces the file backing an existing content version.
 func (c *Client) UploadFileToContent(ctx context.Context, contentVersionID string, req UploadFileRequest) (*ContentFileUploadResponse, error) {
-	if strings.TrimSpace(contentVersionID) == "" {
-		return nil, &ConfigurationError{Message: "contentVersionID must not be blank"}
-	}
 	raw, err := c.doUpload(ctx, fmt.Sprintf("/contents/%s/upload", pathSegment(contentVersionID)), req)
 	if err != nil {
 		return nil, err
@@ -3763,15 +3794,20 @@ func (c *Client) ListCloudDriveRejections(ctx context.Context, connectionID stri
 
 // buildURL constructs a full request URL by joining apiPath to the base URL
 // and appending query parameters.
-func (c *Client) buildURL(apiPath string, query map[string]string) *url.URL {
+func (c *Client) buildURL(apiPath string, query map[string]string) (*url.URL, error) {
 	return c.buildURLValues(apiPath, queryValues(query))
 }
 
 // pathSegment escapes one path segment (an ID) for an apiPath. Beyond
 // url.PathEscape it escapes the dots of a "." or ".." segment, so buildURLValues's
 // path.Clean, and any server or proxy that resolves dot segments, cannot take
-// the ID as a step up the path.
+// the ID as a step up the path. A blank ID becomes blankPathSegment, which
+// buildURLValues refuses, since path.Clean would collapse an empty segment
+// into a request for another endpoint ("/agents//runs" is "/agents/runs").
 func pathSegment(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return blankPathSegment
+	}
 	switch s {
 	case ".":
 		return "%2E"
@@ -3781,19 +3817,31 @@ func pathSegment(s string) string {
 	return url.PathEscape(s)
 }
 
-// escapeStrayPercents escapes each % that does not start a %XX escape, so a
-// [Client.Do] path such as "/files/100%" is sent as "/files/100%25".
-func escapeStrayPercents(p string) string {
-	if !strings.Contains(p, "%") {
-		return p
-	}
+// blankPathSegment is what pathSegment returns for a blank ID. It holds NUL
+// bytes, which pathSegment never emits for a real ID.
+const blankPathSegment = "\x00blank-id\x00"
+
+// escapePath makes p a valid escaped path, so that [url.URL.EscapedPath] sends
+// it as it is: a %XX escape is kept, a % that does not start one is written
+// %25 (a [Client.Do] path such as "/files/100%" is sent as "/files/100%25"),
+// and any other byte that may not appear in a path, such as a space or a
+// non-ASCII byte, is percent-encoded. Were one such byte left raw, Go would
+// discard RawPath and re-escape the decoded path, turning each %2F the caller
+// wrote into a separator.
+func escapePath(p string) string {
 	var b strings.Builder
 	for i := 0; i < len(p); i++ {
-		if p[i] == '%' && (i+2 >= len(p) || !isHex(p[i+1]) || !isHex(p[i+2])) {
-			b.WriteString("%25")
-			continue
+		c := p[i]
+		switch {
+		case c == '%' && i+2 < len(p) && isHex(p[i+1]) && isHex(p[i+2]):
+			b.WriteByte(c)
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9',
+			strings.IndexByte("-._~/!$&'()*+,;=:@", c) >= 0:
+			// Unreserved, "/", a sub-delimiter, ":" or "@": valid in RawPath as is.
+			b.WriteByte(c)
+		default:
+			fmt.Fprintf(&b, "%%%02X", c)
 		}
-		b.WriteByte(p[i])
 	}
 	return b.String()
 }
@@ -3813,7 +3861,11 @@ func queryValues(query map[string]string) url.Values {
 
 // buildURLValues is buildURL for a query whose keys may repeat. Blank keys and
 // empty values are dropped, and a key replaces the same key on the base URL.
-func (c *Client) buildURLValues(apiPath string, query url.Values) *url.URL {
+// It returns a *ConfigurationError when apiPath holds a blank ID.
+func (c *Client) buildURLValues(apiPath string, query url.Values) (*url.URL, error) {
+	if strings.Contains(apiPath, blankPathSegment) {
+		return nil, &ConfigurationError{Message: "an ID in the request path must not be blank"}
+	}
 	u := *c.baseURL
 	joined := apiPath
 	if !strings.HasPrefix(joined, "/") {
@@ -3829,10 +3881,8 @@ func (c *Client) buildURLValues(apiPath string, query url.Values) *url.URL {
 	if hadTrailingSlash && !strings.HasSuffix(cleaned, "/") {
 		cleaned += "/"
 	}
-	cleaned = escapeStrayPercents(cleaned)
-	decoded, _ := url.PathUnescape(cleaned) // cannot fail after escapeStrayPercents
-	// If cleaned is not a valid escaping of decoded (a [Client.Do] caller passed
-	// a raw space, say), EscapedPath ignores RawPath and escapes Path instead.
+	cleaned = escapePath(cleaned)
+	decoded, _ := url.PathUnescape(cleaned) // cannot fail after escapePath
 	u.Path, u.RawPath = decoded, cleaned
 	q := u.Query()
 	for k, values := range query {
@@ -3850,5 +3900,5 @@ func (c *Client) buildURLValues(apiPath string, query url.Values) *url.URL {
 		}
 	}
 	u.RawQuery = q.Encode()
-	return &u
+	return &u, nil
 }

@@ -99,6 +99,33 @@ func TestClient_RunStreamingAgentAndWait_DropsIncludeReasoning(t *testing.T) {
 	}
 }
 
+// A stream that ends after its result event but before done returns the
+// result snapshot, which holds the answer, rather than the init one; done
+// still wins when it arrives.
+func TestClient_RunStreamingAgentAndWait_ResultEvent(t *testing.T) {
+	const (
+		initEv   = "event: init\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"processing\"}\n\n"
+		resultEv = "event: result\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"processing\",\"output\":\"answer\",\"result_reported_at\":\"2026-11-05T00:00:00Z\"}\n\n"
+		doneEv   = "event: done\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"completed\",\"output\":\"final\"}\n\n"
+	)
+	for _, tc := range []struct{ name, stream, wantOutput, wantStatus string }{
+		{"ends after result", initEv + resultEv, "answer", "processing"},
+		{"done wins", initEv + resultEv + doneEv, "final", "completed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var rec requestRecorder
+			c := newRecordingServer(t, &rec, 200, "text/event-stream", tc.stream)
+			res, err := c.RunStreamingAgentAndWait(context.Background(), "agent_1", AgentRunStreamRequest{})
+			if err != nil {
+				t.Fatalf("RunStreamingAgentAndWait: %v", err)
+			}
+			if res.Output == nil || *res.Output != tc.wantOutput || string(res.Status) != tc.wantStatus {
+				t.Fatalf("got output %v status %q, want %q %q", res.Output, res.Status, tc.wantOutput, tc.wantStatus)
+			}
+		})
+	}
+}
+
 func TestClient_RunStreamingAgentAndWait_Timeout(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/agents/agent_1/runs/stream" {
@@ -1365,6 +1392,53 @@ func TestClient_RunAgentAndPoll_PollsUntilComplete(t *testing.T) {
 	}
 	if pollCount < 2 {
 		t.Fatalf("expected at least 2 polls, got %d", pollCount)
+	}
+}
+
+// With ReturnOnResult, polling stops at the first snapshot whose
+// result_reported_at is set, though the run is still processing; without it,
+// polling goes on to completed.
+func TestClient_RunAgentAndPoll_ReturnOnResult(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		returnOnResult bool
+		wantPolls      int
+		wantStatus     string
+	}{
+		{"on", true, 2, "processing"},
+		{"off", false, 3, "completed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			polls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method == http.MethodPost {
+					_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"pending"}`)
+					return
+				}
+				polls++
+				switch polls {
+				case 1:
+					_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"processing"}`)
+				case 2:
+					_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"processing","output":"answer","result_reported_at":"2026-11-05T00:00:00Z"}`)
+				default:
+					_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"completed","output":"answer","result_reported_at":"2026-11-05T00:00:00Z"}`)
+				}
+			}))
+			t.Cleanup(srv.Close)
+
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			resp, err := c.RunAgentAndPoll(ctx, "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Millisecond, ReturnOnResult: tc.returnOnResult})
+			if err != nil {
+				t.Fatalf("RunAgentAndPoll: %v", err)
+			}
+			if polls != tc.wantPolls || string(resp.Status) != tc.wantStatus || resp.Output == nil || *resp.Output != "answer" {
+				t.Fatalf("polls %d status %q output %v, want %d %q answer", polls, resp.Status, resp.Output, tc.wantPolls, tc.wantStatus)
+			}
+		})
 	}
 }
 
