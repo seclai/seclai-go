@@ -14,27 +14,31 @@ import (
 
 // These tests pin the behaviour v1.9.0 released, which stays the default
 // until the next major version. They use only v1.9.0's API, so they also run
-// against that tag's code.
+// against that tag's code, where only the res checks the CHANGELOG lists as
+// additions (the snapshot beside a timeout or read error) fail.
 
-// By default Do takes apiPath as unescaped and escapes it as a whole.
+// By default Do takes the base URL's path and apiPath as unescaped and
+// escapes them as a whole.
 func TestClient_Do_DefaultEscapesTheWholePath(t *testing.T) {
-	for _, tc := range []struct{ apiPath, want string }{
-		{"/agents/a%201", "/agents/a%25201"},
-		{"/agents/a 1", "/agents/a%201"},
-		{"/files/100%", "/files/100%25"},
-		{"/agents/é", "/agents/%C3%A9"},
-		{"agents", "/agents"},
-		{"/agents/", "/agents/"},
-		{"/agents//x/./y/../z", "/agents/x/z"},
+	for _, tc := range []struct{ prefix, apiPath, want string }{
+		{"", "/agents/a%201", "/agents/a%25201"},
+		{"", "/agents/a 1", "/agents/a%201"},
+		{"", "/files/100%", "/files/100%25"},
+		{"", "/agents/é", "/agents/%C3%A9"},
+		{"", "agents", "/agents"},
+		{"", "/agents/", "/agents/"},
+		{"", "/agents//x/./y/../z", "/agents/x/z"},
+		{"/x%2Fy/api", "/agents/a", "/x/y/api/agents/a"},
+		{"/my%20api/", "/agents/a%2F1", "/my%20api/agents/a%252F1"},
 	} {
-		t.Run(tc.apiPath, func(t *testing.T) {
+		t.Run(tc.prefix+" "+tc.apiPath, func(t *testing.T) {
 			var seen []string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				target, _, _ := strings.Cut(r.RequestURI, "?")
 				seen = append(seen, target)
 			}))
 			t.Cleanup(srv.Close)
-			c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL + tc.prefix})
 			if err != nil {
 				t.Fatalf("NewClient: %v", err)
 			}
@@ -49,7 +53,8 @@ func TestClient_Do_DefaultEscapesTheWholePath(t *testing.T) {
 }
 
 // By default the wait helper returns the init run when the stream ends
-// without done, and the bare error on a timeout or a broken stream.
+// without done, and the bare error on a timeout or a broken stream, with the
+// init run beside it (an addition to v1.9.0, which returned nil there).
 func TestClient_RunStreamingAgentAndWait_ReleasedEndings(t *testing.T) {
 	const initEv = "event: init\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"processing\"}\n\n"
 	for _, tc := range []struct {
@@ -69,15 +74,21 @@ func TestClient_RunStreamingAgentAndWait_ReleasedEndings(t *testing.T) {
 			}
 			return nil
 		}},
-		{"times out", initEv, "hang", func(_ *AgentRunResponse, err error) error {
+		{"times out", initEv, "hang", func(res *AgentRunResponse, err error) error {
 			if err != context.DeadlineExceeded {
 				return fmt.Errorf("got %T %v, want the bare context.DeadlineExceeded", err, err)
 			}
+			if res == nil || res.RunId != "run_1" { // nil in v1.9.0
+				return fmt.Errorf("got %v, want the init run beside the error", res)
+			}
 			return nil
 		}},
-		{"cut", initEv, "cut", func(_ *AgentRunResponse, err error) error {
+		{"cut", initEv, "cut", func(res *AgentRunResponse, err error) error {
 			if err != io.ErrUnexpectedEOF {
 				return fmt.Errorf("got %T %v, want the bare io.ErrUnexpectedEOF", err, err)
+			}
+			if res == nil || res.RunId != "run_1" { // nil in v1.9.0
+				return fmt.Errorf("got %v, want the init run beside the error", res)
 			}
 			return nil
 		}},

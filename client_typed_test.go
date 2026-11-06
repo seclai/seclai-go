@@ -241,6 +241,34 @@ func TestClient_RunStreamingAgentAndWait_DefaultEndingsKeepTheResult(t *testing.
 	}
 }
 
+// http.Client.Timeout covers reading the body, so it must not bound a stream:
+// done arrives after the client's timeout and is still read.
+func TestClient_Streams_OutliveTheHTTPClientTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.(http.Flusher).Flush()
+		time.Sleep(150 * time.Millisecond)
+		_, _ = io.WriteString(w, "event: done\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"completed\"}\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	c.httpClient.Timeout = 50 * time.Millisecond // the default client's 30s, shrunk
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := c.RunStreamingAgentAndWait(ctx, "agent_1", AgentRunStreamRequest{}); err != nil {
+		t.Fatalf("RunStreamingAgentAndWait: %v", err)
+	}
+	events, errs := c.RunStreamingAgent(ctx, "agent_1", AgentRunStreamRequest{})
+	var got []string
+	for evt := range events {
+		got = append(got, evt.Event)
+	}
+	if err := <-errs; err != nil || len(got) != 1 || got[0] != "done" {
+		t.Fatalf("RunStreamingAgent: events %v, err %v", got, err)
+	}
+}
+
 func TestGeneratedClient_ListSources_SetsAuthAndDecodes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/sources" {
@@ -1551,6 +1579,54 @@ func TestClient_RunAgentAndPoll_IncludeStepOutputsFetchesFirst(t *testing.T) {
 				}
 			} else if len(gets) != 0 || resp.Steps != nil {
 				t.Fatalf("gets %v, want the first response returned as it is", gets)
+			}
+		})
+	}
+}
+
+// With IncludeStepOutputs, a RunAgent response that would not end the poll
+// is not fetched again at once: the poll waits its interval first.
+func TestClient_RunAgentAndPoll_IncludeStepOutputsWaitsWhenUnfinished(t *testing.T) {
+	gets := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet {
+			gets++
+		}
+		_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"processing"}`)
+	}))
+	t.Cleanup(srv.Close)
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err := c.RunAgentAndPoll(ctx, "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Hour, IncludeStepOutputs: true})
+	if err != context.DeadlineExceeded || gets != 0 {
+		t.Fatalf("err %v after %d fetches, want the deadline before any fetch", err, gets)
+	}
+}
+
+// A failed GetAgentRun returns the last run polled with the error, so the
+// caller keeps its RunId: both the step-outputs fetch and a fetch in the loop.
+func TestClient_RunAgentAndPoll_FetchErrorKeepsTheRun(t *testing.T) {
+	for _, tc := range []struct{ name, status string }{
+		{"step-outputs fetch", "completed"},
+		{"loop fetch", "processing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"`+tc.status+`"}`)
+			}))
+			t.Cleanup(srv.Close)
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			res, err := c.RunAgentAndPoll(context.Background(), "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Millisecond, IncludeStepOutputs: true})
+			var statusErr *APIStatusError
+			if !errors.As(err, &statusErr) || res == nil || res.RunId != "run_1" {
+				t.Fatalf("got %v, %v; want run_1 with the *APIStatusError", res, err)
 			}
 		})
 	}

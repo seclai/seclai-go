@@ -101,6 +101,7 @@ type Options struct {
 	APIVersion string
 
 	// HTTPClient is used for requests. Defaults to a client with a 30s timeout.
+	// Its Timeout does not apply to the streaming methods, which ctx bounds.
 	HTTPClient *http.Client
 }
 
@@ -285,7 +286,7 @@ func (c *Client) applyAuth(ctx context.Context, req *http.Request) error {
 // By default (the released behaviour) apiPath is taken as unescaped and
 // escaped as a whole: pass IDs in it raw ("/agents/" + id). A "%" in it is
 // sent as %25, so an ID escaped with url.PathEscape is escaped twice, and an
-// ID containing "/" or "?" cannot be sent. With [Options.EscapedDoPaths],
+// ID containing "/" cannot be sent. With [Options.EscapedDoPaths],
 // recommended and the default from the next major version, apiPath is sent as
 // given: escape IDs with url.PathEscape ("/agents/" + url.PathEscape(id)). A
 // %XX is then taken as an escape already made and sent unchanged, a "%" that
@@ -310,8 +311,13 @@ func (c *Client) applyAuth(ctx context.Context, req *http.Request) error {
 // is sent.
 func (c *Client) Do(ctx context.Context, method, apiPath string, query map[string]string, body any, headers map[string]string, out any) error {
 	if !c.escapedDoPaths {
-		// Escape the whole path, as the released Do did.
-		apiPath = (&url.URL{Path: apiPath}).EscapedPath()
+		// As the released Do did, take the base URL's path and apiPath as
+		// unescaped and escape them: the base's own escapes are decoded too.
+		released := *c
+		base := *c.baseURL
+		base.RawPath = ""
+		released.baseURL = &base
+		return released.do(ctx, method, (&url.URL{Path: apiPath}).EscapedPath(), query, body, headers, out)
 	}
 	return c.do(ctx, method, apiPath, query, body, headers, out)
 }
@@ -1425,7 +1431,10 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 
-	resp, err := c.httpClient.Do(req)
+	// http.Client.Timeout would cut the stream while it is read; ctx bounds it.
+	streamClient := *c.httpClient
+	streamClient.Timeout = 0
+	resp, err := streamClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1481,7 +1490,11 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 				return done, nil
 			}
 			if !errorOnIncomplete {
-				// Released behaviour, kept until the next major version.
+				// The released endings, kept until the next major version,
+				// with the additions the CHANGELOG lists: the buffered event
+				// above is dispatched on any read error, not only at EOF, the
+				// latest snapshot may be the result run, and it is returned
+				// beside a timeout or read error rather than nil.
 				switch {
 				case err != io.EOF:
 					return lastSeen, err
@@ -1614,7 +1627,10 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "text/event-stream")
 
-		resp, err := c.httpClient.Do(req)
+		// http.Client.Timeout would cut the stream while it is read; ctx bounds it.
+		streamClient := *c.httpClient
+		streamClient.Timeout = 0
+		resp, err := streamClient.Do(req)
 		if err != nil {
 			errCh <- err
 			return
@@ -1726,10 +1742,11 @@ type RunAgentAndPollOptions struct {
 // RunAgentAndPoll runs an agent and polls until it reaches a terminal status
 // (completed or failed), or, with opts.ReturnOnResult, until it has reported
 // its result. The initial RunAgent response is checked before the first wait;
-// with opts.IncludeStepOutputs, which that response lacks, the run is fetched
-// once with step outputs first and that snapshot is checked instead.
-// The context controls the overall timeout: when it ends, the last polled
-// snapshot is returned with ctx.Err().
+// with opts.IncludeStepOutputs, which that response lacks, a response that
+// would end the poll is fetched again at once with step outputs, and that
+// snapshot is checked instead. The context controls the overall timeout. When
+// it ends, or a GetAgentRun fails, the last run polled is returned with the
+// error, so its RunId is kept.
 func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body AgentRunRequest, opts *RunAgentAndPollOptions) (*AgentRunResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -1753,36 +1770,33 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 	var getOpts *GetAgentRunOptions
 	if includeSteps {
 		getOpts = &GetAgentRunOptions{IncludeStepOutputs: true}
-		// The RunAgent response carries no step outputs, so it cannot end the
-		// poll: fetch the run with them before the first check.
-		run, err = c.GetAgentRun(ctx, run.RunId, getOpts)
-		if err != nil {
-			return nil, err
-		}
 	}
+	// The RunAgent response carries no step outputs, so with includeSteps it
+	// cannot end the poll: fetch the run with them first, without waiting.
+	lacksSteps := includeSteps
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
-		switch run.Status {
-		case "completed", "failed":
+		finished := run.Status == "completed" || run.Status == "failed" ||
+			(returnOnResult && run.ResultReportedAt != nil)
+		if finished && !lacksSteps {
 			return run, nil
 		}
-		if returnOnResult && run.ResultReportedAt != nil {
-			return run, nil
+		if !finished {
+			select {
+			case <-ctx.Done():
+				return run, ctx.Err()
+			case <-ticker.C:
+			}
 		}
 
-		select {
-		case <-ctx.Done():
-			return run, ctx.Err()
-		case <-ticker.C:
-		}
-
-		run, err = c.GetAgentRun(ctx, run.RunId, getOpts)
+		next, err := c.GetAgentRun(ctx, run.RunId, getOpts)
 		if err != nil {
-			return nil, err
+			return run, err
 		}
+		run, lacksSteps = next, false
 	}
 }
 

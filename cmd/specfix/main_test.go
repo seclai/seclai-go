@@ -281,3 +281,24 @@ func TestRetainRemovedRequestFields_FailsOnAStaleEntry(t *testing.T) {
 		t.Fatalf("expected the spec's own property left alone, got %v", declared)
 	}
 }
+
+// Every entry is checked before any is applied: with a stale entry after a
+// valid one, the valid one is not added either.
+func TestRetainRemovedRequestFields_StaleEntryLeavesDocUnchanged(t *testing.T) {
+	saved := retainedRequestFields
+	t.Cleanup(func() { retainedRequestFields = saved })
+	retainedRequestFields = []retainedRequestField{
+		{schema: "Req", property: "gone", def: map[string]any{"type": "string"}},
+		{schema: "Req", property: "back", def: map[string]any{"type": "string"}},
+	}
+	props := map[string]any{"back": map[string]any{"type": "string"}}
+	doc := map[string]any{"components": map[string]any{"schemas": map[string]any{
+		"Req": map[string]any{"properties": props},
+	}}}
+	if err := retainRemovedRequestFields(doc); err == nil {
+		t.Fatal("want the stale entry refused")
+	}
+	if _, added := props["gone"]; added || len(props) != 1 {
+		t.Fatalf("doc changed: %v", props)
+	}
+}

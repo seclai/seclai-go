@@ -344,23 +344,26 @@ func retainRemovedRequestFields(doc any) error {
 	root, _ := doc.(map[string]any)
 	comps, _ := root["components"].(map[string]any)
 	schemas, _ := comps["schemas"].(map[string]any)
+	var props []map[string]any
 	for _, f := range retainedRequestFields {
-		schema, ok := schemas[f.schema].(map[string]any)
-		if !ok {
-			continue
-		}
-		props, ok := schema["properties"].(map[string]any)
-		if !ok {
-			continue
-		}
-		if _, exists := props[f.property]; exists {
+		schema, _ := schemas[f.schema].(map[string]any)
+		p, _ := schema["properties"].(map[string]any)
+		if _, exists := p[f.property]; exists {
 			return fmt.Errorf("stale entry `%s.%s` in the retained-fields list: the spec declares it again; remove the entry", f.schema, f.property)
+		}
+		props = append(props, p)
+	}
+	// Every entry was checked before any is applied, so a stale one leaves doc
+	// unchanged.
+	for i, f := range retainedRequestFields {
+		if props[i] == nil {
+			continue
 		}
 		def := make(map[string]any, len(f.def))
 		for k, v := range f.def {
 			def[k] = v
 		}
-		props[f.property] = def
+		props[i][f.property] = def
 	}
 	return nil
 }
