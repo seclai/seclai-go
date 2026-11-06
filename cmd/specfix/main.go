@@ -33,6 +33,10 @@ func main() {
 	}
 
 	fix(doc)
+	if err := retainRemovedRequestFields(doc); err != nil {
+		fmt.Fprintf(os.Stderr, "specfix: %v\n", err)
+		os.Exit(1)
+	}
 	omitUnsetRequestFields(doc)
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -300,4 +304,66 @@ func omitUnsetRequestFields(doc any) {
 			}
 		}
 	}
+}
+
+// retainedRequestField is a request-body property the API no longer declares
+// but a released SDK version exposed. Go has no way to deprecate a struct field
+// other than keeping it, and the request types in package seclai are aliases of
+// the generated structs, so dropping a property from the spec would remove the
+// field and break every caller that sets it.
+type retainedRequestField struct {
+	schema, property string
+	def              map[string]any
+}
+
+// retainedRequestFields lists the removed properties to keep generating. Each
+// is marked deprecated, so oapi-codegen writes a "Deprecated:" comment that
+// editors and staticcheck surface. Remove an entry at the next major version,
+// or when the spec declares the property again: specfix then fails on the
+// stale entry rather than let it hide the spec's own definition.
+var retainedRequestFields = []retainedRequestField{
+	{
+		// Released in v1.9.0; the API ignores it since version 2026-11-04.
+		schema:   "SetSlackTriggerConfigApiRequest",
+		property: "input",
+		def: map[string]any{
+			"type":                "string",
+			"nullable":            true,
+			"deprecated":          true,
+			"x-deprecated-reason": "Ignored by the API since 2026-11-04; set Alias to choose the name people type after /seclai.",
+		},
+	},
+}
+
+// retainRemovedRequestFields adds each of retainedRequestFields back to its
+// schema. It returns an error, and changes nothing, when the spec already
+// declares one of them: the API added the property back, so the entry is stale
+// and must be removed. Call it after fix and before omitUnsetRequestFields, so
+// a nullable property is tagged omitempty.
+func retainRemovedRequestFields(doc any) error {
+	root, _ := doc.(map[string]any)
+	comps, _ := root["components"].(map[string]any)
+	schemas, _ := comps["schemas"].(map[string]any)
+	var props []map[string]any
+	for _, f := range retainedRequestFields {
+		schema, _ := schemas[f.schema].(map[string]any)
+		p, _ := schema["properties"].(map[string]any)
+		if _, exists := p[f.property]; exists {
+			return fmt.Errorf("stale entry `%s.%s` in the retained-fields list: the spec declares it again; remove the entry", f.schema, f.property)
+		}
+		props = append(props, p)
+	}
+	// Every entry was checked before any is applied, so a stale one leaves doc
+	// unchanged.
+	for i, f := range retainedRequestFields {
+		if props[i] == nil {
+			continue
+		}
+		def := make(map[string]any, len(f.def))
+		for k, v := range f.def {
+			def[k] = v
+		}
+		props[i][f.property] = def
+	}
+	return nil
 }

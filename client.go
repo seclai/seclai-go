@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -76,6 +77,14 @@ type Options struct {
 	// mis-decodes, silently. Prefer upgrading the module.
 	AllowUnknownAPIVersion bool
 
+	// EscapedDoPaths makes [Client.Do] send apiPath as given, already escaped:
+	// a %XX in it is kept as an escape. Off by default, which keeps the
+	// released behaviour: apiPath is taken as unescaped and escaped as a whole,
+	// so a % in it is sent as %25 and an ID escaped with url.PathEscape is
+	// escaped twice. It will become the default in the next major version.
+	// The client's own methods always send their IDs escaped once.
+	EscapedDoPaths bool
+
 	// APIVersion is a dated API version (YYYY-MM-DD) sent as the Seclai-Version
 	// header, opting this client into backward-incompatible API changes released
 	// on or before that date.
@@ -92,6 +101,9 @@ type Options struct {
 	APIVersion string
 
 	// HTTPClient is used for requests. Defaults to a client with a 30s timeout.
+	// Its Timeout, the 30s default included, also bounds reading a stream.
+	// How timeouts and body-read errors are reported is being reworked; see
+	// https://github.com/seclai/seclai-go/issues/21.
 	HTTPClient *http.Client
 }
 
@@ -103,6 +115,7 @@ type Client struct {
 	httpClient     *http.Client
 
 	allowUnknownAPIVersion bool
+	escapedDoPaths         bool
 
 	generated *generated.ClientWithResponses
 }
@@ -221,6 +234,7 @@ func NewClient(opts Options) (*Client, error) {
 		defaultHeaders:         defHeaders,
 		httpClient:             hc,
 		allowUnknownAPIVersion: opts.AllowUnknownAPIVersion,
+		escapedDoPaths:         opts.EscapedDoPaths,
 	}
 
 	gen, err := generated.NewClientWithResponses(parsed.String(),
@@ -268,7 +282,27 @@ func (c *Client) applyAuth(ctx context.Context, req *http.Request) error {
 	return nil
 }
 
-// Do makes a low-level request to the Seclai API.
+// Do makes a low-level request to the Seclai API. apiPath is joined to the
+// base URL's path.
+//
+// By default (the released behaviour) apiPath is taken as unescaped and
+// escaped as a whole: pass IDs in it raw ("/agents/" + id). A "%" in it is
+// sent as %25, so an ID escaped with url.PathEscape is escaped twice, and an
+// ID containing "/" cannot be sent. With [Options.EscapedDoPaths],
+// recommended and the default from the next major version, apiPath is sent as
+// given: escape IDs with url.PathEscape ("/agents/" + url.PathEscape(id)). A
+// %XX is then taken as an escape already made and sent unchanged, a "%" that
+// does not start one is sent as %25, and characters that are not allowed in a
+// path, such as a space, are escaped.
+//
+// "." and ".." segments are resolved before sending, and url.PathEscape leaves
+// them as they are: "/agents/" + url.PathEscape("..") is sent as "/". Reject an
+// ID of "." or "..", or with EscapedDoPaths write its dots as %2E, before
+// building apiPath.
+//
+// Reject a blank ID as well, which Do cannot detect: an empty segment is
+// collapsed ("/agents//runs" is sent as "/agents/runs", another endpoint),
+// and a trailing one ("/agents/") is a path Do sends as it is.
 //
 // For JSON responses, out is decoded from JSON when non-nil.
 // For non-2xx responses, an *APIStatusError or *APIValidationError is returned.
@@ -278,6 +312,21 @@ func (c *Client) applyAuth(ctx context.Context, req *http.Request) error {
 // Options.AllowUnknownAPIVersion, returns a *ConfigurationError and no request
 // is sent.
 func (c *Client) Do(ctx context.Context, method, apiPath string, query map[string]string, body any, headers map[string]string, out any) error {
+	if !c.escapedDoPaths {
+		// As the released Do did, take the base URL's path and apiPath as
+		// unescaped and escape them: the base's own escapes are decoded too.
+		released := *c
+		base := *c.baseURL
+		base.RawPath = ""
+		released.baseURL = &base
+		return released.do(ctx, method, (&url.URL{Path: apiPath}).EscapedPath(), query, body, headers, out)
+	}
+	return c.do(ctx, method, apiPath, query, body, headers, out)
+}
+
+// do is [Client.Do] with Options.EscapedDoPaths on, for the client's own
+// methods, whose paths are built with pathSegment and already escaped.
+func (c *Client) do(ctx context.Context, method, apiPath string, query map[string]string, body any, headers map[string]string, out any) error {
 	return c.doValues(ctx, method, apiPath, queryValues(query), body, headers, out)
 }
 
@@ -315,7 +364,10 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 		}
 	}
 
-	reqURL := c.buildURLValues(apiPath, query)
+	reqURL, err := c.buildURLValues(apiPath, query)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	var reqBody io.Reader
 	if body != nil {
@@ -379,7 +431,7 @@ func apiError(statusCode int, method, reqURL string, raw []byte) error {
 // organizations they belong to.
 func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	var out MeResponse
-	if err := c.Do(ctx, http.MethodGet, "/me", nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/me", nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -394,7 +446,7 @@ func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 // default — so EffectiveVersion reflects [Options.APIVersion] when it is set.
 func (c *Client) GetAPIVersion(ctx context.Context) (*ApiVersionResponse, error) {
 	var out ApiVersionResponse
-	if err := c.Do(ctx, http.MethodGet, "/version", nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/version", nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -414,7 +466,7 @@ func (c *Client) UpdateAPIVersion(ctx context.Context, version *string) (*ApiVer
 	if version == nil {
 		body = map[string]any{"version": nil}
 	}
-	if err := c.Do(ctx, http.MethodPut, "/version", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, "/version", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -494,7 +546,7 @@ func queryPositiveInt(n int) string {
 // ListAgents lists agents.
 func (c *Client) ListAgents(ctx context.Context, opts ListOptions) (*AgentListResponse, error) {
 	var out AgentListResponse
-	if err := c.Do(ctx, http.MethodGet, "/agents", listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/agents", listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -522,7 +574,7 @@ func (c *Client) ListAgentExamples(ctx context.Context, opts ListAgentExamplesOp
 		q["use_case"] = opts.UseCase
 	}
 	var out AgentExampleListResponse
-	if err := c.Do(ctx, http.MethodGet, "/agents/examples", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/agents/examples", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -531,7 +583,7 @@ func (c *Client) ListAgentExamples(ctx context.Context, opts ListAgentExamplesOp
 // CreateAgent creates a new agent.
 func (c *Client) CreateAgent(ctx context.Context, body CreateAgentRequest) (*AgentSummaryResponse, error) {
 	var out AgentSummaryResponse
-	if err := c.Do(ctx, http.MethodPost, "/agents", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/agents", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -540,7 +592,7 @@ func (c *Client) CreateAgent(ctx context.Context, body CreateAgentRequest) (*Age
 // GetAgent retrieves an agent by ID.
 func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentSummaryResponse, error) {
 	var out AgentSummaryResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s", url.PathEscape(agentID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s", pathSegment(agentID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -549,7 +601,7 @@ func (c *Client) GetAgent(ctx context.Context, agentID string) (*AgentSummaryRes
 // UpdateAgent updates an agent.
 func (c *Client) UpdateAgent(ctx context.Context, agentID string, body UpdateAgentRequest) (*AgentSummaryResponse, error) {
 	var out AgentSummaryResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s", pathSegment(agentID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -557,7 +609,7 @@ func (c *Client) UpdateAgent(ctx context.Context, agentID string, body UpdateAge
 
 // DeleteAgent deletes an agent.
 func (c *Client) DeleteAgent(ctx context.Context, agentID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/%s", url.PathEscape(agentID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/agents/%s", pathSegment(agentID)), nil, nil, nil, nil)
 }
 
 // DisableAgent pauses an agent so it stops firing from every trigger path.
@@ -566,7 +618,7 @@ func (c *Client) DeleteAgent(ctx context.Context, agentID string) error {
 // via a call_agent step; use [Client.GetAgentCallers] to list them.
 func (c *Client) DisableAgent(ctx context.Context, agentID string) (*AgentSummaryResponse, error) {
 	var out AgentSummaryResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/disable", url.PathEscape(agentID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/disable", pathSegment(agentID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -576,7 +628,7 @@ func (c *Client) DisableAgent(ctx context.Context, agentID string) (*AgentSummar
 // the inbound-email overload safeguard.
 func (c *Client) EnableAgent(ctx context.Context, agentID string) (*AgentSummaryResponse, error) {
 	var out AgentSummaryResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/enable", url.PathEscape(agentID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/enable", pathSegment(agentID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -586,7 +638,7 @@ func (c *Client) EnableAgent(ctx context.Context, agentID string) (*AgentSummary
 // step. They must be disabled before this agent can be paused.
 func (c *Client) GetAgentCallers(ctx context.Context, agentID string) ([]AgentCallerApiResponse, error) {
 	var out []AgentCallerApiResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/callers", url.PathEscape(agentID)), nil, nil, "", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/callers", pathSegment(agentID)), nil, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -598,7 +650,7 @@ func (c *Client) GetAgentCallers(ctx context.Context, agentID string) ([]AgentCa
 func (c *Client) ExportAgent(ctx context.Context, agentID string, download bool) (*AgentExportResponse, error) {
 	query := map[string]string{"download": fmt.Sprintf("%t", download)}
 	var out AgentExportResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/export", url.PathEscape(agentID)), query, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/export", pathSegment(agentID)), query, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -619,7 +671,7 @@ func (c *Client) ExportAgent(ctx context.Context, agentID string, download bool)
 // [AgentDefinitionImportErrorResponse]).
 func (c *Client) PreviewImportAgent(ctx context.Context, body AgentImportPreviewRequest) (*AgentImportPreviewResponse, error) {
 	var out AgentImportPreviewResponse
-	if err := c.Do(ctx, http.MethodPost, "/agents/preview-import", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/agents/preview-import", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -630,7 +682,7 @@ func (c *Client) PreviewImportAgent(ctx context.Context, body AgentImportPreview
 // GetAgentDefinition retrieves the definition (step configuration) for an agent.
 func (c *Client) GetAgentDefinition(ctx context.Context, agentID string) (*AgentDefinitionResponse, error) {
 	var out AgentDefinitionResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/definition", url.PathEscape(agentID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/definition", pathSegment(agentID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -639,7 +691,7 @@ func (c *Client) GetAgentDefinition(ctx context.Context, agentID string) (*Agent
 // UpdateAgentDefinition updates the definition for an agent.
 func (c *Client) UpdateAgentDefinition(ctx context.Context, agentID string, body UpdateAgentDefinitionRequest) (*AgentDefinitionResponse, error) {
 	var out AgentDefinitionResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/definition", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/definition", pathSegment(agentID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -650,7 +702,7 @@ func (c *Client) UpdateAgentDefinition(ctx context.Context, agentID string, body
 // RunAgent runs an agent.
 func (c *Client) RunAgent(ctx context.Context, agentID string, body AgentRunRequest) (*AgentRunResponse, error) {
 	var out AgentRunResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/runs", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/runs", pathSegment(agentID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -673,7 +725,7 @@ func (c *Client) ListAgentRuns(ctx context.Context, agentID string, opts ListAge
 		q["status"] = opts.Status
 	}
 	var out AgentRunListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs", url.PathEscape(agentID)), q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs", pathSegment(agentID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -682,7 +734,7 @@ func (c *Client) ListAgentRuns(ctx context.Context, agentID string, opts ListAge
 // SearchAgentRuns searches agent runs with filter criteria.
 func (c *Client) SearchAgentRuns(ctx context.Context, body AgentTraceSearchRequest) (*AgentTraceSearchResponse, error) {
 	var out AgentTraceSearchResponse
-	if err := c.Do(ctx, http.MethodPost, "/agents/runs/search", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/agents/runs/search", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -701,7 +753,7 @@ func (c *Client) GetAgentRun(ctx context.Context, runID string, opts *GetAgentRu
 		q = map[string]string{"include_step_outputs": "true"}
 	}
 	var out AgentRunResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/runs/%s", url.PathEscape(runID)), q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/runs/%s", pathSegment(runID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -724,7 +776,7 @@ func (c *Client) DeleteAgentRun(ctx context.Context, runID string) error {
 // Rejected when the run has already reached a terminal state.
 func (c *Client) CancelAgentRun(ctx context.Context, runID string) (*AgentRunResponse, error) {
 	var out AgentRunResponse
-	if err := c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/runs/%s", url.PathEscape(runID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/agents/runs/%s", pathSegment(runID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -741,7 +793,7 @@ func (c *Client) CancelAgentRun(ctx context.Context, runID string) (*AgentRunRes
 // types the API lists, and write the file's text into the run's input, so poll
 // [Client.GetAgentInputUploadStatus] until Status is "ready" before running.
 func (c *Client) UploadAgentInput(ctx context.Context, agentID string, req UploadFileRequest) (*UploadAgentInputApiResponse, error) {
-	resp, err := c.doUpload(ctx, fmt.Sprintf("/agents/%s/upload-input", url.PathEscape(agentID)), req)
+	resp, err := c.doUpload(ctx, fmt.Sprintf("/agents/%s/upload-input", pathSegment(agentID)), req)
 	if err != nil {
 		return nil, err
 	}
@@ -756,7 +808,7 @@ func (c *Client) UploadAgentInput(ctx context.Context, agentID string, req Uploa
 // version 2026-10-16 an upload is ready at once and need not be polled.
 func (c *Client) GetAgentInputUploadStatus(ctx context.Context, agentID, uploadID string) (*UploadAgentInputApiResponse, error) {
 	var out UploadAgentInputApiResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/input-uploads/%s", url.PathEscape(agentID), url.PathEscape(uploadID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/input-uploads/%s", pathSegment(agentID), pathSegment(uploadID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -771,7 +823,7 @@ func (c *Client) GetAgentInputUploadStatus(ctx context.Context, agentID, uploadI
 // selector is rejected with HTTP 400.
 func (c *Client) GetAgentAttachmentReferences(ctx context.Context, agentID string) (*AgentAttachmentRefsApiResponse, error) {
 	var out AgentAttachmentRefsApiResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/attachment-references", url.PathEscape(agentID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/attachment-references", pathSegment(agentID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -788,7 +840,41 @@ func (c *Client) GetAgentAttachmentReferences(ctx context.Context, agentID strin
 // declaration leaves out.
 func (c *Client) SetAcceptedAttachments(ctx context.Context, agentID, triggerID string, body SetAcceptedAttachmentsRequest) (*AcceptedAttachmentsResponse, error) {
 	var out AcceptedAttachmentsResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/accepted-attachments", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/accepted-attachments", pathSegment(agentID), pathSegment(triggerID)), nil, body, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetMetadataKeys returns the run metadata keys an agent's trigger declares,
+// which the agent's steps may reference as {{metadata.<key>}}, and the system
+// and source keys the trigger's type can declare.
+//
+// triggerID is the TriggerId that [Client.GetAgent] returns.
+func (c *Client) GetMetadataKeys(ctx context.Context, agentID, triggerID string) (*MetadataKeysResponse, error) {
+	var out MetadataKeysResponse
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/triggers/%s/metadata-keys", pathSegment(agentID), pathSegment(triggerID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SetMetadataKeys replaces the run metadata keys an agent's trigger declares.
+// body.MetadataKeys is the whole declaration: a key left out is no longer
+// declared. Pass an empty, non-nil slice to clear it; a nil MetadataKeys is
+// refused with a [*ConfigurationError] before anything is sent. A
+// caller-started run that sends an undeclared custom key, or lacks a required
+// one, is refused with HTTP 400.
+//
+// The API answers 400 when the agent references a key no trigger of its
+// branch declares. Warnings on the response lists agents whose call_agent
+// mapping no longer fits the new declaration.
+func (c *Client) SetMetadataKeys(ctx context.Context, agentID, triggerID string, body SetMetadataKeysRequest) (*MetadataKeysResponse, error) {
+	if body.MetadataKeys == nil {
+		return nil, &ConfigurationError{Message: "SetMetadataKeys: MetadataKeys must not be nil; pass an empty slice to clear"}
+	}
+	var out MetadataKeysResponse
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/metadata-keys", pathSegment(agentID), pathSegment(triggerID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -806,7 +892,7 @@ func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachme
 	if downloadName != "" {
 		query = map[string]string{"download_name": downloadName}
 	}
-	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/v2/agent-runs/%s/attachments/%s", url.PathEscape(runID), url.PathEscape(attachmentID)), query)
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/v2/agent-runs/%s/attachments/%s", pathSegment(runID), pathSegment(attachmentID)), query)
 }
 
 // doRaw issues a request without a body and returns the 2xx response
@@ -818,7 +904,10 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	reqURL := c.buildURL(apiPath, query)
+	reqURL, err := c.buildURL(apiPath, query)
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, method, reqURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -846,7 +935,7 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 // GenerateAgentSteps uses the AI assistant to generate step configurations for an agent.
 func (c *Client) GenerateAgentSteps(ctx context.Context, agentID string, body GenerateAgentStepsRequest) (*GenerateAgentStepsResponse, error) {
 	var out GenerateAgentStepsResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/ai-assistant/generate-steps", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/ai-assistant/generate-steps", pathSegment(agentID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -855,7 +944,7 @@ func (c *Client) GenerateAgentSteps(ctx context.Context, agentID string, body Ge
 // GenerateStepConfig uses the AI assistant to generate configuration for a single step.
 func (c *Client) GenerateStepConfig(ctx context.Context, agentID string, body GenerateStepConfigRequest) (*GenerateStepConfigResponse, error) {
 	var out GenerateStepConfigResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/ai-assistant/step-config", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/ai-assistant/step-config", pathSegment(agentID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -896,7 +985,7 @@ func (c *Client) GetAgentAiConversationHistoryWithOptions(ctx context.Context, a
 		q["offset"] = fmt.Sprintf("%d", opts.Offset)
 	}
 	var out AiConversationHistoryResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/ai-assistant/conversations", url.PathEscape(agentID)), q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/ai-assistant/conversations", pathSegment(agentID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -916,7 +1005,7 @@ type AiConversationHistoryOptions struct {
 
 // MarkAgentAiSuggestion marks an AI assistant suggestion as accepted/rejected.
 func (c *Client) MarkAgentAiSuggestion(ctx context.Context, agentID, conversationID string, body MarkAiSuggestionRequest) error {
-	return c.Do(ctx, http.MethodPatch, fmt.Sprintf("/agents/%s/ai-assistant/%s", url.PathEscape(agentID), url.PathEscape(conversationID)), nil, body, nil, nil)
+	return c.do(ctx, http.MethodPatch, fmt.Sprintf("/agents/%s/ai-assistant/%s", pathSegment(agentID), pathSegment(conversationID)), nil, body, nil, nil)
 }
 
 // ── Agent Evaluations ───────────────────────────────────────────────────────
@@ -941,7 +1030,7 @@ func (c *Client) ListEvaluationCriteria(ctx context.Context, agentID string, opt
 // other arrives. Pagination is nil on the bare-array shape.
 func (c *Client) ListEvaluationCriteriaPage(ctx context.Context, agentID string, opts ListOptions) (*EvaluationCriteriaListResponse, error) {
 	var out EvaluationCriteriaListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-criteria", url.PathEscape(agentID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-criteria", pathSegment(agentID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -950,7 +1039,7 @@ func (c *Client) ListEvaluationCriteriaPage(ctx context.Context, agentID string,
 // CreateEvaluationCriteria creates new evaluation criteria for an agent.
 func (c *Client) CreateEvaluationCriteria(ctx context.Context, agentID string, body CreateEvaluationCriteriaRequest) (*EvaluationCriteriaResponse, error) {
 	var out EvaluationCriteriaResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/evaluation-criteria", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/evaluation-criteria", pathSegment(agentID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -959,7 +1048,7 @@ func (c *Client) CreateEvaluationCriteria(ctx context.Context, agentID string, b
 // GetEvaluationCriteria retrieves evaluation criteria by ID.
 func (c *Client) GetEvaluationCriteria(ctx context.Context, criteriaID string) (*EvaluationCriteriaResponse, error) {
 	var out EvaluationCriteriaResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s", url.PathEscape(criteriaID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s", pathSegment(criteriaID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -968,7 +1057,7 @@ func (c *Client) GetEvaluationCriteria(ctx context.Context, criteriaID string) (
 // UpdateEvaluationCriteria updates evaluation criteria.
 func (c *Client) UpdateEvaluationCriteria(ctx context.Context, criteriaID string, body UpdateEvaluationCriteriaRequest) (*EvaluationCriteriaResponse, error) {
 	var out EvaluationCriteriaResponse
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/agents/evaluation-criteria/%s", url.PathEscape(criteriaID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/agents/evaluation-criteria/%s", pathSegment(criteriaID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1018,7 +1107,7 @@ func (c *Client) ClearEvaluationCriteriaFields(ctx context.Context, criteriaID s
 		}
 	}
 	var out EvaluationCriteriaResponse
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/agents/evaluation-criteria/%s", url.PathEscape(criteriaID)), nil, payload, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/agents/evaluation-criteria/%s", pathSegment(criteriaID)), nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1026,13 +1115,13 @@ func (c *Client) ClearEvaluationCriteriaFields(ctx context.Context, criteriaID s
 
 // DeleteEvaluationCriteria deletes evaluation criteria.
 func (c *Client) DeleteEvaluationCriteria(ctx context.Context, criteriaID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/evaluation-criteria/%s", url.PathEscape(criteriaID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/agents/evaluation-criteria/%s", pathSegment(criteriaID)), nil, nil, nil, nil)
 }
 
 // GetEvaluationCriteriaSummary retrieves the summary for evaluation criteria.
 func (c *Client) GetEvaluationCriteriaSummary(ctx context.Context, criteriaID string) (*EvaluationResultSummaryResponse, error) {
 	var out EvaluationResultSummaryResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/summary", url.PathEscape(criteriaID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/summary", pathSegment(criteriaID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1070,7 +1159,7 @@ func (c *Client) ListEvaluationResultsWithOptions(ctx context.Context, criteriaI
 		"time_to":      opts.TimeTo,
 	})
 	var out EvaluationResultListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/results", url.PathEscape(criteriaID)), q, nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/results", pathSegment(criteriaID)), q, nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1079,7 +1168,7 @@ func (c *Client) ListEvaluationResultsWithOptions(ctx context.Context, criteriaI
 // CreateEvaluationResult creates a new evaluation result for criteria.
 func (c *Client) CreateEvaluationResult(ctx context.Context, criteriaID string, body CreateEvaluationResultRequest) (*EvaluationResultResponse, error) {
 	var out EvaluationResultResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/evaluation-criteria/%s/results", url.PathEscape(criteriaID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/agents/evaluation-criteria/%s/results", pathSegment(criteriaID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1108,7 +1197,7 @@ func (c *Client) ListCompatibleRunsWithOptions(ctx context.Context, criteriaID s
 		q["started_after"] = opts.StartedAfter
 	}
 	var out CompatibleRunListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/compatible-runs", url.PathEscape(criteriaID)), q, nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/evaluation-criteria/%s/compatible-runs", pathSegment(criteriaID)), q, nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1117,7 +1206,7 @@ func (c *Client) ListCompatibleRunsWithOptions(ctx context.Context, criteriaID s
 // TestDraftEvaluation tests a draft evaluation criteria without persisting.
 func (c *Client) TestDraftEvaluation(ctx context.Context, agentID string, body TestDraftEvaluationRequest) (*TestDraftEvaluationResponse, error) {
 	var out TestDraftEvaluationResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/evaluation-criteria/test-draft", url.PathEscape(agentID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/agents/%s/evaluation-criteria/test-draft", pathSegment(agentID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1158,7 +1247,7 @@ func (c *Client) ListAgentEvaluationResultsWithOptions(ctx context.Context, agen
 		"time_to":      opts.TimeTo,
 	})
 	var out EvaluationResultWithCriteriaListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-results", url.PathEscape(agentID)), q, nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-results", pathSegment(agentID)), q, nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1171,7 +1260,7 @@ func (c *Client) ListAgentEvaluationResultsWithOptions(ctx context.Context, agen
 // or later, so Total, Page and Limit are zero in the former case.
 func (c *Client) ListRunEvaluationResults(ctx context.Context, agentID, runID string, opts ListOptions) (*EvaluationResultWithCriteriaListResponse, error) {
 	var out EvaluationResultWithCriteriaListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s/evaluation-results", url.PathEscape(agentID), url.PathEscape(runID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/runs/%s/evaluation-results", pathSegment(agentID), pathSegment(runID)), listQuery(opts.Page, opts.Limit), nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1209,7 +1298,7 @@ func (c *Client) ListEvaluationRunsWithOptions(ctx context.Context, agentID stri
 		"time_to":   opts.TimeTo,
 	})
 	var out EvaluationRunSummaryListResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-runs", url.PathEscape(agentID)), q, nil, "data", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/agents/%s/evaluation-runs", pathSegment(agentID)), q, nil, "data", &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1252,24 +1341,70 @@ func (c *Client) GetNonManualEvaluationSummaryWithOptions(ctx context.Context, o
 		"end_date":   opts.EndDate,
 	})
 	var out NonManualEvaluationSummaryResponse
-	if err := c.Do(ctx, http.MethodGet, "/agents/evaluation-results/non-manual-summary", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/agents/evaluation-results/non-manual-summary", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
+// RunStreamingAgentAndWaitOptions controls [Client.RunStreamingAgentAndWaitWithOptions].
+type RunStreamingAgentAndWaitOptions struct {
+	// ReturnOnResult returns the run from the `event: result` message, sent
+	// once the run has reported its result, without waiting for `done`. Its
+	// Output is the run's answer and does not change, but its Status may not be
+	// terminal: later steps may still run and the run can still fail. Check
+	// ResultReportedAt, not Status.
+	ReturnOnResult bool
+	// ErrorOnIncomplete returns a [*StreamingError] carrying the latest
+	// snapshot in its Run, rather than the released behaviour, whenever the
+	// wait ends without the run it was waiting for after the stream has
+	// opened: on a timeout, or when the stream ends or breaks first.
+	// Cancelling ctx after the stream has opened returns the latest snapshot
+	// with ctx.Err() instead. It
+	// will become the default in the next major version.
+	ErrorOnIncomplete bool
+}
+
 // RunStreamingAgentAndWait runs an agent in priority mode and waits for completion.
+// It is [Client.RunStreamingAgentAndWaitWithOptions] with nil options.
+func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, body AgentRunStreamRequest) (*AgentRunResponse, error) {
+	return c.RunStreamingAgentAndWaitWithOptions(ctx, agentID, body, nil)
+}
+
+// RunStreamingAgentAndWaitWithOptions runs an agent in priority mode and waits
+// for completion.
 //
 // This method calls POST /agents/{agent_id}/runs/stream and consumes Server-Sent Events (SSE).
-// It returns when the stream emits an `event: done` message whose `data:` field contains the final run payload.
+// It returns when the stream emits an `event: done` message whose `data:` field
+// contains the final run payload, or, with opts.ReturnOnResult, the
+// `event: result` one (see [RunStreamingAgentAndWaitOptions]).
 //
-// Timeout behavior is controlled by ctx (for example, use context.WithTimeout). If ctx has no deadline,
-// a default 60s timeout is applied.
+// The latest snapshot read is the `event: result` run if one arrived
+// (ResultReportedAt is set and Output is the answer), else the `event: init`
+// one, else nil. If the stream ends or breaks before the event it waits for,
+// or the timeout passes:
 //
-// body.IncludeReasoning is not sent: this method reads only the final run, so
-// reasoning events would be streamed only to be discarded while counting
+//   - By default (the released behaviour), a stream that ends returns the
+//     latest snapshot with a nil error, though the run may not have finished:
+//     check its Status and ResultReportedAt. With no snapshot it returns a
+//     [*StreamingError]. A timeout or a broken stream returns the error with
+//     the latest snapshot beside it.
+//   - With opts.ErrorOnIncomplete, recommended and the default from the next
+//     major version: once the stream has opened, a timeout or a stream that
+//     ends or breaks returns the latest snapshot together with a
+//     [*StreamingError] whose Run is that snapshot, and cancelling ctx returns
+//     the latest snapshot with ctx.Err() instead.
+//
+// Whichever bound passes first ends the wait: ctx's deadline (60s by default
+// when ctx has none), or the HTTP client's Timeout (30s with the default
+// client; see [Options.HTTPClient]).
+//
+// body.IncludeReasoning is not sent: this method reads only the run snapshots,
+// so reasoning events would be streamed only to be discarded while counting
 // against the timeout. Use [Client.RunStreamingAgent] to receive them.
-func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, body AgentRunStreamRequest) (*AgentRunResponse, error) {
+func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentID string, body AgentRunStreamRequest, opts *RunStreamingAgentAndWaitOptions) (*AgentRunResponse, error) {
+	returnOnResult := opts != nil && opts.ReturnOnResult
+	errorOnIncomplete := opts != nil && opts.ErrorOnIncomplete
 	body.IncludeReasoning = nil
 	if ctx == nil {
 		ctx = context.Background()
@@ -1280,7 +1415,10 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 		defer cancel()
 	}
 
-	reqURL := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", url.PathEscape(agentID)), nil)
+	reqURL, err := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", pathSegment(agentID)), nil)
+	if err != nil {
+		return nil, err
+	}
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -1314,7 +1452,9 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 	var currentEvent string
 	var dataLines []string
 	var lastSeen *AgentRunResponse
+	var sawResult bool
 
+	// dispatch reports the run to return when the event finishes the wait.
 	dispatch := func() (*AgentRunResponse, bool) {
 		if currentEvent == "" && len(dataLines) == 0 {
 			return nil, false
@@ -1330,11 +1470,14 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 			return nil, false
 		}
 
-		if currentEvent == "init" || currentEvent == "done" {
+		if currentEvent == "init" || currentEvent == "result" || currentEvent == "done" {
 			var parsed AgentRunResponse
 			if err := json.Unmarshal([]byte(data), &parsed); err == nil {
 				lastSeen = &parsed
-				if currentEvent == "done" {
+				if currentEvent == "result" {
+					sawResult = true
+				}
+				if currentEvent == "done" || (returnOnResult && currentEvent == "result") {
 					return &parsed, true
 				}
 			}
@@ -1345,16 +1488,46 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			if err == io.EOF {
-				if done, ok := dispatch(); ok {
-					return done, nil
-				}
-				if lastSeen != nil {
+			// Use an event whose lines were read but whose blank line was not.
+			if done, ok := dispatch(); ok {
+				return done, nil
+			}
+			if !errorOnIncomplete {
+				// The released endings, kept until the next major version,
+				// with the additions the CHANGELOG lists: the buffered event
+				// above is dispatched on any read error, not only at EOF, the
+				// latest snapshot may be the result run, and it is returned
+				// beside a timeout or read error rather than nil.
+				switch {
+				case err != io.EOF:
+					return lastSeen, err
+				case lastSeen != nil:
 					return lastSeen, nil
 				}
 				return nil, &StreamingError{Message: "stream ended before receiving done event"}
 			}
-			return nil, err
+			ctxErr := ctx.Err()
+			if errors.Is(ctxErr, context.Canceled) {
+				return lastSeen, ctxErr
+			}
+			streamErr := &StreamingError{Run: lastSeen}
+			switch {
+			case ctxErr != nil:
+				streamErr.Message, streamErr.Err = "timed out before receiving done event", ctxErr
+			case err == io.EOF:
+				streamErr.Message = "stream ended before receiving done event"
+			default:
+				streamErr.Message, streamErr.Err = "stream broke before receiving done event", err
+			}
+			if sawResult {
+				streamErr.Message += " (a result had been reported; see Run)"
+			} else {
+				streamErr.Message += " (no result had been reported)"
+			}
+			if lastSeen != nil {
+				streamErr.RunID = lastSeen.RunId
+			}
+			return lastSeen, streamErr
 		}
 
 		line = strings.TrimRight(line, "\r\n")
@@ -1389,7 +1562,10 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 
 // AgentRunEvent is a single event from an SSE agent run stream.
 type AgentRunEvent struct {
-	// Event is the SSE event type (e.g. "init", "update", "done").
+	// Event is the SSE event type (e.g. "init", "update", "result", "done").
+	// "result" carries the run once it has reported its result
+	// (ResultReportedAt is set and Output is the answer); it comes before
+	// "done", possibly while later steps still run.
 	Event string
 	// Data is the raw JSON data payload.
 	Data string
@@ -1399,7 +1575,13 @@ type AgentRunEvent struct {
 
 // RunStreamingAgent runs an agent in priority mode and returns a channel that
 // yields SSE events as they arrive. The channel is closed when the stream ends
-// or when ctx is cancelled.
+// or when ctx is cancelled. Take the run's answer from the "result" event's
+// Run; the "done" event's Run is the terminal snapshot, and its Status says
+// whether the whole run succeeded, which can still fail after its result.
+//
+// When the server answers with plain JSON instead of an SSE stream, the
+// channel yields only a "done" event, so done may be the only event: read the
+// answer from its Run.
 //
 // The caller should range over the returned channel:
 //
@@ -1422,7 +1604,11 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 			ctx = context.Background()
 		}
 
-		reqURL := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", url.PathEscape(agentID)), nil)
+		reqURL, err := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", pathSegment(agentID)), nil)
+		if err != nil {
+			errCh <- err
+			return
+		}
 		b, err := json.Marshal(body)
 		if err != nil {
 			errCh <- err
@@ -1545,10 +1731,25 @@ type RunAgentAndPollOptions struct {
 	PollInterval time.Duration
 	// IncludeStepOutputs requests step details in the final result.
 	IncludeStepOutputs bool
+	// ReturnOnResult returns as soon as a snapshot has ResultReportedAt set:
+	// its Output is the run's answer and does not change, but its Status may
+	// not be terminal: later steps may still run and the run can still fail.
+	// Check ResultReportedAt, not Status. When false, polling continues until
+	// the run is completed or failed.
+	ReturnOnResult bool
 }
 
 // RunAgentAndPoll runs an agent and polls until it reaches a terminal status
-// (completed or failed). The context controls the overall timeout.
+// (completed or failed), or, with opts.ReturnOnResult, until it has reported
+// its result. The initial RunAgent response is checked before the first wait;
+// with opts.IncludeStepOutputs, which that response lacks, a response that
+// would end the poll is fetched again at once with step outputs, and that
+// snapshot is checked instead. The context controls the overall timeout.
+//
+// When ctx ends during the wait between polls, the last run polled is
+// returned with ctx.Err(). When a poll's GetAgentRun fails, the last run
+// polled is returned with that fetch's error; a failed starting RunAgent
+// returns nil.
 func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body AgentRunRequest, opts *RunAgentAndPollOptions) (*AgentRunResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -1560,38 +1761,45 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 	}
 
 	interval := 2 * time.Second
-	var includeSteps bool
+	var includeSteps, returnOnResult bool
 	if opts != nil {
 		if opts.PollInterval > 0 {
 			interval = opts.PollInterval
 		}
 		includeSteps = opts.IncludeStepOutputs
+		returnOnResult = opts.ReturnOnResult
 	}
 
 	var getOpts *GetAgentRunOptions
 	if includeSteps {
 		getOpts = &GetAgentRunOptions{IncludeStepOutputs: true}
 	}
+	// The RunAgent response carries no step outputs, so with includeSteps it
+	// cannot end the poll: fetch the run with them first, without waiting.
+	lacksSteps := includeSteps
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
-		switch run.Status {
-		case "completed", "failed":
+		finished := run.Status == "completed" || run.Status == "failed" ||
+			(returnOnResult && run.ResultReportedAt != nil)
+		if finished && !lacksSteps {
 			return run, nil
 		}
-
-		select {
-		case <-ctx.Done():
-			return run, ctx.Err()
-		case <-ticker.C:
+		if !finished {
+			select {
+			case <-ctx.Done():
+				return run, ctx.Err()
+			case <-ticker.C:
+			}
 		}
 
-		run, err = c.GetAgentRun(ctx, run.RunId, getOpts)
+		next, err := c.GetAgentRun(ctx, run.RunId, getOpts)
 		if err != nil {
-			return nil, err
+			return run, err
 		}
+		run, lacksSteps = next, false
 	}
 }
 
@@ -1628,7 +1836,10 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 		mimeType = strings.TrimSpace(mime.TypeByExtension(filepath.Ext(req.FileName)))
 	}
 
-	reqURL := c.buildURL(apiPath, nil)
+	reqURL, err := c.buildURL(apiPath, nil)
+	if err != nil {
+		return nil, err
+	}
 
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
@@ -1643,10 +1854,7 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 		}
 		_ = w.WriteField("metadata", string(b))
 	}
-	var (
-		fw  io.Writer
-		err error
-	)
+	var fw io.Writer
 	if mimeType != "" {
 		fileName := strings.ReplaceAll(req.FileName, "\"", "")
 		h := make(textproto.MIMEHeader)
@@ -1694,7 +1902,7 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 
 // UploadFileToSource uploads a file to a source connection.
 func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID string, req UploadFileRequest) (*FileUploadResponse, error) {
-	raw, err := c.doUpload(ctx, fmt.Sprintf("/sources/%s/upload", url.PathEscape(sourceConnectionID)), req)
+	raw, err := c.doUpload(ctx, fmt.Sprintf("/sources/%s/upload", pathSegment(sourceConnectionID)), req)
 	if err != nil {
 		return nil, err
 	}
@@ -1710,7 +1918,7 @@ func (c *Client) UploadFileToSource(ctx context.Context, sourceConnectionID stri
 // UploadInlineTextToSource submits inline text content to a source.
 func (c *Client) UploadInlineTextToSource(ctx context.Context, sourceConnectionID string, body InlineTextUploadRequest) (*FileUploadResponse, error) {
 	var out FileUploadResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s", url.PathEscape(sourceConnectionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s", pathSegment(sourceConnectionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1718,10 +1926,7 @@ func (c *Client) UploadInlineTextToSource(ctx context.Context, sourceConnectionI
 
 // UploadFileToContent replaces the file backing an existing content version.
 func (c *Client) UploadFileToContent(ctx context.Context, contentVersionID string, req UploadFileRequest) (*ContentFileUploadResponse, error) {
-	if strings.TrimSpace(contentVersionID) == "" {
-		return nil, &ConfigurationError{Message: "contentVersionID must not be blank"}
-	}
-	raw, err := c.doUpload(ctx, fmt.Sprintf("/contents/%s/upload", url.PathEscape(contentVersionID)), req)
+	raw, err := c.doUpload(ctx, fmt.Sprintf("/contents/%s/upload", pathSegment(contentVersionID)), req)
 	if err != nil {
 		return nil, err
 	}
@@ -1744,7 +1949,7 @@ func (c *Client) UploadFileToContent(ctx context.Context, contentVersionID strin
 // clears the allowlist.
 func (c *Client) SetEmailTriggerConfig(ctx context.Context, agentID string, triggerID string, body RoutersApiAgentsSetEmailTriggerConfigRequest) (*EmailTriggerConfigResponse, error) {
 	var out EmailTriggerConfigResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/email-config", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/email-config", pathSegment(agentID), pathSegment(triggerID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1762,7 +1967,7 @@ func (c *Client) SetEmailTriggerConfig(ctx context.Context, agentID string, trig
 // ClearSlackTriggerMaxTurns.
 func (c *Client) SetSlackTriggerConfig(ctx context.Context, agentID string, triggerID string, body SetSlackTriggerConfigRequest) (*SlackTriggerConfigResponse, error) {
 	var out SlackTriggerConfigResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/slack-config", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/slack-config", pathSegment(agentID), pathSegment(triggerID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1775,7 +1980,7 @@ func (c *Client) SetSlackTriggerConfig(ctx context.Context, agentID string, trig
 func (c *Client) ClearSlackTriggerMaxTurns(ctx context.Context, agentID string, triggerID string) (*SlackTriggerConfigResponse, error) {
 	var out SlackTriggerConfigResponse
 	payload := map[string]any{"max_turns": nil}
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/slack-config", url.PathEscape(agentID), url.PathEscape(triggerID)), nil, payload, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/agents/%s/triggers/%s/slack-config", pathSegment(agentID), pathSegment(triggerID)), nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1833,7 +2038,7 @@ func (c *Client) ListAgentEmailOptOuts(ctx context.Context, opts AgentEmailOptOu
 
 // RemoveAgentEmailOptOut revokes an opt-out, opting the recipient back in.
 func (c *Client) RemoveAgentEmailOptOut(ctx context.Context, optoutID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/agent-email-optouts/%s", url.PathEscape(optoutID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/agents/agent-email-optouts/%s", pathSegment(optoutID)), nil, nil, nil, nil)
 }
 
 // ListBlockedEmailSenders lists the account's blocked inbound email senders
@@ -1857,7 +2062,7 @@ func (c *Client) ListBlockedEmailSenders(ctx context.Context, opts BlockedEmailS
 // blocklist. Idempotent. Requires an account owner or admin.
 func (c *Client) BlockEmailSender(ctx context.Context, body BlockEmailSenderRequest) (*BlockedEmailSenderResponse, error) {
 	var out BlockedEmailSenderResponse
-	if err := c.Do(ctx, http.MethodPost, "/agents/blocked-email-senders", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/agents/blocked-email-senders", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1866,7 +2071,7 @@ func (c *Client) BlockEmailSender(ctx context.Context, body BlockEmailSenderRequ
 // UnblockEmailSender removes a blocked sender by ID. Requires an account
 // owner or admin.
 func (c *Client) UnblockEmailSender(ctx context.Context, blockedID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/agents/blocked-email-senders/%s", url.PathEscape(blockedID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/agents/blocked-email-senders/%s", pathSegment(blockedID)), nil, nil, nil, nil)
 }
 
 // SetAutoBlockMode sets whether a governance BLOCK on an authenticated inbound
@@ -1901,7 +2106,7 @@ func (c *Client) ListInboundEmailRejections(ctx context.Context, opts InboundEma
 // breaker has paused new inbound email, plus the queued backlog size.
 func (c *Client) GetInboundEmailStatus(ctx context.Context) (*InboundEmailStatusResponse, error) {
 	var out InboundEmailStatusResponse
-	if err := c.Do(ctx, http.MethodGet, "/agents/inbound-email-status", nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/agents/inbound-email-status", nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1911,7 +2116,7 @@ func (c *Client) GetInboundEmailStatus(ctx context.Context) (*InboundEmailStatus
 // inbound-email runs. Requires an account owner or admin.
 func (c *Client) CancelQueuedEmailRuns(ctx context.Context) (*CancelQueuedRunsResponse, error) {
 	var out CancelQueuedRunsResponse
-	if err := c.Do(ctx, http.MethodPost, "/agents/inbound-email-status/cancel-queued", nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/agents/inbound-email-status/cancel-queued", nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1921,7 +2126,7 @@ func (c *Client) CancelQueuedEmailRuns(ctx context.Context) (*CancelQueuedRunsRe
 // the breaker re-arms if the backlog is still above the ceiling.
 func (c *Client) ResumeInboundEmail(ctx context.Context) (*ResumeInboundResponse, error) {
 	var out ResumeInboundResponse
-	if err := c.Do(ctx, http.MethodPost, "/agents/inbound-email-status/resume", nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/agents/inbound-email-status/resume", nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1941,7 +2146,7 @@ func (c *Client) ListKnowledgeBases(ctx context.Context, opts SortableListOption
 // CreateKnowledgeBase creates a new knowledge base.
 func (c *Client) CreateKnowledgeBase(ctx context.Context, body CreateKnowledgeBaseBody) (*KnowledgeBaseResponse, error) {
 	var out KnowledgeBaseResponse
-	if err := c.Do(ctx, http.MethodPost, "/knowledge_bases", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/knowledge_bases", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1950,7 +2155,18 @@ func (c *Client) CreateKnowledgeBase(ctx context.Context, body CreateKnowledgeBa
 // GetKnowledgeBase retrieves a knowledge base by ID.
 func (c *Client) GetKnowledgeBase(ctx context.Context, knowledgeBaseID string) (*KnowledgeBaseResponse, error) {
 	var out KnowledgeBaseResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/knowledge_bases/%s", url.PathEscape(knowledgeBaseID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/knowledge_bases/%s", pathSegment(knowledgeBaseID)), nil, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetKnowledgeBaseMetadataKeyStats returns the item-metadata keys seen in a
+// knowledge base's content, with item counts and each key's most frequent
+// values, for all time and the last 30 and 7 days.
+func (c *Client) GetKnowledgeBaseMetadataKeyStats(ctx context.Context, knowledgeBaseID string) (*KnowledgeBaseMetadataKeyStatsResponse, error) {
+	var out KnowledgeBaseMetadataKeyStatsResponse
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/knowledge_bases/%s/metadata-key-stats", pathSegment(knowledgeBaseID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1959,7 +2175,7 @@ func (c *Client) GetKnowledgeBase(ctx context.Context, knowledgeBaseID string) (
 // UpdateKnowledgeBase updates a knowledge base.
 func (c *Client) UpdateKnowledgeBase(ctx context.Context, knowledgeBaseID string, body UpdateKnowledgeBaseBody) (*KnowledgeBaseResponse, error) {
 	var out KnowledgeBaseResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/knowledge_bases/%s", url.PathEscape(knowledgeBaseID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/knowledge_bases/%s", pathSegment(knowledgeBaseID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -1967,7 +2183,7 @@ func (c *Client) UpdateKnowledgeBase(ctx context.Context, knowledgeBaseID string
 
 // DeleteKnowledgeBase deletes a knowledge base.
 func (c *Client) DeleteKnowledgeBase(ctx context.Context, knowledgeBaseID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/knowledge_bases/%s", url.PathEscape(knowledgeBaseID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/knowledge_bases/%s", pathSegment(knowledgeBaseID)), nil, nil, nil, nil)
 }
 
 // ── Memory Banks ────────────────────────────────────────────────────────────
@@ -2040,7 +2256,7 @@ func (c *Client) CreateMemoryBankWithOptions(ctx context.Context, body CreateMem
 		}{CreateMemoryBankBody: body}
 	}
 	var out MemoryBankResponse
-	if err := c.Do(ctx, http.MethodPost, "/memory_banks", nil, payload, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/memory_banks", nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2049,7 +2265,7 @@ func (c *Client) CreateMemoryBankWithOptions(ctx context.Context, body CreateMem
 // GetMemoryBank retrieves a memory bank by ID.
 func (c *Client) GetMemoryBank(ctx context.Context, memoryBankID string) (*MemoryBankResponse, error) {
 	var out MemoryBankResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s", url.PathEscape(memoryBankID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s", pathSegment(memoryBankID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2060,7 +2276,7 @@ func (c *Client) GetMemoryBank(ctx context.Context, memoryBankID string) (*Memor
 // window, use [Client.ClearMemoryBankRetention].
 func (c *Client) UpdateMemoryBank(ctx context.Context, memoryBankID string, body UpdateMemoryBankBody) (*MemoryBankResponse, error) {
 	var out MemoryBankResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/memory_banks/%s", url.PathEscape(memoryBankID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/memory_banks/%s", pathSegment(memoryBankID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2077,7 +2293,7 @@ func (c *Client) ClearMemoryBankRetention(ctx context.Context, memoryBankID stri
 
 // DeleteMemoryBank deletes a memory bank.
 func (c *Client) DeleteMemoryBank(ctx context.Context, memoryBankID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/memory_banks/%s", url.PathEscape(memoryBankID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/memory_banks/%s", pathSegment(memoryBankID)), nil, nil, nil, nil)
 }
 
 // GetAgentsUsingMemoryBank lists agents that use a memory bank.
@@ -2088,7 +2304,7 @@ func (c *Client) GetAgentsUsingMemoryBank(ctx context.Context, memoryBankID stri
 
 // agentsUsingMemoryBankBody is the request behind [Client.GetAgentsUsingMemoryBank] and its typed form.
 func (c *Client) agentsUsingMemoryBankBody(ctx context.Context, memoryBankID string) ([]byte, *url.URL, error) {
-	return c.doBytes(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/agents", url.PathEscape(memoryBankID)), nil, nil, nil)
+	return c.doBytes(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/agents", pathSegment(memoryBankID)), nil, nil, nil)
 }
 
 // GetMemoryBankStats retrieves statistics for a memory bank.
@@ -2123,7 +2339,7 @@ func (c *Client) GetMemoryBankStatsWithOptions(ctx context.Context, memoryBankID
 		"end_date":   opts.EndDate,
 	})
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/stats", url.PathEscape(memoryBankID)), q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/memory_banks/%s/stats", pathSegment(memoryBankID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2131,18 +2347,18 @@ func (c *Client) GetMemoryBankStatsWithOptions(ctx context.Context, memoryBankID
 
 // CompactMemoryBank triggers compaction for a memory bank.
 func (c *Client) CompactMemoryBank(ctx context.Context, memoryBankID string) error {
-	return c.Do(ctx, http.MethodPost, fmt.Sprintf("/memory_banks/%s/compact", url.PathEscape(memoryBankID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/memory_banks/%s/compact", pathSegment(memoryBankID)), nil, nil, nil, nil)
 }
 
 // DeleteMemoryBankSource deletes the source associated with a memory bank.
 func (c *Client) DeleteMemoryBankSource(ctx context.Context, memoryBankID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/memory_banks/%s/source", url.PathEscape(memoryBankID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/memory_banks/%s/source", pathSegment(memoryBankID)), nil, nil, nil, nil)
 }
 
 // TestMemoryBankCompaction tests compaction for a memory bank.
 func (c *Client) TestMemoryBankCompaction(ctx context.Context, memoryBankID string, body TestCompactionRequest) (*CompactionTestResponse, error) {
 	var out CompactionTestResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/memory_banks/%s/test-compaction", url.PathEscape(memoryBankID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/memory_banks/%s/test-compaction", pathSegment(memoryBankID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2151,7 +2367,7 @@ func (c *Client) TestMemoryBankCompaction(ctx context.Context, memoryBankID stri
 // TestCompactionPromptStandalone tests a compaction prompt without a memory bank.
 func (c *Client) TestCompactionPromptStandalone(ctx context.Context, body StandaloneTestCompactionRequest) (*CompactionTestResponse, error) {
 	var out CompactionTestResponse
-	if err := c.Do(ctx, http.MethodPost, "/memory_banks/test-compaction", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/memory_banks/test-compaction", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2173,7 +2389,7 @@ func (c *Client) memoryBankTemplatesBody(ctx context.Context) ([]byte, *url.URL,
 // GenerateMemoryBankConfig uses the AI assistant to generate memory bank configuration.
 func (c *Client) GenerateMemoryBankConfig(ctx context.Context, body MemoryBankAiAssistantRequest) (*MemoryBankAiAssistantResponse, error) {
 	var out MemoryBankAiAssistantResponse
-	if err := c.Do(ctx, http.MethodPost, "/memory_banks/ai-assistant", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/memory_banks/ai-assistant", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2204,7 +2420,7 @@ func (c *Client) GetMemoryBankAiLastConversationWithOptions(ctx context.Context,
 		"offset": queryPositiveInt(opts.Offset),
 	})
 	var out MemoryBankLastConversationResponse
-	if err := c.Do(ctx, http.MethodGet, "/memory_banks/ai-assistant/last-conversation", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/memory_banks/ai-assistant/last-conversation", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2213,7 +2429,7 @@ func (c *Client) GetMemoryBankAiLastConversationWithOptions(ctx context.Context,
 // AcceptMemoryBankAiSuggestion accepts an AI-generated memory bank suggestion.
 func (c *Client) AcceptMemoryBankAiSuggestion(ctx context.Context, conversationID string, body MemoryBankAcceptRequest) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/memory_banks/ai-assistant/%s", url.PathEscape(conversationID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/memory_banks/ai-assistant/%s", pathSegment(conversationID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2235,7 +2451,7 @@ func (c *Client) ListSources(ctx context.Context, opts ListSourcesOptions) (*Sou
 		q["account_id"] = opts.AccountID
 	}
 	var out SourceListResponse
-	if err := c.Do(ctx, http.MethodGet, "/sources", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/sources", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2244,7 +2460,7 @@ func (c *Client) ListSources(ctx context.Context, opts ListSourcesOptions) (*Sou
 // CreateSource creates a new source.
 func (c *Client) CreateSource(ctx context.Context, body CreateSourceBody) (*SourceResponse, error) {
 	var out SourceResponse
-	if err := c.Do(ctx, http.MethodPost, "/sources", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/sources", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2253,7 +2469,7 @@ func (c *Client) CreateSource(ctx context.Context, body CreateSourceBody) (*Sour
 // GetSource retrieves a source by ID.
 func (c *Client) GetSource(ctx context.Context, sourceID string) (*SourceResponse, error) {
 	var out SourceResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s", pathSegment(sourceID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2264,7 +2480,7 @@ func (c *Client) GetSource(ctx context.Context, sourceID string) (*SourceRespons
 // spend limit, use [Client.ClearSourceFields].
 func (c *Client) UpdateSource(ctx context.Context, sourceID string, body UpdateSourceBody) (*SourceResponse, error) {
 	var out SourceResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", pathSegment(sourceID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2308,7 +2524,7 @@ func (c *Client) ClearSourceFields(ctx context.Context, sourceID string, fields 
 		}
 	}
 	var out SourceResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, payload, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/sources/%s", pathSegment(sourceID)), nil, payload, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2322,7 +2538,7 @@ func (c *Client) ClearSourceRetention(ctx context.Context, sourceID string) (*So
 
 // DeleteSource deletes a source.
 func (c *Client) DeleteSource(ctx context.Context, sourceID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/sources/%s", url.PathEscape(sourceID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/sources/%s", pathSegment(sourceID)), nil, nil, nil, nil)
 }
 
 // ── Source Exports ──────────────────────────────────────────────────────────
@@ -2330,7 +2546,7 @@ func (c *Client) DeleteSource(ctx context.Context, sourceID string) error {
 // ListSourceExports lists exports for a source.
 func (c *Client) ListSourceExports(ctx context.Context, sourceID string, opts ListOptions) (*ExportListResponse, error) {
 	var out ExportListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports", url.PathEscape(sourceID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports", pathSegment(sourceID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2339,7 +2555,7 @@ func (c *Client) ListSourceExports(ctx context.Context, sourceID string, opts Li
 // CreateSourceExport creates a new export for a source.
 func (c *Client) CreateSourceExport(ctx context.Context, sourceID string, body CreateExportRequest) (*ExportResponse, error) {
 	var out ExportResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/exports", url.PathEscape(sourceID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/exports", pathSegment(sourceID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2348,7 +2564,7 @@ func (c *Client) CreateSourceExport(ctx context.Context, sourceID string, body C
 // GetSourceExport retrieves a source export by ID.
 func (c *Client) GetSourceExport(ctx context.Context, sourceID, exportID string) (*ExportResponse, error) {
 	var out ExportResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports/%s", url.PathEscape(sourceID), url.PathEscape(exportID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports/%s", pathSegment(sourceID), pathSegment(exportID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2357,7 +2573,7 @@ func (c *Client) GetSourceExport(ctx context.Context, sourceID, exportID string)
 // CancelSourceExport cancels a source export.
 func (c *Client) CancelSourceExport(ctx context.Context, sourceID, exportID string) (*ExportResponse, error) {
 	var out ExportResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/exports/%s/cancel", url.PathEscape(sourceID), url.PathEscape(exportID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/exports/%s/cancel", pathSegment(sourceID), pathSegment(exportID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2365,19 +2581,19 @@ func (c *Client) CancelSourceExport(ctx context.Context, sourceID, exportID stri
 
 // DeleteSourceExport deletes a source export.
 func (c *Client) DeleteSourceExport(ctx context.Context, sourceID, exportID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/sources/%s/exports/%s", url.PathEscape(sourceID), url.PathEscape(exportID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/sources/%s/exports/%s", pathSegment(sourceID), pathSegment(exportID)), nil, nil, nil, nil)
 }
 
 // DownloadSourceExport downloads a source export. Returns the raw HTTP response
 // so the caller can stream the body. The caller must close the response body.
 func (c *Client) DownloadSourceExport(ctx context.Context, sourceID, exportID string) (*http.Response, error) {
-	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports/%s/download", url.PathEscape(sourceID), url.PathEscape(exportID)), nil)
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports/%s/download", pathSegment(sourceID), pathSegment(exportID)), nil)
 }
 
 // EstimateSourceExport estimates the cost/size of a source export.
 func (c *Client) EstimateSourceExport(ctx context.Context, sourceID string, body EstimateExportRequest) (*EstimateExportResponse, error) {
 	var out EstimateExportResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/exports/estimate", url.PathEscape(sourceID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/exports/estimate", pathSegment(sourceID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2388,7 +2604,7 @@ func (c *Client) EstimateSourceExport(ctx context.Context, sourceID string, body
 // GetSourceEmbeddingMigration retrieves the embedding migration status for a source.
 func (c *Client) GetSourceEmbeddingMigration(ctx context.Context, sourceID string) (*SourceEmbeddingMigrationResponse, error) {
 	var out SourceEmbeddingMigrationResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/embedding-migration", url.PathEscape(sourceID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/embedding-migration", pathSegment(sourceID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2397,7 +2613,7 @@ func (c *Client) GetSourceEmbeddingMigration(ctx context.Context, sourceID strin
 // StartSourceEmbeddingMigration starts an embedding migration for a source.
 func (c *Client) StartSourceEmbeddingMigration(ctx context.Context, sourceID string, body StartSourceEmbeddingMigrationRequest) (*SourceEmbeddingMigrationResponse, error) {
 	var out SourceEmbeddingMigrationResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/embedding-migration", url.PathEscape(sourceID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/embedding-migration", pathSegment(sourceID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2406,7 +2622,7 @@ func (c *Client) StartSourceEmbeddingMigration(ctx context.Context, sourceID str
 // CancelSourceEmbeddingMigration cancels an in-progress embedding migration.
 func (c *Client) CancelSourceEmbeddingMigration(ctx context.Context, sourceID string) (*SourceEmbeddingMigrationResponse, error) {
 	var out SourceEmbeddingMigrationResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/embedding-migration/cancel", url.PathEscape(sourceID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/sources/%s/embedding-migration/cancel", pathSegment(sourceID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2477,7 +2693,7 @@ func (c *Client) ListSourceContents(ctx context.Context, sourceID string, opts L
 		q["content_version_id"] = ids
 	}
 	var out SourceContentStatusListResponse
-	if err := c.doValues(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/contents", url.PathEscape(sourceID)), q, nil, nil, &out); err != nil {
+	if err := c.doValues(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/contents", pathSegment(sourceID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2487,7 +2703,7 @@ func (c *Client) ListSourceContents(ctx context.Context, sourceID string, opts L
 // the content_version_id an upload returned.
 func (c *Client) GetSourceContentStatus(ctx context.Context, sourceID, contentVersionID string) (*SourceContentStatusResponse, error) {
 	var out SourceContentStatusResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/contents/%s", url.PathEscape(sourceID), url.PathEscape(contentVersionID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/contents/%s", pathSegment(sourceID), pathSegment(contentVersionID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2504,7 +2720,7 @@ func (c *Client) GetSourceContentStatus(ctx context.Context, sourceID, contentVe
 // {data, pagination} envelope on every API version.
 func (c *Client) ListEmailSourceRejections(ctx context.Context, sourceID string, opts ListOptions) (*EmailSourceRejectionListResponse, error) {
 	var out EmailSourceRejectionListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/email-rejections", url.PathEscape(sourceID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/email-rejections", pathSegment(sourceID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2522,7 +2738,7 @@ func (c *Client) GetContentDetail(ctx context.Context, contentVersionID string, 
 		q["end"] = fmt.Sprintf("%d", end)
 	}
 	var out ContentDetailResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s", url.PathEscape(contentVersionID)), q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s", pathSegment(contentVersionID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2531,7 +2747,7 @@ func (c *Client) GetContentDetail(ctx context.Context, contentVersionID string, 
 // ReplaceContentWithInlineText replaces content with inline text.
 func (c *Client) ReplaceContentWithInlineText(ctx context.Context, contentVersionID string, body InlineTextReplaceRequest) (*ContentFileUploadResponse, error) {
 	var out ContentFileUploadResponse
-	if err := c.Do(ctx, http.MethodPut, fmt.Sprintf("/contents/%s", url.PathEscape(contentVersionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, fmt.Sprintf("/contents/%s", pathSegment(contentVersionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2539,13 +2755,13 @@ func (c *Client) ReplaceContentWithInlineText(ctx context.Context, contentVersio
 
 // DeleteContent deletes a content version.
 func (c *Client) DeleteContent(ctx context.Context, contentVersionID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/contents/%s", url.PathEscape(contentVersionID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/contents/%s", pathSegment(contentVersionID)), nil, nil, nil, nil)
 }
 
 // ListContentEmbeddings lists embeddings for a content version.
 func (c *Client) ListContentEmbeddings(ctx context.Context, contentVersionID string, opts ListOptions) (*ContentEmbeddingsListResponse, error) {
 	var out ContentEmbeddingsListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/embeddings", url.PathEscape(contentVersionID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/embeddings", pathSegment(contentVersionID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2559,7 +2775,7 @@ func (c *Client) ListContentEmbeddings(ctx context.Context, contentVersionID str
 // version.
 func (c *Client) ListContentAttachments(ctx context.Context, contentVersionID string, opts ListOptions) (*ContentAttachmentsListResponse, error) {
 	var out ContentAttachmentsListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments", url.PathEscape(contentVersionID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments", pathSegment(contentVersionID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2593,7 +2809,7 @@ func (c *Client) GetContentAttachment(ctx context.Context, contentVersionID, att
 		q["end"] = fmt.Sprintf("%d", *opts.End)
 	}
 	var out ContentAttachmentDetailResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s", pathSegment(contentVersionID), pathSegment(attachmentID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2605,7 +2821,7 @@ func (c *Client) GetContentAttachment(ctx context.Context, contentVersionID, att
 // credits left.
 func (c *Client) ListContentAttachmentEmbeddings(ctx context.Context, contentVersionID, attachmentID string, opts ListOptions) (*ContentEmbeddingsListResponse, error) {
 	var out ContentEmbeddingsListResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/embeddings", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/embeddings", pathSegment(contentVersionID), pathSegment(attachmentID)), listQuery(opts.Page, opts.Limit), nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2619,7 +2835,7 @@ func (c *Client) ListContentAttachmentEmbeddings(ctx context.Context, contentVer
 // still being indexed. The attachment's FileWithheld field says which. It
 // answers 402 when the account has no credits left.
 func (c *Client) DownloadContentAttachment(ctx context.Context, contentVersionID, attachmentID string) (*http.Response, error) {
-	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/file", url.PathEscape(contentVersionID), url.PathEscape(attachmentID)), nil)
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/file", pathSegment(contentVersionID), pathSegment(attachmentID)), nil)
 }
 
 // ── Solutions ───────────────────────────────────────────────────────────────
@@ -2646,7 +2862,7 @@ func (c *Client) ListSolutionsWithOptions(ctx context.Context, opts ListSolution
 		q["search"] = opts.Search
 	}
 	var out SolutionListResponse
-	if err := c.Do(ctx, http.MethodGet, "/solutions", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/solutions", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2655,7 +2871,7 @@ func (c *Client) ListSolutionsWithOptions(ctx context.Context, opts ListSolution
 // CreateSolution creates a new solution.
 func (c *Client) CreateSolution(ctx context.Context, body CreateSolutionRequest) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodPost, "/solutions", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/solutions", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2664,7 +2880,7 @@ func (c *Client) CreateSolution(ctx context.Context, body CreateSolutionRequest)
 // GetSolution retrieves a solution by ID.
 func (c *Client) GetSolution(ctx context.Context, solutionID string) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/solutions/%s", url.PathEscape(solutionID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/solutions/%s", pathSegment(solutionID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2673,7 +2889,7 @@ func (c *Client) GetSolution(ctx context.Context, solutionID string) (*SolutionR
 // UpdateSolution updates a solution.
 func (c *Client) UpdateSolution(ctx context.Context, solutionID string, body UpdateSolutionRequest) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/solutions/%s", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/solutions/%s", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2681,13 +2897,13 @@ func (c *Client) UpdateSolution(ctx context.Context, solutionID string, body Upd
 
 // DeleteSolution deletes a solution.
 func (c *Client) DeleteSolution(ctx context.Context, solutionID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/solutions/%s", url.PathEscape(solutionID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/solutions/%s", pathSegment(solutionID)), nil, nil, nil, nil)
 }
 
 // LinkAgentsToSolution links agents to a solution.
 func (c *Client) LinkAgentsToSolution(ctx context.Context, solutionID string, body LinkResourcesRequest) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/agents", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/agents", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2696,7 +2912,7 @@ func (c *Client) LinkAgentsToSolution(ctx context.Context, solutionID string, bo
 // UnlinkAgentsFromSolution unlinks agents from a solution.
 func (c *Client) UnlinkAgentsFromSolution(ctx context.Context, solutionID string, body UnlinkResourcesRequest) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodDelete, fmt.Sprintf("/solutions/%s/agents", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/solutions/%s/agents", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2705,7 +2921,7 @@ func (c *Client) UnlinkAgentsFromSolution(ctx context.Context, solutionID string
 // LinkKnowledgeBasesToSolution links knowledge bases to a solution.
 func (c *Client) LinkKnowledgeBasesToSolution(ctx context.Context, solutionID string, body LinkResourcesRequest) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/knowledge-bases", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/knowledge-bases", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2714,7 +2930,7 @@ func (c *Client) LinkKnowledgeBasesToSolution(ctx context.Context, solutionID st
 // UnlinkKnowledgeBasesFromSolution unlinks knowledge bases from a solution.
 func (c *Client) UnlinkKnowledgeBasesFromSolution(ctx context.Context, solutionID string, body UnlinkResourcesRequest) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodDelete, fmt.Sprintf("/solutions/%s/knowledge-bases", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/solutions/%s/knowledge-bases", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2723,7 +2939,7 @@ func (c *Client) UnlinkKnowledgeBasesFromSolution(ctx context.Context, solutionI
 // LinkSourceConnectionsToSolution links source connections to a solution.
 func (c *Client) LinkSourceConnectionsToSolution(ctx context.Context, solutionID string, body LinkResourcesRequest) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/source-connections", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/source-connections", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2732,7 +2948,7 @@ func (c *Client) LinkSourceConnectionsToSolution(ctx context.Context, solutionID
 // UnlinkSourceConnectionsFromSolution unlinks source connections from a solution.
 func (c *Client) UnlinkSourceConnectionsFromSolution(ctx context.Context, solutionID string, body UnlinkResourcesRequest) (*SolutionResponse, error) {
 	var out SolutionResponse
-	if err := c.Do(ctx, http.MethodDelete, fmt.Sprintf("/solutions/%s/source-connections", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/solutions/%s/source-connections", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2743,7 +2959,7 @@ func (c *Client) UnlinkSourceConnectionsFromSolution(ctx context.Context, soluti
 // ListSolutionConversations lists conversations for a solution.
 func (c *Client) ListSolutionConversations(ctx context.Context, solutionID string) ([]SolutionConversationResponse, error) {
 	var out []SolutionConversationResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/solutions/%s/conversations", url.PathEscape(solutionID)), nil, nil, "", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/solutions/%s/conversations", pathSegment(solutionID)), nil, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2752,7 +2968,7 @@ func (c *Client) ListSolutionConversations(ctx context.Context, solutionID strin
 // AddSolutionConversationTurn adds a conversation turn to a solution.
 func (c *Client) AddSolutionConversationTurn(ctx context.Context, solutionID string, body AddConversationTurnRequest) (*SolutionConversationResponse, error) {
 	var out SolutionConversationResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/conversations", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/conversations", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2760,7 +2976,7 @@ func (c *Client) AddSolutionConversationTurn(ctx context.Context, solutionID str
 
 // MarkSolutionConversationTurn marks a conversation turn (e.g. as accepted/rejected).
 func (c *Client) MarkSolutionConversationTurn(ctx context.Context, solutionID, conversationID string, body MarkConversationTurnRequest) error {
-	return c.Do(ctx, http.MethodPatch, fmt.Sprintf("/solutions/%s/conversations/%s", url.PathEscape(solutionID), url.PathEscape(conversationID)), nil, body, nil, nil)
+	return c.do(ctx, http.MethodPatch, fmt.Sprintf("/solutions/%s/conversations/%s", pathSegment(solutionID), pathSegment(conversationID)), nil, body, nil, nil)
 }
 
 // ── Solution AI Assistant ───────────────────────────────────────────────────
@@ -2768,7 +2984,7 @@ func (c *Client) MarkSolutionConversationTurn(ctx context.Context, solutionID, c
 // GenerateSolutionAiPlan uses the AI assistant to generate a plan for a solution.
 func (c *Client) GenerateSolutionAiPlan(ctx context.Context, solutionID string, body AiAssistantGenerateRequest) (*AiAssistantGenerateResponse, error) {
 	var out AiAssistantGenerateResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/generate", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/generate", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2777,7 +2993,7 @@ func (c *Client) GenerateSolutionAiPlan(ctx context.Context, solutionID string, 
 // GenerateSolutionAiKnowledgeBase uses the AI assistant to generate a knowledge base plan for a solution.
 func (c *Client) GenerateSolutionAiKnowledgeBase(ctx context.Context, solutionID string, body AiAssistantGenerateRequest) (*AiAssistantGenerateResponse, error) {
 	var out AiAssistantGenerateResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/knowledge-base", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/knowledge-base", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2786,7 +3002,7 @@ func (c *Client) GenerateSolutionAiKnowledgeBase(ctx context.Context, solutionID
 // GenerateSolutionAiSource uses the AI assistant to generate a source plan for a solution.
 func (c *Client) GenerateSolutionAiSource(ctx context.Context, solutionID string, body AiAssistantGenerateRequest) (*AiAssistantGenerateResponse, error) {
 	var out AiAssistantGenerateResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/source", url.PathEscape(solutionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/source", pathSegment(solutionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2795,7 +3011,7 @@ func (c *Client) GenerateSolutionAiSource(ctx context.Context, solutionID string
 // AcceptSolutionAiPlan accepts an AI-generated solution plan.
 func (c *Client) AcceptSolutionAiPlan(ctx context.Context, solutionID, conversationID string, body AiAssistantAcceptRequest) (*AiAssistantAcceptResponse, error) {
 	var out AiAssistantAcceptResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/%s/accept", url.PathEscape(solutionID), url.PathEscape(conversationID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/%s/accept", pathSegment(solutionID), pathSegment(conversationID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2803,7 +3019,7 @@ func (c *Client) AcceptSolutionAiPlan(ctx context.Context, solutionID, conversat
 
 // DeclineSolutionAiPlan declines an AI-generated solution plan.
 func (c *Client) DeclineSolutionAiPlan(ctx context.Context, solutionID, conversationID string) error {
-	return c.Do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/%s/decline", url.PathEscape(solutionID), url.PathEscape(conversationID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/solutions/%s/ai-assistant/%s/decline", pathSegment(solutionID), pathSegment(conversationID)), nil, nil, nil, nil)
 }
 
 // ── Governance AI Assistant ─────────────────────────────────────────────────
@@ -2811,7 +3027,7 @@ func (c *Client) DeclineSolutionAiPlan(ctx context.Context, solutionID, conversa
 // GenerateGovernanceAiPlan uses the governance AI assistant to generate a plan.
 func (c *Client) GenerateGovernanceAiPlan(ctx context.Context, body GovernanceAiAssistantRequest) (*GovernanceAiAssistantResponse, error) {
 	var out GovernanceAiAssistantResponse
-	if err := c.Do(ctx, http.MethodPost, "/governance/ai-assistant", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/governance/ai-assistant", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2848,7 +3064,7 @@ func (c *Client) ListGovernanceAiConversationsWithOptions(ctx context.Context, o
 // AcceptGovernanceAiPlan accepts a governance AI plan.
 func (c *Client) AcceptGovernanceAiPlan(ctx context.Context, conversationID string) (*GovernanceAiAcceptResponse, error) {
 	var out GovernanceAiAcceptResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/governance/ai-assistant/%s/accept", url.PathEscape(conversationID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/governance/ai-assistant/%s/accept", pathSegment(conversationID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -2856,7 +3072,7 @@ func (c *Client) AcceptGovernanceAiPlan(ctx context.Context, conversationID stri
 
 // DeclineGovernanceAiPlan declines a governance AI plan.
 func (c *Client) DeclineGovernanceAiPlan(ctx context.Context, conversationID string) error {
-	return c.Do(ctx, http.MethodPost, fmt.Sprintf("/governance/ai-assistant/%s/decline", url.PathEscape(conversationID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/governance/ai-assistant/%s/decline", pathSegment(conversationID)), nil, nil, nil, nil)
 }
 
 // ── Alerts ──────────────────────────────────────────────────────────────────
@@ -2900,7 +3116,7 @@ func (c *Client) ListAlerts(ctx context.Context, opts ListAlertsOptions) (json.R
 		q["time_to"] = opts.TimeTo
 	}
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/alerts", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/alerts", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2909,7 +3125,7 @@ func (c *Client) ListAlerts(ctx context.Context, opts ListAlertsOptions) (json.R
 // GetAlert retrieves an alert by ID.
 func (c *Client) GetAlert(ctx context.Context, alertID string) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/alerts/%s", url.PathEscape(alertID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/alerts/%s", pathSegment(alertID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2918,7 +3134,7 @@ func (c *Client) GetAlert(ctx context.Context, alertID string) (json.RawMessage,
 // ChangeAlertStatus changes the status of an alert.
 func (c *Client) ChangeAlertStatus(ctx context.Context, alertID string, body ChangeStatusRequest) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/status", url.PathEscape(alertID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/status", pathSegment(alertID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2927,7 +3143,7 @@ func (c *Client) ChangeAlertStatus(ctx context.Context, alertID string, body Cha
 // AddAlertComment adds a comment to an alert.
 func (c *Client) AddAlertComment(ctx context.Context, alertID string, body AddCommentRequest) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/comments", url.PathEscape(alertID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/comments", pathSegment(alertID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2936,7 +3152,7 @@ func (c *Client) AddAlertComment(ctx context.Context, alertID string, body AddCo
 // SubscribeToAlert subscribes to an alert.
 func (c *Client) SubscribeToAlert(ctx context.Context, alertID string) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/subscribe", url.PathEscape(alertID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/subscribe", pathSegment(alertID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -2945,7 +3161,7 @@ func (c *Client) SubscribeToAlert(ctx context.Context, alertID string) (json.Raw
 // UnsubscribeFromAlert unsubscribes from an alert.
 func (c *Client) UnsubscribeFromAlert(ctx context.Context, alertID string) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/unsubscribe", url.PathEscape(alertID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/alerts/%s/unsubscribe", pathSegment(alertID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3001,7 +3217,7 @@ func (c *Client) alertConfigsBody(ctx context.Context, opts ListAlertConfigsOpti
 // CreateAlertConfig creates a new alert configuration.
 func (c *Client) CreateAlertConfig(ctx context.Context, body CreateAlertConfigRequest) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPost, "/alerts/configs", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/alerts/configs", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3010,7 +3226,7 @@ func (c *Client) CreateAlertConfig(ctx context.Context, body CreateAlertConfigRe
 // GetAlertConfig retrieves an alert configuration by ID.
 func (c *Client) GetAlertConfig(ctx context.Context, configID string) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/alerts/configs/%s", url.PathEscape(configID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/alerts/configs/%s", pathSegment(configID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3019,7 +3235,7 @@ func (c *Client) GetAlertConfig(ctx context.Context, configID string) (json.RawM
 // UpdateAlertConfig updates an alert configuration.
 func (c *Client) UpdateAlertConfig(ctx context.Context, configID string, body UpdateAlertConfigRequest) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/alerts/configs/%s", url.PathEscape(configID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/alerts/configs/%s", pathSegment(configID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3027,7 +3243,7 @@ func (c *Client) UpdateAlertConfig(ctx context.Context, configID string, body Up
 
 // DeleteAlertConfig deletes an alert configuration.
 func (c *Client) DeleteAlertConfig(ctx context.Context, configID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/alerts/configs/%s", url.PathEscape(configID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/alerts/configs/%s", pathSegment(configID)), nil, nil, nil, nil)
 }
 
 // ── Alert Preferences ───────────────────────────────────────────────────────
@@ -3068,7 +3284,7 @@ func (c *Client) ListOrganizationAlertPreferencesWithOptions(ctx context.Context
 // UpdateOrganizationAlertPreference updates an organization alert preference.
 func (c *Client) UpdateOrganizationAlertPreference(ctx context.Context, organizationID, alertType string, body UpdateOrganizationAlertPreferenceRequest) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/alerts/organization-preferences/%s/%s", url.PathEscape(organizationID), url.PathEscape(alertType)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/alerts/organization-preferences/%s/%s", pathSegment(organizationID), pathSegment(alertType)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3127,13 +3343,13 @@ func (c *Client) modelAlertsBody(ctx context.Context, opts ListModelAlertsOption
 
 // MarkAllModelAlertsRead marks all model alerts as read.
 func (c *Client) MarkAllModelAlertsRead(ctx context.Context) error {
-	return c.Do(ctx, http.MethodPost, "/models/alerts/mark-all-read", nil, nil, nil, nil)
+	return c.do(ctx, http.MethodPost, "/models/alerts/mark-all-read", nil, nil, nil, nil)
 }
 
 // GetUnreadModelAlertCount retrieves the count of unread model alerts.
 func (c *Client) GetUnreadModelAlertCount(ctx context.Context) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/models/alerts/unread-count", nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/models/alerts/unread-count", nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3141,7 +3357,7 @@ func (c *Client) GetUnreadModelAlertCount(ctx context.Context) (json.RawMessage,
 
 // MarkModelAlertRead marks a single model alert as read.
 func (c *Client) MarkModelAlertRead(ctx context.Context, alertID string) error {
-	return c.Do(ctx, http.MethodPatch, fmt.Sprintf("/models/alerts/%s/read", url.PathEscape(alertID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodPatch, fmt.Sprintf("/models/alerts/%s/read", pathSegment(alertID)), nil, nil, nil, nil)
 }
 
 // GetModelRecommendations retrieves recommendations for a model.
@@ -3186,7 +3402,7 @@ func (c *Client) GetModelRecommendationsWithOptions(ctx context.Context, modelID
 		q["min_output_tokens"] = fmt.Sprintf("%d", *opts.MinOutputTokens)
 	}
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/models/%s/recommendations", url.PathEscape(modelID)), q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/models/%s/recommendations", pathSegment(modelID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3236,7 +3452,7 @@ func (c *Client) ListModels(ctx context.Context, opts ListModelsOptions) ([]Prov
 // GetModel retrieves full details for a specific model.
 func (c *Client) GetModel(ctx context.Context, modelID string) (*PromptModelResponse, error) {
 	var out PromptModelResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/models/%s/details", url.PathEscape(modelID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/models/%s/details", pathSegment(modelID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3337,7 +3553,7 @@ func (c *Client) experimentsBody(ctx context.Context, opts ListExperimentsOption
 // CreateExperiment creates a model playground experiment.
 func (c *Client) CreateExperiment(ctx context.Context, body PlaygroundCreateRequest) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPost, "/models/playground/experiments", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/models/playground/experiments", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3346,7 +3562,7 @@ func (c *Client) CreateExperiment(ctx context.Context, body PlaygroundCreateRequ
 // GetExperiment retrieves a model playground experiment by ID.
 func (c *Client) GetExperiment(ctx context.Context, experimentID string) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/models/playground/experiments/%s", url.PathEscape(experimentID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/models/playground/experiments/%s", pathSegment(experimentID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3355,7 +3571,7 @@ func (c *Client) GetExperiment(ctx context.Context, experimentID string) (json.R
 // CancelExperiment cancels a running model playground experiment.
 func (c *Client) CancelExperiment(ctx context.Context, experimentID string) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/models/playground/experiments/%s/cancel", url.PathEscape(experimentID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/models/playground/experiments/%s/cancel", pathSegment(experimentID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3364,7 +3580,7 @@ func (c *Client) CancelExperiment(ctx context.Context, experimentID string) (jso
 // DeleteExperiment soft-deletes a model playground experiment, removing it from
 // list/detail views while preserving audit history.
 func (c *Client) DeleteExperiment(ctx context.Context, experimentID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/models/playground/experiments/%s", url.PathEscape(experimentID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/models/playground/experiments/%s", pathSegment(experimentID)), nil, nil, nil, nil)
 }
 
 // ── General Search ──────────────────────────────────────────────────────────
@@ -3394,7 +3610,7 @@ func (c *Client) Search(ctx context.Context, opts SearchOptions) (json.RawMessag
 		q["entity_type"] = opts.EntityType
 	}
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/search", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/search", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3426,7 +3642,7 @@ func (c *Client) SearchDocs(ctx context.Context, opts DocsSearchOptions) (json.R
 		q["limit"] = fmt.Sprintf("%d", opts.Limit)
 	}
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodGet, "/docs-search", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/docs-search", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3457,7 +3673,7 @@ func (c *Client) ListEmailDomains(ctx context.Context) (*EmailDomainsListRespons
 // standing up the SES identity and DNS. Requires an account owner or admin.
 func (c *Client) AddEmailDomain(ctx context.Context, body AddEmailDomainRequest) (*EmailDomainResponse, error) {
 	var out EmailDomainResponse
-	if err := c.Do(ctx, http.MethodPost, "/email-domains", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/email-domains", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3468,7 +3684,7 @@ func (c *Client) AddEmailDomain(ctx context.Context, body AddEmailDomainRequest)
 // to delete the registrar NS delegation record.
 func (c *Client) RemoveEmailDomain(ctx context.Context, domainID string) (*RemoveEmailDomainResponse, error) {
 	var out RemoveEmailDomainResponse
-	if err := c.Do(ctx, http.MethodDelete, fmt.Sprintf("/email-domains/%s", url.PathEscape(domainID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/email-domains/%s", pathSegment(domainID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3478,7 +3694,7 @@ func (c *Client) RemoveEmailDomain(ctx context.Context, domainID string) (*Remov
 // for the background sweep, returning updated status and record check results.
 func (c *Client) VerifyEmailDomain(ctx context.Context, domainID string) (*EmailDomainResponse, error) {
 	var out EmailDomainResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/email-domains/%s/verify", url.PathEscape(domainID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/email-domains/%s/verify", pathSegment(domainID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3489,7 +3705,7 @@ func (c *Client) VerifyEmailDomain(ctx context.Context, domainID string) (*Email
 // agent.seclai.com.
 func (c *Client) SetPrimaryEmailDomain(ctx context.Context, domainID string) (*EmailDomainResponse, error) {
 	var out EmailDomainResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/email-domains/%s/primary", url.PathEscape(domainID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/email-domains/%s/primary", pathSegment(domainID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3499,7 +3715,7 @@ func (c *Client) SetPrimaryEmailDomain(ctx context.Context, domainID string) (*E
 // reverts to the shared agent.seclai.com scheme, without removing the configured
 // domains — they stay verified and can be promoted again later.
 func (c *Client) UseSharedEmailDomain(ctx context.Context) error {
-	return c.Do(ctx, http.MethodPost, "/email-domains/use-shared-domain", nil, nil, nil, nil)
+	return c.do(ctx, http.MethodPost, "/email-domains/use-shared-domain", nil, nil, nil, nil)
 }
 
 // SendEmailDomainTestEmail sends a test message from a verified domain to the
@@ -3507,7 +3723,7 @@ func (c *Client) UseSharedEmailDomain(ctx context.Context) error {
 // sends anywhere else, so it cannot be used as an open relay.
 func (c *Client) SendEmailDomainTestEmail(ctx context.Context, domainID string) (*SendTestEmailResponse, error) {
 	var out SendTestEmailResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/email-domains/%s/test-email", url.PathEscape(domainID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/email-domains/%s/test-email", pathSegment(domainID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3525,7 +3741,7 @@ func (c *Client) GetDmarcSummary(ctx context.Context, domainID string, opts Dmar
 		q["top_sources"] = fmt.Sprintf("%d", opts.TopSources)
 	}
 	var out DmarcSummaryResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/email-domains/%s/dmarc", url.PathEscape(domainID)), q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/email-domains/%s/dmarc", pathSegment(domainID)), q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3536,7 +3752,7 @@ func (c *Client) GetDmarcSummary(ctx context.Context, domainID string, opts Dmar
 // SubmitAiFeedback submits feedback to the AI assistant.
 func (c *Client) SubmitAiFeedback(ctx context.Context, body AiAssistantFeedbackRequest) (*AiAssistantFeedbackResponse, error) {
 	var out AiAssistantFeedbackResponse
-	if err := c.Do(ctx, http.MethodPost, "/ai-assistant/feedback", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/ai-assistant/feedback", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3545,7 +3761,7 @@ func (c *Client) SubmitAiFeedback(ctx context.Context, body AiAssistantFeedbackR
 // AiAssistantKnowledgeBase generates a knowledge base plan via the top-level AI assistant.
 func (c *Client) AiAssistantKnowledgeBase(ctx context.Context, body AiAssistantGenerateRequest) (*AiAssistantGenerateResponse, error) {
 	var out AiAssistantGenerateResponse
-	if err := c.Do(ctx, http.MethodPost, "/ai-assistant/knowledge-base", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/ai-assistant/knowledge-base", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3554,7 +3770,7 @@ func (c *Client) AiAssistantKnowledgeBase(ctx context.Context, body AiAssistantG
 // AiAssistantSource generates a source plan via the top-level AI assistant.
 func (c *Client) AiAssistantSource(ctx context.Context, body AiAssistantGenerateRequest) (*AiAssistantGenerateResponse, error) {
 	var out AiAssistantGenerateResponse
-	if err := c.Do(ctx, http.MethodPost, "/ai-assistant/source", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/ai-assistant/source", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3563,7 +3779,7 @@ func (c *Client) AiAssistantSource(ctx context.Context, body AiAssistantGenerate
 // AiAssistantSolution generates a solution plan via the top-level AI assistant.
 func (c *Client) AiAssistantSolution(ctx context.Context, body AiAssistantGenerateRequest) (*AiAssistantGenerateResponse, error) {
 	var out AiAssistantGenerateResponse
-	if err := c.Do(ctx, http.MethodPost, "/ai-assistant/solution", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/ai-assistant/solution", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3572,7 +3788,7 @@ func (c *Client) AiAssistantSolution(ctx context.Context, body AiAssistantGenera
 // AiAssistantMemoryBank generates a memory bank plan via the top-level AI assistant.
 func (c *Client) AiAssistantMemoryBank(ctx context.Context, body MemoryBankAiAssistantRequest) (*MemoryBankAiAssistantResponse, error) {
 	var out MemoryBankAiAssistantResponse
-	if err := c.Do(ctx, http.MethodPost, "/ai-assistant/memory-bank", nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/ai-assistant/memory-bank", nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3594,7 +3810,7 @@ func (c *Client) GetAiAssistantMemoryBankHistoryWithOptions(ctx context.Context,
 		"offset": queryPositiveInt(opts.Offset),
 	})
 	var out MemoryBankLastConversationResponse
-	if err := c.Do(ctx, http.MethodGet, "/ai-assistant/memory-bank/last-conversation", q, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/ai-assistant/memory-bank/last-conversation", q, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3603,7 +3819,7 @@ func (c *Client) GetAiAssistantMemoryBankHistoryWithOptions(ctx context.Context,
 // AcceptAiAssistantPlan accepts a top-level AI assistant plan.
 func (c *Client) AcceptAiAssistantPlan(ctx context.Context, conversationID string, body AiAssistantAcceptRequest) (*AiAssistantAcceptResponse, error) {
 	var out AiAssistantAcceptResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/ai-assistant/%s/accept", url.PathEscape(conversationID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/ai-assistant/%s/accept", pathSegment(conversationID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3611,13 +3827,13 @@ func (c *Client) AcceptAiAssistantPlan(ctx context.Context, conversationID strin
 
 // DeclineAiAssistantPlan declines a top-level AI assistant plan.
 func (c *Client) DeclineAiAssistantPlan(ctx context.Context, conversationID string) error {
-	return c.Do(ctx, http.MethodPost, fmt.Sprintf("/ai-assistant/%s/decline", url.PathEscape(conversationID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/ai-assistant/%s/decline", pathSegment(conversationID)), nil, nil, nil, nil)
 }
 
 // AcceptAiMemoryBankSuggestion accepts a top-level AI memory bank suggestion.
 func (c *Client) AcceptAiMemoryBankSuggestion(ctx context.Context, conversationID string, body MemoryBankAcceptRequest) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/ai-assistant/memory-bank/%s", url.PathEscape(conversationID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/ai-assistant/memory-bank/%s", pathSegment(conversationID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3648,7 +3864,7 @@ func (c *Client) ListCloudDrives(ctx context.Context) ([]CloudDriveResponse, err
 // GetCloudDrive retrieves a cloud-drive connection.
 func (c *Client) GetCloudDrive(ctx context.Context, connectionID string) (*CloudDriveResponse, error) {
 	var out CloudDriveResponse
-	if err := c.Do(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s", url.PathEscape(connectionID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s", pathSegment(connectionID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3658,7 +3874,7 @@ func (c *Client) GetCloudDrive(ctx context.Context, connectionID string) (*Cloud
 // A nil field is left unchanged.
 func (c *Client) UpdateCloudDrive(ctx context.Context, connectionID string, body CloudDriveUpdateRequest) (*CloudDriveResponse, error) {
 	var out CloudDriveResponse
-	if err := c.Do(ctx, http.MethodPatch, fmt.Sprintf("/cloud-drives/%s", url.PathEscape(connectionID)), nil, body, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, fmt.Sprintf("/cloud-drives/%s", pathSegment(connectionID)), nil, body, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3668,7 +3884,7 @@ func (c *Client) UpdateCloudDrive(ctx context.Context, connectionID string, body
 // connection itself, and returns it in its disconnected state.
 func (c *Client) DisconnectCloudDrive(ctx context.Context, connectionID string) (*CloudDriveResponse, error) {
 	var out CloudDriveResponse
-	if err := c.Do(ctx, http.MethodPost, fmt.Sprintf("/cloud-drives/%s/disconnect", url.PathEscape(connectionID)), nil, nil, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/cloud-drives/%s/disconnect", pathSegment(connectionID)), nil, nil, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -3676,14 +3892,14 @@ func (c *Client) DisconnectCloudDrive(ctx context.Context, connectionID string) 
 
 // DeleteCloudDrive deletes a cloud-drive connection.
 func (c *Client) DeleteCloudDrive(ctx context.Context, connectionID string) error {
-	return c.Do(ctx, http.MethodDelete, fmt.Sprintf("/cloud-drives/%s", url.PathEscape(connectionID)), nil, nil, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/cloud-drives/%s", pathSegment(connectionID)), nil, nil, nil, nil)
 }
 
 // GetAgentsUsingCloudDrive lists the agents that use a cloud-drive connection.
 // Either wire shape is accepted.
 func (c *Client) GetAgentsUsingCloudDrive(ctx context.Context, connectionID string) ([]AgentUsingCloudDriveResponse, error) {
 	var out []AgentUsingCloudDriveResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/agents", url.PathEscape(connectionID)), nil, nil, "", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/agents", pathSegment(connectionID)), nil, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3704,7 +3920,7 @@ func (c *Client) ListCloudDriveRejections(ctx context.Context, connectionID stri
 		q["limit"] = fmt.Sprintf("%d", opts.Limit)
 	}
 	var out []CloudDriveRejectionResponse
-	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/rejections", url.PathEscape(connectionID)), q, nil, "", &out); err != nil {
+	if err := c.doList(ctx, http.MethodGet, fmt.Sprintf("/cloud-drives/%s/rejections", pathSegment(connectionID)), q, nil, "", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -3714,8 +3930,65 @@ func (c *Client) ListCloudDriveRejections(ctx context.Context, connectionID stri
 
 // buildURL constructs a full request URL by joining apiPath to the base URL
 // and appending query parameters.
-func (c *Client) buildURL(apiPath string, query map[string]string) *url.URL {
+func (c *Client) buildURL(apiPath string, query map[string]string) (*url.URL, error) {
 	return c.buildURLValues(apiPath, queryValues(query))
+}
+
+// pathSegment escapes one path segment (an ID) for an apiPath. Beyond
+// url.PathEscape it escapes the dots of a "." or ".." segment, so buildURLValues's
+// path.Clean, and any server or proxy that resolves dot segments, cannot take
+// the ID as a step up the path. A blank ID becomes blankPathSegment, which
+// buildURLValues refuses, since path.Clean would collapse an empty segment
+// into a request for another endpoint ("/agents//runs" is "/agents/runs").
+//
+// The refusal works only where the path reaches buildURLValues, as every URL
+// the client builds does today (doBytes, doRaw, doUpload and the two streaming
+// methods). TestClient_BlankPathIDIsRefused calls one method on each of those
+// paths; a new way of building a request URL needs a case there too.
+func pathSegment(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return blankPathSegment
+	}
+	switch s {
+	case ".":
+		return "%2E"
+	case "..":
+		return "%2E%2E"
+	}
+	return url.PathEscape(s)
+}
+
+// blankPathSegment is what pathSegment returns for a blank ID. It holds NUL
+// bytes, which pathSegment never emits for a real ID.
+const blankPathSegment = "\x00blank-id\x00"
+
+// escapePath makes p a valid escaped path, so that [url.URL.EscapedPath] sends
+// it as it is: a %XX escape is kept, a % that does not start one is written
+// %25 (a [Client.Do] path such as "/files/100%" is sent as "/files/100%25"),
+// and any other byte that may not appear in a path, such as a space or a
+// non-ASCII byte, is percent-encoded. Were one such byte left raw, Go would
+// discard RawPath and re-escape the decoded path, turning each %2F the caller
+// wrote into a separator.
+func escapePath(p string) string {
+	var b strings.Builder
+	for i := 0; i < len(p); i++ {
+		c := p[i]
+		switch {
+		case c == '%' && i+2 < len(p) && isHex(p[i+1]) && isHex(p[i+2]):
+			b.WriteByte(c)
+		case 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', '0' <= c && c <= '9',
+			strings.IndexByte("-._~/!$&'()*+,;=:@", c) >= 0:
+			// Unreserved, "/", a sub-delimiter, ":" or "@": valid in RawPath as is.
+			b.WriteByte(c)
+		default:
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
+}
+
+func isHex(c byte) bool {
+	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
 }
 
 // queryValues lifts a single-valued query map into url.Values.
@@ -3729,18 +4002,29 @@ func queryValues(query map[string]string) url.Values {
 
 // buildURLValues is buildURL for a query whose keys may repeat. Blank keys and
 // empty values are dropped, and a key replaces the same key on the base URL.
-func (c *Client) buildURLValues(apiPath string, query url.Values) *url.URL {
+// It returns a *ConfigurationError when apiPath holds a blank ID.
+func (c *Client) buildURLValues(apiPath string, query url.Values) (*url.URL, error) {
+	if strings.Contains(apiPath, blankPathSegment) {
+		return nil, &ConfigurationError{Message: "an ID in the request path must not be blank"}
+	}
 	u := *c.baseURL
 	joined := apiPath
 	if !strings.HasPrefix(joined, "/") {
 		joined = "/" + joined
 	}
 	hadTrailingSlash := joined != "/" && strings.HasSuffix(joined, "/")
-	cleaned := path.Clean(strings.TrimSuffix(u.Path, "/") + joined)
+	// apiPath is already escaped (the methods build it with pathSegment), so join
+	// and clean the escaped form: there %2F stays inside its segment and an ID of
+	// ".." is %2E%2E, which path.Clean leaves alone. Then set both Path and
+	// RawPath, so String() sends the escaped form as it is instead of escaping
+	// it a second time.
+	cleaned := path.Clean(strings.TrimSuffix(u.EscapedPath(), "/") + joined)
 	if hadTrailingSlash && !strings.HasSuffix(cleaned, "/") {
 		cleaned += "/"
 	}
-	u.Path = cleaned
+	cleaned = escapePath(cleaned)
+	decoded, _ := url.PathUnescape(cleaned) // cannot fail after escapePath
+	u.Path, u.RawPath = decoded, cleaned
 	q := u.Query()
 	for k, values := range query {
 		if strings.TrimSpace(k) == "" {
@@ -3757,5 +4041,5 @@ func (c *Client) buildURLValues(apiPath string, query url.Values) *url.URL {
 		}
 	}
 	u.RawQuery = q.Encode()
-	return &u
+	return &u, nil
 }

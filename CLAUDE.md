@@ -1,5 +1,13 @@
 # seclai-go
 
+## Changing and reviewing code
+
+The rules for writing a change (the cold-review gate on your own diff before you
+report) and for producing review findings are shared by every SDK repo. They are
+vendored from `sdk-tools` with the review-triage skill:
+
+@.claude/skills/seclai-sdk-review-triage/rules.md
+
 ## Git and PRs
 
 - **Never commit or push.** No `git commit`, `git push`, `gh pr create`, no merging, not after finishing a task, not after addressing review comments, not after checks pass. The user commits all work themselves. Leave the changes in the working tree and say the work is ready. Do not offer to commit either.

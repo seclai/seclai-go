@@ -149,7 +149,7 @@ baseline applies and responses keep their current shapes. Upgrading this module
 alone never changes the wire contract.
 
 Known versions are package constants (`APIVersion20260701` through
-`APIVersion20261028`, one per version in the table below, plus
+`APIVersion20261104`, one per version in the table below, plus
 `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
 this release was **not** built against makes `NewClient` fail: a newer version
 can reshape responses, and this client would decode them incorrectly rather than
@@ -242,6 +242,8 @@ this client decodes; its row says how:
 | `2026-10-19` | `APIVersion20261019` | `CreateSource` rejects `polling_max_items` on a website, custom index or cloud drive source with a 400 |
 | `2026-10-21` | `APIVersion20261021` | `GetNonManualEvaluationSummary` leaves results whose evaluator returned no verdict out of `Failed`, `PassRate` and `FailureRate` (they are in `Error` on every version); a criteria summary's `AverageScore` averages only passed and failed results; `TestDraftEvaluation` sends a null score and verdict for an `error` result, which decode to 0 and false, rather than 0.5 and false |
 | `2026-10-28` | `APIVersion20261028` | An `if_else` or `switch` step's `Output` is the result of the arm it took (its input when that arm is empty or it took none), with that arm's files in `Attachments`, rather than a `{"branch": ...}` marker naming the arm. The arm it took is in the step's `Decision` |
+| `2026-11-02` | `APIVersion20261102` | A definition or sampling-rule write other than an import that references a metadata key no trigger declares is refused: `UpdateAgentDefinition` answers 400, and `UpdateAgent` setting `SamplingConfig` answers 422; older versions declare each such key optional instead. Declare keys with `SetMetadataKeys` first |
+| `2026-11-04` | `APIVersion20261104` | Refuses evaluation mode `eval_and_retry`, a new evaluation-criteria `step_id` that is not a `display_result` or `streaming_result` step, and `retry_triggered: true` on a recorded evaluation result, each with a 400. Older versions store `eval_and_retry` as `sample_and_flag` and accept any `step_id` |
 
 ## Typed responses
 
@@ -409,7 +411,9 @@ _ = client.DeleteAgentRun(ctx, "run_id")
 
 The SDK provides two streaming patterns over the SSE `/runs/stream` endpoint.
 
-**Block until done** — returns the final `done` payload or returns an error on timeout. It reads only that payload, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events:
+**Block until done** — returns the final `done` payload. It reads only the run payloads, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events. By default, if the stream ends before `done`, it returns the latest run it saw with a nil error: the `result` event's run if one arrived (`ResultReportedAt` is set and `Output` is the answer), else the `init` one. That run may not have finished, for example after a cut stream, so check its `Status` and `ResultReportedAt`. A timeout or a broken stream returns the error, with that latest run beside it.
+
+Whichever bound passes first ends the wait: `ctx`'s deadline (60s by default when `ctx` has none), or the HTTP client's `Timeout` (30s with the default client; see `Options.HTTPClient`):
 
 ```go
 // If ctx has no deadline, the SDK applies a default timeout.
@@ -419,7 +423,29 @@ run, err := client.RunStreamingAgentAndWait(ctx, "agent_id", seclai.AgentRunStre
 })
 ```
 
-**Channel-based** — yields every SSE event as `AgentRunEvent`:
+We recommend `RunStreamingAgentAndWaitWithOptions` with `ErrorOnIncomplete`, which becomes the default in the next major version. It never returns an unfinished run as if it were final. Once the stream has opened, a timeout or a stream that ends or breaks before `done` returns a `*StreamingError` whose `Run` holds the latest snapshot (the same run is returned beside it), and cancelling `ctx` returns the latest snapshot with `ctx.Err()` instead.
+
+Add `ReturnOnResult` to return as soon as the run reports its result, without waiting for `done`. The run may still be in progress: its `Status` may not be terminal and the run can still fail, so check `ResultReportedAt`, not `Status`. On a timeout or a cut stream, read the answer from the error's `Run`:
+
+<!-- sdksync:check -->
+```go
+input := "Hello"
+run, err := client.RunStreamingAgentAndWaitWithOptions(ctx, "agent_id", seclai.AgentRunStreamRequest{
+	Input: &input,
+}, &seclai.RunStreamingAgentAndWaitOptions{ErrorOnIncomplete: true, ReturnOnResult: true})
+streamErr, _ := err.(*seclai.StreamingError)
+switch {
+case err == nil:
+	fmt.Println(*run.Output, run.ResultReportedAt != nil)
+case streamErr != nil && streamErr.Run != nil && streamErr.Run.ResultReportedAt != nil:
+	// The run reported its answer before the stream stopped.
+	fmt.Println(*streamErr.Run.Output)
+default:
+	fmt.Println(err)
+}
+```
+
+**Channel-based** — yields every SSE event as `AgentRunEvent`. Take the run's answer from the `result` event; the `done` event's `Status` says whether the whole run succeeded, which can still fail after its result. When the server answers with plain JSON instead of an SSE stream, the channel yields only a `done` event, so read the answer from its `Run`:
 
 ```go
 events, errCh := client.RunStreamingAgent(ctx, "agent_id", seclai.AgentRunStreamRequest{
@@ -435,14 +461,26 @@ if err := <-errCh; err != nil {
 
 ### Polling
 
-For environments where SSE is not practical, poll for a completed run:
+For environments where SSE is not practical, poll for a completed run. When
+`ctx` ends during the wait between polls, the last polled run is returned with
+`ctx.Err()`. When a poll's `GetAgentRun` fails, the last polled run is
+returned with that fetch's error; a failed starting `RunAgent` returns nil. Set
+`ReturnOnResult` to return as soon as the run has reported its result
+(`ResultReportedAt` is set). The run may still be in progress: its `Status`
+may not be terminal and the run can still fail, so check `ResultReportedAt`,
+not `Status`:
 
 ```go
+input := "Hello"
 result, err := client.RunAgentAndPoll(ctx, "agent_id", seclai.AgentRunRequest{
-	Input: "Hello",
+	Input: &input,
 }, &seclai.RunAgentAndPollOptions{
-	PollInterval: 2 * time.Second,
+	PollInterval:   2 * time.Second,
+	ReturnOnResult: true,
 })
+if err == nil && result.ResultReportedAt != nil {
+	fmt.Println(*result.Output)
+}
 ```
 
 ### Agent input uploads
@@ -495,6 +533,47 @@ if _, err := client.SetAcceptedAttachments(ctx, "agent_id", "trigger_id", seclai
 
 `CreateAgentRequest` and `UpdateAgentDefinitionRequest` take the same
 `AcceptedAttachments` to declare them in the same call.
+
+### Trigger metadata keys
+
+Declare the run metadata keys an agent's trigger provides. Steps reference one
+as `{{metadata.<key>}}`, and a caller-started run that sends an undeclared
+custom key, or lacks a required one, is refused with a 400. `SetMetadataKeys`
+replaces the whole declaration, so declare a custom key with it before sending
+that key in a run's `Metadata`; the API answers 400 when the agent still
+references a key no trigger of its branch declares. An empty, non-nil
+`MetadataKeys` clears the declaration; a nil one is refused with a
+`*ConfigurationError` before anything is sent. A nil
+`Required` is treated as false, and only a `custom` key can be required.
+
+<!-- sdksync:check -->
+```go
+keys, err := client.GetMetadataKeys(ctx, "agent_id", "trigger_id")
+if err != nil {
+	fmt.Println(err)
+	return
+}
+for _, k := range keys.DeclarableKeys { // system and source keys this trigger's type can declare
+	fmt.Println(k.Key, k.Origin, k.AlwaysPresent)
+}
+
+required := true
+updated, err := client.SetMetadataKeys(ctx, "agent_id", "trigger_id", seclai.SetMetadataKeysRequest{
+	MetadataKeys: []seclai.MetadataKeyDeclaration{
+		{Key: "customer_id", Origin: "custom", Required: &required},
+		{Key: "channel", Origin: "custom"},
+	},
+})
+if err != nil {
+	fmt.Println(err)
+	return
+}
+if updated.Warnings != nil {
+	for _, w := range *updated.Warnings { // agents whose call_agent mapping no longer fits
+		fmt.Println(w)
+	}
+}
+```
 
 ### Agent run attachments
 
@@ -600,6 +679,28 @@ kb, _ := client.CreateKnowledgeBase(ctx, seclai.CreateKnowledgeBaseBody{})
 fetched, _ := client.GetKnowledgeBase(ctx, "kb_id")
 _, _ = client.UpdateKnowledgeBase(ctx, "kb_id", seclai.UpdateKnowledgeBaseBody{})
 _ = client.DeleteKnowledgeBase(ctx, "kb_id")
+```
+
+`GetKnowledgeBaseMetadataKeyStats` reports the item-metadata keys seen in a
+knowledge base's content, for all time and the last 30 and 7 days, with each
+key's item count and its most frequent values:
+
+<!-- sdksync:check -->
+```go
+stats, err := client.GetKnowledgeBaseMetadataKeyStats(ctx, "kb_id")
+if err != nil {
+	fmt.Println(err)
+	return
+}
+for _, w := range stats.Windows {
+	fmt.Println(w.Window, w.TotalItems)
+	for _, k := range w.Keys {
+		fmt.Println(" ", k.Key, k.Items, k.DistinctValues)
+		for _, v := range k.TopValues {
+			fmt.Println("   ", v.Value, v.Items)
+		}
+	}
+}
 ```
 
 ### Memory banks
@@ -1032,16 +1133,22 @@ _, _ = client.SetEmailTriggerConfig(ctx, "agent_id", "trigger_id",
 from Slack with `/seclai` or the message shortcut: the Slack connection, the
 form, the channels, who sees the reply and the conversation settings. A nil
 field is left unchanged. Each form value reaches the run as
-`{{metadata.<key>}}`.
+`{{metadata.<key>}}`; the run's input is the text typed after `/seclai <alias>`,
+or the message the shortcut was used on. `Alias` sets that name: lowercase
+letters, digits and hyphens, unique in the Slack workspace, generated from the
+agent's name when unset or empty. `Input` is deprecated: the API ignores it
+from 2026-11-04 on.
 
 <!-- sdksync:check -->
 ```go
+alias := "triage"
 scope := seclai.SlackTriggerScope("selected_channels")
 visibility := seclai.SlackReplyVisibility("private")
 channels := []string{"C0123456789"}
 form := []map[string]any{{"key": "topic", "label": "Topic", "type": "short_text", "required": true}}
 turns := true
 cfg, err := client.SetSlackTriggerConfig(ctx, "agent_id", "trigger_id", seclai.SetSlackTriggerConfigRequest{
+	Alias:        &alias,
 	Scope:        &scope,
 	ChannelIds:   &channels,
 	Visibility:   &visibility,
@@ -1051,6 +1158,9 @@ cfg, err := client.SetSlackTriggerConfig(ctx, "agent_id", "trigger_id", seclai.S
 if err != nil {
 	fmt.Println(err)
 	return
+}
+if cfg.Alias != nil {
+	fmt.Println("/seclai " + *cfg.Alias)
 }
 fmt.Println(cfg.Activation, cfg.MissingScopes) // scopes the Slack connection lacks for optional features
 ```
@@ -1255,12 +1365,22 @@ if err != nil {
 | `*ConfigurationError` | Missing API key, invalid base URL |
 | `*APIStatusError` | Non-2xx HTTP response |
 | `*APIValidationError` | HTTP 422 (embeds `APIStatusError`), except from the `Download*` methods, which return `*APIStatusError` for every non-2xx |
-| `*StreamingError` | SSE stream ended unexpectedly |
+| `*StreamingError` | SSE stream ended with no run; with `ErrorOnIncomplete`, it timed out, ended or broke before `done`, and `Run` holds the latest snapshot |
 | `*UnexpectedResponseError` | A 2xx response that is not the list its method reads |
 
 ## Low-level access
 
-Use `client.Do()` for direct API requests:
+Use `client.Do()` for direct API requests. By default `apiPath` is taken as
+unescaped and escaped as a whole, as in earlier releases: pass IDs in it raw,
+since a `%` is sent as `%25`. Set `Options.EscapedDoPaths`, recommended and the
+default from the next major version, to send `apiPath` as given: escape IDs in
+it with `url.PathEscape`, and a `%XX` in it is kept as an escape. `.` and `..`
+segments are resolved before sending, and `url.PathEscape` leaves them as they
+are, so reject an ID of `.` or `..` (or, with `EscapedDoPaths`, write its dots
+as `%2E`). Reject a blank ID too, which `Do` cannot detect:
+`"/agents/" + id + "/runs"` with an empty `id` collapses to `/agents/runs`,
+another endpoint, and `"/agents/" + id` is `/agents/`, a path `Do` sends as it
+is:
 
 ```go
 var result MyType

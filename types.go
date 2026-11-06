@@ -118,6 +118,28 @@ type SetAcceptedAttachmentsRequest = generated.SetAcceptedAttachmentsRequest
 // AcceptedAttachmentsResponse is the input attachments a trigger accepts.
 type AcceptedAttachmentsResponse = generated.AcceptedAttachmentsResponse
 
+// ── Trigger Metadata Keys ───────────────────────────────────────────────────
+
+// MetadataOrigin is who writes a run metadata key: "system" and "source" keys
+// are written by the platform, "custom" keys by the caller or the trigger.
+type MetadataOrigin = generated.MetadataOrigin
+
+// MetadataKeyDeclaration is one run metadata key a trigger declares, which the
+// agent's steps may reference as {{metadata.<key>}}. A nil Required is sent
+// unset and the API treats it as false; only a "custom" key can be required.
+type MetadataKeyDeclaration = generated.MetadataKeyDeclaration
+
+// DeclarableMetadataKey is a system or source key a trigger's type can declare.
+type DeclarableMetadataKey = generated.DeclarableMetadataKey
+
+// SetMetadataKeysRequest is the request body for [Client.SetMetadataKeys]. Its
+// MetadataKeys is the whole declaration and replaces the trigger's current one.
+type SetMetadataKeysRequest = generated.SetMetadataKeysRequest
+
+// MetadataKeysResponse is the run metadata keys a trigger declares, plus the
+// system and source keys its type can declare.
+type MetadataKeysResponse = generated.MetadataKeysResponse
+
 // ── Agent Import ────────────────────────────────────────────────────────────
 
 // AgentImportPreviewRequest is the request body for previewing an agent_definition import (dry-run validation).
@@ -444,6 +466,22 @@ type CreateKnowledgeBaseBody = generated.CreateKnowledgeBaseBody
 
 // UpdateKnowledgeBaseBody is the request body for updating a knowledge base.
 type UpdateKnowledgeBaseBody = generated.UpdateKnowledgeBaseBody
+
+// KnowledgeBaseMetadataKeyStatsResponse is the item-metadata keys seen in a
+// knowledge base's content, counted over several time windows.
+type KnowledgeBaseMetadataKeyStatsResponse = generated.KnowledgeBaseMetadataKeyStatsResponse
+
+// MetadataKeyWindowResponse is the item-metadata keys seen in one time window:
+// "all_time", "last_30_days" or "last_7_days".
+type MetadataKeyWindowResponse = generated.MetadataKeyWindowResponse
+
+// MetadataKeyCountResponse is one item-metadata key's count within a window,
+// with its most frequent values.
+type MetadataKeyCountResponse = generated.MetadataKeyCountResponse
+
+// MetadataValueCountResponse is one value of an item-metadata key and how many
+// items carry it.
+type MetadataValueCountResponse = generated.MetadataValueCountResponse
 
 // ── Memory Banks ────────────────────────────────────────────────────────────
 

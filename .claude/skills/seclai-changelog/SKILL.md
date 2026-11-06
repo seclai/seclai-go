@@ -64,13 +64,13 @@ forward.
 
 ## Determine the version
 
-Do not guess the next version. Releases are cut by `seclai/github-tag-action` in `.github/workflows/main-build.yaml`, which reads the **merge commit message**:
+Do not guess the next version. Releases are cut by `seclai/github-tag-action` in `.github/workflows/main-build.yaml`, which scans the **commit messages** for a bump keyword. The PR title is not scanned:
 
 - contains `#major` → major bump
 - contains `#minor` → minor bump
 - otherwise → `DEFAULT_BUMP: patch`
 
-So a change that adds endpoints must say `#minor` in a commit message, or the heading you write will not match the tag that gets cut. The keyword goes in the commit message, not the PR title. Confirm the intended bump with the user when it isn't stated, and flag the mismatch risk if no commit message carries the keyword.
+Put `#minor` / `#major` in a branch commit message; never tell the user that the PR title will do. The keyword reaches `main` in the squash commit's message, so keep it when editing the message in the merge dialog. A change that adds endpoints needs `#minor` in a commit message, or it ships as a patch and the heading you write will not match the tag that gets cut. Confirm the intended bump with the user when it isn't stated, and flag the mismatch risk if no branch commit message carries the keyword.
 
 Check `git tag --sort=-v:refname | head -1` for the current latest, then apply the bump.
 

@@ -232,3 +232,73 @@ func TestOmitUnsetRequestFields_MarksOptionalNullableRequestProperties(t *testin
 		t.Fatalf("response-only schema must be left alone")
 	}
 }
+
+func TestRetainRemovedRequestFields_RestoresDeprecatedSlackInput(t *testing.T) {
+	input := []byte(`{
+		"components": {"schemas": {"SetSlackTriggerConfigApiRequest": {
+			"type": "object",
+			"properties": {"alias": {"type": "string", "nullable": true}}
+		}}},
+		"paths": {"/x": {"put": {"requestBody": {"content": {"application/json": {
+			"schema": {"$ref": "#/components/schemas/SetSlackTriggerConfigApiRequest"}
+		}}}}}}
+	}`)
+	var doc any
+	if err := json.Unmarshal(input, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if err := retainRemovedRequestFields(doc); err != nil {
+		t.Fatalf("retainRemovedRequestFields: %v", err)
+	}
+	omitUnsetRequestFields(doc)
+
+	props := doc.(map[string]any)["components"].(map[string]any)["schemas"].(map[string]any)["SetSlackTriggerConfigApiRequest"].(map[string]any)["properties"].(map[string]any)
+	in, ok := props["input"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected input restored, got %v", props)
+	}
+	if in["deprecated"] != true || in["x-omitempty"] != true || in["type"] != "string" {
+		t.Fatalf("expected deprecated, omitempty string, got %v", in)
+	}
+}
+
+// When the spec declares a retained property again, the entry is stale:
+// specfix fails rather than keep the entry, and leaves the spec's own
+// definition alone.
+func TestRetainRemovedRequestFields_FailsOnAStaleEntry(t *testing.T) {
+	declared := map[string]any{"type": "string", "description": "from the spec"}
+	doc := map[string]any{"components": map[string]any{"schemas": map[string]any{
+		"SetSlackTriggerConfigApiRequest": map[string]any{
+			"properties": map[string]any{"input": declared},
+		},
+	}}}
+	err := retainRemovedRequestFields(doc)
+	want := "stale entry `SetSlackTriggerConfigApiRequest.input` in the retained-fields list: the spec declares it again; remove the entry"
+	if err == nil || err.Error() != want {
+		t.Fatalf("got error %v, want %q", err, want)
+	}
+	if declared["deprecated"] != nil {
+		t.Fatalf("expected the spec's own property left alone, got %v", declared)
+	}
+}
+
+// Every entry is checked before any is applied: with a stale entry after a
+// valid one, the valid one is not added either.
+func TestRetainRemovedRequestFields_StaleEntryLeavesDocUnchanged(t *testing.T) {
+	saved := retainedRequestFields
+	t.Cleanup(func() { retainedRequestFields = saved })
+	retainedRequestFields = []retainedRequestField{
+		{schema: "Req", property: "gone", def: map[string]any{"type": "string"}},
+		{schema: "Req", property: "back", def: map[string]any{"type": "string"}},
+	}
+	props := map[string]any{"back": map[string]any{"type": "string"}}
+	doc := map[string]any{"components": map[string]any{"schemas": map[string]any{
+		"Req": map[string]any{"properties": props},
+	}}}
+	if err := retainRemovedRequestFields(doc); err == nil {
+		t.Fatal("want the stale entry refused")
+	}
+	if _, added := props["gone"]; added || len(props) != 1 {
+		t.Fatalf("doc changed: %v", props)
+	}
+}

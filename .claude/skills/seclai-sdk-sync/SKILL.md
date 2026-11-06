@@ -97,8 +97,8 @@ schema, and splits the result by how much it costs you:
 - **SHAPE MISMATCH** (error) — the client commits to a list and the endpoint
   returns an object, or the reverse. This throws at deserialization; a shipped
   SDK is already broken. This is the 2026-07 envelope change.
-- **NAME DIFFERS** (warning) — same shape, different type name. All four SDKs
-  drop the spec's `Model` and `Api` affixes by convention, so this tier is mostly
+- **NAME DIFFERS** (warning) — same shape, different type name. The SDKs' own
+  type names often drop the spec's `Model` and `Api` affixes, so this tier is mostly
   noise by design. Keep it out of CI with `--quiet-renamed`.
 - **UNTYPED** (warning) — the spec names a schema and the client returns
   `JsonElement` / `json.RawMessage` / `unknown` / `JSONValue`. Not a defect, but
@@ -153,38 +153,100 @@ diff called 21 JavaScript changes breaking when none were:
 
 - **REMOVED / BREAKING** (error) — a released signature no longer works: method
   gone, parameter list changed, or a return type changed in a static language.
-- **WARN** — compatible but worth checking: a *trailing* optional parameter
-  (source compatible; flagged as binary breaking for C#), `unknown` narrowed to a
-  concrete type in TypeScript (safe), an optional member added to an inline
-  TypeScript options object such as `opts: { signal?: AbortSignal } = {}` (never
-  to an empty `{}`, which accepts any value the new type may reject; every
-  other member unchanged or only widened to accept `undefined`, the parameter's
-  name and its default unchanged; usually source
-  compatible, but a caller passing a non-literal object that already carries a
-  same-named property of another type — `const o = { signal: "abc" }` — no
-  longer compiles, since excess-property checks only cover literals), an
-  optional options-object member widened to accept `undefined`
-  (`x?: T` -> `x?: T | undefined`; source compatible), a TypeScript parameter
-  type wrapped in `Omit<T, "k">` (usually source compatible: an object literal
-  that sets an omitted key no longer compiles) or `Partial<T>` (source
-  compatible), a TypeScript options parameter retyped to another **named** type
-  whose members, resolved from the declarations under `src/` at the tag and in
-  the working tree (interfaces, `extends`, aliases, `&`, `Omit`, `Pick`,
-  `Partial`), keep every old member with the same optionality and type and add
-  only optional ones — a member whose type names a local type counts as
-  unchanged only if that type's declaration is identical at both revisions, and
-  a type that does not resolve (generic, import, indexed access, union) stays
-  breaking — a required Python or TypeScript parameter made optional in place
-  (`id: str` -> `id: str | None = None`, `id: string` -> `id?: string`; same
-  name and position, positional stays positional, type unchanged or only widened
-  by `None`/`undefined`; not graded this way for C#), or a Python return
-  annotation (not enforced — but confirm the runtime value did not change too).
+- **WARN** — compatible but worth checking. One line per kind:
+  - **Trailing optional parameter**: source compatible, but flagged as binary
+    breaking for C#.
+  - **`unknown` narrowed** to a concrete TypeScript return type, keeping its
+    wrapper: `unknown` to any type, `unknown[]` to `X[]` or `Array<X>`,
+    `Promise<unknown>` to `Promise<X>`, `Promise<unknown[]>` to
+    `Promise<X[]>`. Changing the wrapper (`unknown[]` to `Promise<X>`) breaks
+    callers that `.map` or `await`, so it stays BREAKING, as does an
+    `unknown` anywhere else (a callback parameter, a type-parameter
+    constraint, `Record<string, unknown>`).
+  - **Options-object member added**: an optional member added to an inline
+    TypeScript options object such as `opts: { signal?: AbortSignal } = {}`, with
+    every other member, the parameter's name and its default unchanged. Usually
+    source compatible, but a caller passing a non-literal object that already
+    has a same-named property of another type (`const o = { signal: "abc" }`) no
+    longer compiles, since excess-property checks only cover literals. Never
+    graded this way for an empty `{}`, which accepts values the new type rejects.
+  - **Widened to `undefined`**: an optional options-object member `x?: T` ->
+    `x?: T | undefined`. Source compatible. A callback whose *return* type gained
+    `| undefined` is not this, and stays breaking.
+  - **`Omit<T, "k">`**: a TypeScript parameter type wrapped in it. Usually source
+    compatible; an object literal that sets an omitted key no longer compiles.
+  - **`Partial<T>`**: a TypeScript parameter type wrapped in it. Source compatible.
+  - **Retyped to another named type**: a TypeScript options parameter whose new
+    type, resolved from the declarations under `src/` at the tag and in the
+    working tree (interfaces, `extends`, aliases, `&`, `Omit`, `Pick`, `Partial`),
+    keeps every old member with the same optionality and type and adds only
+    optional ones. A member whose type names a local type counts as unchanged
+    only if that declaration is identical at both revisions. A type that does
+    not resolve (generic, import, indexed access, union) stays breaking.
+  - **Required parameter made optional in place**: Python `id: str` ->
+    `id: str | None = None`, TypeScript `id: string` -> `id?: string`. Same name
+    and position, positional stays positional, type unchanged or only widened by
+    `None`/`undefined`. Not graded this way for C#.
+  - **Python return annotation changed**: not enforced, but confirm the runtime
+    value did not change too.
+
   The parameter-level kinds combine: each old parameter must be unchanged or
   changed in one of these ways, and any added parameter must be optional and at
   the end.
 
+A reformat is not a change: parameter lists are compared as their split,
+whitespace-normalised members, so a trailing comma added when prettier or black
+wraps a signature is invisible. Python's bare `*` is kept, since making a
+parameter keyword-only does break callers.
+
+The return type is read up to the `{` that opens the body, at bracket depth 0,
+so a lone Go `error`, a TypeScript constructor with no annotation,
+`Promise<{ id: string }>`, a generic prettier wraps onto its own lines, and a
+conditional type (`T extends U ? { a: 1 } : never`) are all read whole. An async
+generator (`async *runStreamingAgent(`) is a method like any other, and a
+generic method's type parameters (`paginate<T extends Page>(`, wrapped or
+holding a `() => void`) are recorded with its return type: changing one, or
+its constraint, is BREAKING ("type parameters changed"). Until
+2026-10-31 a regex read it instead, and 27 seclai-go methods returning a lone
+value, plus the TypeScript constructor, were invisible: removing one reported
+"no breaking change".
+
+A head the scan matches but cannot read — type parameters or a return type it
+never closes, a parameter list that does not balance — is reported as
+**UNREADABLE** and fails the run, at either revision, even when nothing changed.
+Before, such a method was silently left out of the surface and its removal
+reported "no breaking change"; every scanner bug found in the 2026-10 reviews
+was that. Now an unfamiliar shape costs a look instead of a missed break: fix
+the scanner and add a test, then rerun. A statement the pattern also matches
+(`setup(x);` at class-member indent) is not a method and is not listed.
+
 Only exported Go methods are surface. A lowercase method is unreachable outside
 the package, so a change to one breaks no caller.
+
+**Go struct fields are surface too.** seclai-go's request/response types are
+aliases (`type SetSlackTriggerConfigRequest =
+generated.SetSlackTriggerConfigApiRequest`) of oapi-codegen structs, and
+`generated` is a public package, so a field dropped by regeneration breaks
+callers while every method signature is unchanged. `surface` diffs the exported
+fields of exported structs in package `seclai` (read through the alias) and in
+`generated/`, and the names of their other exported types, constants and
+variables (an enum value the spec drops removes a generated constant): a removed
+field, type, constant or variable is REMOVED; a changed field type, or a changed
+declared type of a constant or variable, is BREAKING; an added one is ADDED. For
+a non-struct type only the first line of its definition is compared (`string`,
+an alias's target, `interface {`), so a change after the first line (a method of
+a multi-line interface) is not seen. An alias to an exported struct in `seclai`
+or `generated/` is compared by its fields, so re-pointing it at a struct with
+the same fields is not seen either; if the old target is removed, its REMOVED
+line still catches that. An alias to a struct in another package (`type File =
+openapi_types.File`) is compared by its target's name only. Tags and comments
+are ignored; in a nested struct only backtick tags are, the form oapi-codegen
+writes. A struct it cannot read, or one embedding an unexported struct, is
+UNREADABLE, as for a method head. Methods on generated types (union accessors
+such as `AsValidationErrorLoc0`) are not read. It found one shipped break:
+v1.8.0 renamed `generated.InsufficientCreditsDetail.Error` and
+`generated.InsufficientCreditsResponse.Detail`. C# has the same blind spot for
+model properties, and it is not covered.
 
 An optional parameter inserted *mid-list* is graded breaking, not a warning: in
 C# a positional `M(id, token)` then tries to bind `token` to the new parameter.
@@ -207,12 +269,22 @@ both revisions.
 
 Only seclai-csharp: everywhere else regeneration keeps models in step. Use
 `--since <rev>`, which limits the report to properties a schema **gained** since
-that rev. Without it you get every long-standing coverage gap — 27 for
-seclai-csharp, none of them actionable, which is how a gate gets muted.
+that rev. Without it you get every long-standing coverage gap, which is how a
+gate gets muted.
 
-It cannot see models whose schema is declared inline rather than as a named
-component; it prints how many are unchecked for that reason. Two of the six
-models left stale in 2026-07 were in that blind spot, so treat the count as real.
+A class is matched to its schema by name with the module prefix and the `Api` /
+`Model` affixes dropped (`SlackTriggerConfigApiResponse` is
+`SlackTriggerConfigResponse`), and by the
+client's own methods: the class a method returns, or takes as its body, models
+that operation's schema. That links `ContentFileUploadResponse` and picks which
+`FileUploadResponse` a class is. Until 2026-11 an affixed class was never
+matched, so `--since` did not report the Slack `alias` addition. A name that
+still matches several schemas is listed as AMBIGUOUS and checked only for the
+properties they all declare.
+
+It cannot see models with no named schema (an inline body, an SSE event, a
+client-side options class); it names them as unchecked. Two of the six models
+left stale in 2026-07 were in that blind spot, so read the list.
 
 ## `docexamples` — compile the README
 
@@ -238,7 +310,7 @@ cover README snippets, and two shipped PRs contained examples that could not com
 | --- | --- | --- | --- |
 | seclai-python | generated + hand-written wrappers | yes | `make generate`, then black |
 | seclai-javascript | types generated, methods hand-written | yes | `npm run generate` |
-| seclai-go | hand-written | yes | |
+| seclai-go | types generated, methods hand-written | yes | `make generate`; `types.go` aliases the `generated/` structs |
 | seclai-csharp | hand-rolled from the start | **no** | no codegen library was suitable; still at near-full parity — sync it like the others |
 | seclai-cli | wraps `@seclai/sdk` | no | coverage question is command-to-SDK-method |
 | seclai-mcp | no client source | no | |
@@ -271,7 +343,11 @@ For repos without a bundled spec, point at one:
      generator formats with ruff but the repo commits black, so raw output shows
      ~240 changed files that collapse to ~60 real ones.
    - javascript: `npm run generate` (no churn; types only).
-   - go / csharp: nothing to regenerate.
+   - go: `make generate` (`go generate ./...`, directives in `generated/gen.go`):
+     `cmd/specfix` converts the 3.1 spec to 3.0, then oapi-codegen v2.4.1 writes
+     `generated/seclai.gen.go`. To keep a field the spec removed, compiling and
+     marked deprecated, add it to `retainedRequestFields` in `cmd/specfix`.
+   - csharp: nothing to regenerate; hand-written models are what `models` checks.
 4. **`parity`** to list what is missing. Implement every path, not just the ones
    that look interesting — binary/stream endpoints with no JSON schema are the
    ones that get skipped.
@@ -350,7 +426,6 @@ local conventions (`searchDocs` / `search_docs` / `SearchDocs`).
 
 ## Release
 
-The version comes from the merge commit message, read by `seclai/github-tag-action`
-with `DEFAULT_BUMP: patch`. A sync that adds endpoints needs `#minor` in a commit
-message (not the PR title), or it ships as a patch and the changelog heading
-will not match the tag.
+A sync that adds endpoints needs a `#minor` bump; where the keyword goes and how
+the squash commit carries it is in the `seclai-changelog` skill, "Determine the
+version".

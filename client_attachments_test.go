@@ -22,7 +22,7 @@ type requestRecorder struct {
 func newRecordingServer(t *testing.T, rec *requestRecorder, status int, contentType, body string) *Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rec.method, rec.path, rec.rawQuery = r.Method, r.URL.Path, r.URL.RawQuery
+		rec.method, rec.path, rec.rawQuery = r.Method, r.URL.EscapedPath(), r.URL.RawQuery
 		rec.rawBody, _ = io.ReadAll(r.Body)
 		if len(rec.rawBody) > 0 {
 			_ = json.Unmarshal(rec.rawBody, &rec.body)
@@ -87,6 +87,107 @@ func TestClient_SetAcceptedAttachments_NilAcceptsAnyFiles(t *testing.T) {
 	// null is the documented "accept any files" declaration, so it must be sent, not omitted.
 	if string(rec.rawBody) != `{"accepted_attachments":null}` {
 		t.Fatalf("expected an explicit null, got %s", rec.rawBody)
+	}
+}
+
+// ── Metadata keys ───────────────────────────────────────────────────────────
+
+const testMetadataKeys = `{"agent_id":"3f1a0d6e-0000-4000-8000-000000000001","trigger_id":"3f1a0d6e-0000-4000-8000-000000000002",
+	"metadata_keys":[{"key":"customer_id","origin":"custom","required":true}],
+	"declarable_keys":[{"key":"sender","origin":"system","always_present":true}],
+	"accepts_any_source_key":false,"warnings":["agent b calls this agent without customer_id"]}`
+
+func TestClient_GetMetadataKeys(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", testMetadataKeys)
+
+	got, err := c.GetMetadataKeys(context.Background(), "a_1", "t_1")
+	if err != nil {
+		t.Fatalf("GetMetadataKeys: %v", err)
+	}
+	rec.expect(t, http.MethodGet, "/agents/a_1/triggers/t_1/metadata-keys", "")
+	if len(rec.rawBody) != 0 {
+		t.Fatalf("expected no body, got %s", rec.rawBody)
+	}
+	if len(got.MetadataKeys) != 1 || got.MetadataKeys[0].Key != "customer_id" || got.MetadataKeys[0].Origin != "custom" ||
+		got.MetadataKeys[0].Required == nil || !*got.MetadataKeys[0].Required {
+		t.Fatalf("unexpected metadata keys %+v", got.MetadataKeys)
+	}
+	if len(got.DeclarableKeys) != 1 || got.DeclarableKeys[0].Origin != "system" || !got.DeclarableKeys[0].AlwaysPresent {
+		t.Fatalf("unexpected declarable keys %+v", got.DeclarableKeys)
+	}
+}
+
+func TestClient_SetMetadataKeys(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", testMetadataKeys)
+
+	got, err := c.SetMetadataKeys(context.Background(), "a_1", "t_1", SetMetadataKeysRequest{
+		MetadataKeys: []MetadataKeyDeclaration{
+			{Key: "customer_id", Origin: "custom", Required: ptr(true)},
+			{Key: "channel", Origin: "custom"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SetMetadataKeys: %v", err)
+	}
+	rec.expect(t, http.MethodPut, "/agents/a_1/triggers/t_1/metadata-keys", "")
+	// An unset Required is omitted, so the API's default (false) applies.
+	want := `{"metadata_keys":[{"key":"customer_id","origin":"custom","required":true},{"key":"channel","origin":"custom"}]}`
+	if string(rec.rawBody) != want {
+		t.Fatalf("body %s, want %s", rec.rawBody, want)
+	}
+	if got.Warnings == nil || len(*got.Warnings) != 1 {
+		t.Fatalf("unexpected warnings %+v", got.Warnings)
+	}
+}
+
+// A nil MetadataKeys is refused before anything is sent, rather than sent as
+// null for the API to refuse with 422; an empty slice clears the declaration.
+func TestClient_SetMetadataKeys_NilIsRefused(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", testMetadataKeys)
+	_, err := c.SetMetadataKeys(context.Background(), "a_1", "t_1", SetMetadataKeysRequest{})
+	var configErr *ConfigurationError
+	if !errors.As(err, &configErr) || configErr.Message != "SetMetadataKeys: MetadataKeys must not be nil; pass an empty slice to clear" {
+		t.Fatalf("want a *ConfigurationError, got %T %v", err, err)
+	}
+	if rec.method != "" {
+		t.Fatalf("a request was sent: %s %s", rec.method, rec.path)
+	}
+
+	if _, err := c.SetMetadataKeys(context.Background(), "a_1", "t_1", SetMetadataKeysRequest{MetadataKeys: []MetadataKeyDeclaration{}}); err != nil {
+		t.Fatalf("SetMetadataKeys: %v", err)
+	}
+	if string(rec.rawBody) != `{"metadata_keys":[]}` {
+		t.Fatalf("body %s, want an empty list", rec.rawBody)
+	}
+}
+
+func TestClient_GetKnowledgeBaseMetadataKeyStats(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", `{"knowledge_base_id":"kb_1","windows":[
+		{"window":"all_time","since":null,"total_items":10,"keys":[
+			{"key":"author","items":8,"distinct_values":2,"top_values":[{"value":"ann","items":5},{"value":"bo","items":3}]}]},
+		{"window":"last_7_days","since":"2026-10-29T00:00:00Z","total_items":1,"keys":[]}]}`)
+
+	got, err := c.GetKnowledgeBaseMetadataKeyStats(context.Background(), "kb_1")
+	if err != nil {
+		t.Fatalf("GetKnowledgeBaseMetadataKeyStats: %v", err)
+	}
+	rec.expect(t, http.MethodGet, "/knowledge_bases/kb_1/metadata-key-stats", "")
+	if got.KnowledgeBaseId != "kb_1" || len(got.Windows) != 2 {
+		t.Fatalf("unexpected response %+v", got)
+	}
+	all, week := got.Windows[0], got.Windows[1]
+	if all.Window != "all_time" || all.Since != nil || all.TotalItems != 10 || len(all.Keys) != 1 {
+		t.Fatalf("unexpected all_time window %+v", all)
+	}
+	if k := all.Keys[0]; k.Key != "author" || k.Items != 8 || k.DistinctValues != 2 || len(k.TopValues) != 2 || k.TopValues[0].Value != "ann" {
+		t.Fatalf("unexpected key %+v", k)
+	}
+	if week.Since == nil || week.Since.Day() != 29 {
+		t.Fatalf("unexpected last_7_days window %+v", week)
 	}
 }
 

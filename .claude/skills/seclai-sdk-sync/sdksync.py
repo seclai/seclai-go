@@ -53,8 +53,12 @@ PATH_LITERAL_RE = r"""(?:"(/[^"\n]*)"|`(/[^`\n]*)`|'(/[^'\n]*)')"""
 #                 `[^)]*` class: a callback type or a `(default: 2000)` doc
 #                 comment would end it early, the method would drop out of the
 #                 surface and be reported REMOVED.
-#   sig_tail_re — matched straight after the closing `)` (the return type).
-#   sig_groups  — head groups, then "params", then tail groups.
+#   The return type after the closing `)` is read by `_read_return_tail`, not a
+#   regex: `Promise<{ id: string }>` and Go's single, untupled `error` both
+#   defeated one.
+#   sig_groups  — head groups, then "params", then "ret" when it comes after.
+#   type_params — a `<...>` type-parameter list may sit between the name and
+#                 `(`; it is read and recorded with the return type.
 #   line_comment — the line-comment marker; `public_surface` strips these, and
 #                 `/* */` too when it is `//`, from the whole file. Default `//`.
 # Endpoint helpers, used by `params` and `returns` (see `request_blocks`):
@@ -68,7 +72,6 @@ _JS_HELPER_RE = (r"^  (?:(?:private|protected) (?:static )?(?:async )?\*?|(?:asy
 LANGS = {
     "python": {
         "sig_re": r"\n    (?:async )?def ([a-z]\w*)\(",
-        "sig_tail_re": r"\s*->\s*([^:]+):",
         "line_comment": "#",
         "sig_groups": ("name", "params", "ret"),
         "detect": "seclai/seclai.py",
@@ -79,7 +82,7 @@ LANGS = {
         # calls. `api_key`, a plain property, was credited with GET /sources.
         "boundary_re": r"^[ \t]*(?:async )?def |^class ",
         "verb_re": r'"(GET|POST|PUT|PATCH|DELETE)"',
-        "return_re": r"\s*->\s*([^:\n]+):",
+        "return_after_params": True,
         "dict_at": [r"params\s*=\s*(?:_strip_none\()?\s*"],
         "dict_key_re": r'"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:',
         "helper_re": r"^[ \t]+(?:async )?def (_[a-z0-9][a-z0-9_]*)\(",
@@ -87,8 +90,14 @@ LANGS = {
         "skip": {"request", "request_raw", "stream", "paginate"},
     },
     "javascript": {
-        "sig_re": r"\n  (?:async )?(\w+)\(",
-        "sig_tail_re": r"\s*:\s*([^{\n]+?)\s*\{",
+        # `async *name(` (an async generator, e.g. `runStreamingAgent`) and
+        # `name<T>(` too: either one missing from the pattern left the method out
+        # of the surface, so removing it went unreported. The match stops before
+        # the `<` or `(`; `public_surface` reads a type-parameter list with
+        # `balanced_slice`, so parens and prettier's line wrapping inside it are
+        # fine, and records it with the return type (see `_split_type_params`).
+        "sig_re": r"\n  (?:async )?\*?(\w+)(?=[<(])",
+        "type_params": True,
         "sig_groups": ("name", "params", "ret"),
         "detect": "src/client.ts",
         "sources": ["src/client.ts"],
@@ -102,7 +111,7 @@ LANGS = {
                       r"(?!(?:if|for|while|switch|catch|do|else|try|return|new|typeof|await)\b)"
                       r"([a-zA-Z_][a-zA-Z0-9_]*)\s*[(<]"),
         "verb_re": r'"(GET|POST|PUT|PATCH|DELETE)"',
-        "return_re": r"\s*:\s*([^{\n]+?)\s*\{",
+        "return_after_params": True,
         "dict_at": [r"query:\s*"],
         "dict_key_re": r'["\']?([a-zA-Z_][a-zA-Z0-9_]*)["\']?\s*:',
         # Read a query literal member by member rather than with dict_key_re:
@@ -125,7 +134,6 @@ LANGS = {
         # so a change to one breaks no caller. `alertConfigsBody` and
         # `modelAlertsBody` were graded BREAKING for that reason alone.
         "sig_re": r"func \(c \*Client\) ([A-Z]\w*)\(",
-        "sig_tail_re": r" \(([^)]*)\)",
         "sig_groups": ("name", "params", "ret"),
         "detect": "client.go",
         "sources": ["*.go"],
@@ -135,8 +143,8 @@ LANGS = {
         # between two client methods are read as part of the earlier one.
         "boundary_re": r"^(?:func|type|var|const)\b",
         "verb_re": r"http\.Method(Get|Post|Put|Patch|Delete)",
-        # Go returns `(*T, error)`; take the first element of the tuple.
-        "return_re": r"\s*\(?\s*([^,{\n]+?)\s*(?:,\s*error)?\s*\)?\s*\{",
+        # Go returns `(*T, error)`; `block_return` takes the tuple's first element.
+        "return_after_params": True,
         "key_re": r'q\["([a-zA-Z_][a-zA-Z0-9_]*)"\]\s*=',
         # Go builds a query either by subscript assignment (key_re) or as a map
         # literal. Reading only the former made Search and SearchDocs — whose
@@ -177,6 +185,10 @@ LANGS = {
         "skip": {"SendJsonAsync", "SendNoContentAsync", "SendRawAsync", "BuildUri", "PaginationQuery"},
     },
 }
+
+# The scanner each language's source needs (see `strip_comments`).
+for _name, _cfg in LANGS.items():
+    _cfg["lexer"] = _name
 
 NOT_APPLICABLE = {
     "seclai-cli": "wraps @seclai/sdk; coverage is SDK-method-to-command, not spec-path",
@@ -272,16 +284,79 @@ def _quoted_end(text: str, i: int) -> int | None:
     return None
 
 
+def _norm(x: str | None) -> str:
+    """Whitespace-normalised text: every run of whitespace becomes one space."""
+    return " ".join((x or "").split())
+
+
+def _norm_ts(x: str | None) -> str:
+    """`_norm` for a piece of TypeScript signature, with prettier's wrapped angle
+    brackets joined first: `Record<\n  string,\n  unknown,\n>` becomes
+    `Record<string, unknown>`, as it is written on one line.
+
+    Plain `_norm` turned the wrapped closer's line break into a space on each
+    side of the `>`, which `_bracket` then read as a comparison, so a later scan
+    of the normalised text lost its depth. It assumes a `<` ending a line and a
+    `>` starting one are brackets. That is wrong for a comparison broken across
+    lines in a parameter default (`a <\n b`): the join then miscounts depth, which
+    can only produce a false BREAKING, never a missed one. No SDK file has it."""
+    x = re.sub(r"<[ \t]*\n\s*", "<", x or "")
+    x = re.sub(r",?\s*\n[ \t]*>", ">", x)
+    return _norm(x)
+
+
+def _bracket(s: str, j: int) -> int:
+    """+1 if `s[j]` opens a bracket, -1 if it closes one, 0 otherwise.
+
+    The one place that decides whether `<` and `>` are brackets, shared by every
+    depth-counting scanner here. They are, as generics (`Map<K, List<V>>`), except:
+    `=>` and `->` (an arrow), `<=` and `>=`, `<-` (Go's `<-chan`, `chan<-`), a
+    shift `<<`, and a `<` or `>` with a space on both sides (`a > b` in a default
+    value). Counting those drove the depth negative or left it open, so the
+    commas after them stopped splitting and arity came out wrong.
+
+    A `>` that starts its line is a closer even with a space on both sides:
+    prettier wraps a long generic as `Promise<\n    A | B\n  > {`, and reading
+    that `>` as a comparison left the return type open, so the method fell out
+    of the surface and removing it reported nothing. A comparison does not start
+    a line: prettier breaks a binary expression after its operator.
+    """
+    c = s[j]
+    if c in "([{":
+        return 1
+    if c in ")]}":
+        return -1
+    if c not in "<>":
+        return 0
+    prev = s[j - 1] if j else ""
+    nxt = s[j + 1] if j + 1 < len(s) else ""
+    if prev == " " and nxt == " " and not (c == ">" and _starts_line(s, j)):
+        return 0
+    if c == "<":
+        return 0 if (nxt in "-=<" or prev == "<") else 1
+    return 0 if (prev in "=-" or nxt == "=") else -1
+
+
+def _starts_line(s: str, j: int) -> bool:
+    """True when only spaces or tabs precede `s[j]` on its line."""
+    k = j - 1
+    while k >= 0 and s[k] in " \t":
+        k -= 1
+    return k < 0 or s[k] == "\n"
+
+
 def balanced_slice(text: str, at: int, opener: str = "{", closer: str = "}") -> str | None:
     """Return the bracket-delimited literal starting at or after `at`.
 
     Regex cannot do this: query literals span lines and nest, and a non-greedy
     match silently truncates at the first inner `}`. Brackets inside a string
-    literal (`fmt?: "{id}"`, `sep = ")"`) are text, not structure.
+    literal (`fmt?: "{id}"`, `sep = ")"`) are text, not structure. For `<`/`>`,
+    which of them count is `_bracket`'s call: the `>` of `=>` does not.
     """
     i = text.find(opener, at)
     if i == -1:
         return None
+    angle = opener == "<"
     depth, j = 0, i
     while j < len(text):
         ch = text[j]
@@ -290,9 +365,9 @@ def balanced_slice(text: str, at: int, opener: str = "{", closer: str = "}") -> 
             if end is not None:
                 j = end
                 continue
-        if ch == opener:
+        if ch == opener and (not angle or _bracket(text, j) == 1):
             depth += 1
-        elif ch == closer:
+        elif ch == closer and (not angle or _bracket(text, j) == -1):
             depth -= 1
             if depth == 0:
                 return text[i + 1: j]
@@ -300,22 +375,133 @@ def balanced_slice(text: str, at: int, opener: str = "{", closer: str = "}") -> 
     return None
 
 
-def strip_comments(text: str, line: str = "//") -> str:
+def _triple_end(text: str, i: int) -> int | None:
+    """Index just past the Python triple-quoted string opening at `text[i]`."""
+    q = text[i:i + 3]
+    j = i + 3
+    while j < len(text):
+        if text[j] == "\\":
+            j += 2
+            continue
+        if text.startswith(q, j):
+            return j + 3
+        j += 1
+    return None
+
+
+def _template_end(text: str, i: int) -> int | None:
+    """Index just past the JavaScript template literal opening at `text[i]`.
+    It may span lines, and a `${...}` inside may hold strings and templates."""
+    j, n = i + 1, len(text)
+    while j < n:
+        ch = text[j]
+        if ch == "\\":
+            j += 2
+            continue
+        if ch == "`":
+            return j + 1
+        if text.startswith("${", j):
+            depth, j = 1, j + 2
+            while j < n and depth:
+                c = text[j]
+                if c == "`":
+                    end = _template_end(text, j)
+                    if end is None:
+                        return None
+                    j = end
+                    continue
+                if c in "\"'":
+                    end = _quoted_end(text, j)
+                    j = end if end is not None else j + 1
+                    continue
+                depth += 1 if c == "{" else -1 if c == "}" else 0
+                j += 1
+            continue
+        j += 1
+    return None
+
+
+# After one of these characters or words a `/` starts a regex literal, not a division.
+_REGEX_AFTER_CHARS = set("(,=:[!&|?{};+-*%<>~^")
+_REGEX_AFTER_WORDS = {"return", "typeof", "case", "do", "else", "in", "of", "new",
+                      "delete", "void", "throw", "yield", "await", "instanceof"}
+
+
+def _regex_end(text: str, i: int, before: str) -> int | None:
+    """Index just past the JavaScript regex literal opening at `text[i]`, or None
+    when the `/` is a division. `before` is the code preceding it.
+
+    Which one a `/` is depends on the grammar; this is the usual previous-token
+    heuristic. It is still a limit: a regex directly after `)` (`if (x) /re/.test(s)`)
+    or `]` is read as a division, and its body as code. A literal must close on
+    its own line, as the grammar requires.
+    """
+    if text.startswith(("//", "/*"), i):
+        return None
+    tail = before.rstrip()
+    word = re.search(r"[A-Za-z_$][\w$]*$", tail)
+    if tail and tail[-1] not in _REGEX_AFTER_CHARS and not (word and word.group() in _REGEX_AFTER_WORDS):
+        return None
+    j, in_class = i + 1, False
+    while j < len(text):
+        c = text[j]
+        if c == "\\":
+            j += 2
+            continue
+        if c == "\n":
+            return None
+        if in_class:
+            in_class = c != "]"
+        elif c == "[":
+            in_class = True
+        elif c == "/":
+            j += 1
+            while j < len(text) and (text[j].isalnum() or text[j] in "_$"):
+                j += 1
+            return j
+        j += 1
+    return None
+
+
+def strip_comments(text: str, line: str = "//", lexer: str | None = None,
+                   drop_triple: bool = False) -> str:
     """`text` with `/* ... */` and `line`-to-end-of-line comments replaced by a
     space. String literals are left intact, so `"https://x"` is not a comment.
 
     Python passes `line="#"` and has no block comments; `/*` there would be
     an operator sequence, never a comment, so it is only honoured for `//`.
+
+    `lexer` (a `LANGS` key) adds the literals that span lines or hold comment
+    markers, so a `/*` in one cannot swallow method heads up to the next `*/`:
+    Python triple-quoted strings (replaced by `""` with `drop_triple`, which is
+    how docstrings are kept out of request scanning), JavaScript template and
+    regex literals, Go raw strings. Without it, a literal must close on its own
+    line. C# verbatim strings are a known limit.
     """
     out, j, n = [], 0, len(text)
+    recent = ""   # the last code emitted, for the regex-literal heuristic
     while j < n:
         ch = text[j]
-        if ch in "\"'`":
-            end = _quoted_end(text, j)
+        end = None
+        if lexer == "python" and text.startswith(('"""', "'''"), j):
+            end = _triple_end(text, j)
             if end is not None:
-                out.append(text[j:end])
-                j = end
+                out.append('""' if drop_triple else text[j:end])
+                recent, j = '""', end
                 continue
+        if ch == "`" and lexer == "javascript":
+            end = _template_end(text, j)
+        elif ch == "`" and lexer == "go":
+            close = text.find("`", j + 1)
+            end = None if close == -1 else close + 1
+        elif ch in "\"'`":
+            end = _quoted_end(text, j)
+        elif ch == "/" and lexer == "javascript":
+            end = _regex_end(text, j, recent)
+        if end is not None:
+            out.append(text[j:end])
+            recent, j = text[j:end], end
+            continue
         if line == "//" and text.startswith("/*", j):
             end = text.find("*/", j + 2)
             j = n if end == -1 else end + 2
@@ -327,6 +513,7 @@ def strip_comments(text: str, line: str = "//") -> str:
             out.append(" ")
             continue
         out.append(ch)
+        recent = (recent + ch)[-24:]
         j += 1
     return "".join(out)
 
@@ -336,12 +523,12 @@ def split_args(sig: str, seps: str = ",", keep_star: bool = False) -> list[str]:
 
     A naive `split(",")` turns `Dictionary<string, string> q` into two entries,
     which over-counts arity for the query helpers and reports a phantom
-    signature change for `surface`. The `>` of a TypeScript arrow `=>` is not a
-    closing bracket: counting it would split `cb: (a: A, b: B) => void` after
-    the arrow. `seps` lets an object-literal type body split on `;` too.
-    Separators and brackets inside string literals are text.
+    signature change for `surface`. Which `<`/`>` are brackets is `_bracket`'s
+    call: the `>` of `cb: (a: A, b: B) => void`, Go's `<-chan` and the `>=` of a
+    default value are not. `seps` lets an object-literal type body split on `;`
+    too. Separators and brackets inside string literals are text.
     """
-    out, depth, cur, prev = [], 0, [], ""
+    out, depth, cur = [], 0, []
     j, n = 0, len(sig)
     while j < n:
         ch = sig[j]
@@ -351,11 +538,7 @@ def split_args(sig: str, seps: str = ",", keep_star: bool = False) -> list[str]:
                 cur.append(sig[j:end])
                 j = end
                 continue
-        if ch in "<([{":
-            depth += 1
-        elif ch in ")]}" or (ch == ">" and prev != "="):
-            depth -= 1
-        prev = ch
+        depth += _bracket(sig, j)
         if ch in seps and depth == 0:
             out.append("".join(cur).strip())
             cur = []
@@ -434,15 +617,22 @@ def block_call(body: str, verb_re: str) -> tuple[str, str] | None:
     return v.group(1).upper(), path
 
 
-def strip_docs(text: str) -> str:
-    """Drop docstrings, block comments and whole-line comments.
+def code_only(text: str, cfg: dict) -> str:
+    """`text` without comments or Python docstrings, for request scanning.
 
-    Helper detection reads through this: a docstring's `"GET"` and `"/sources"`
-    example made seclai-python's `_raise_for_openapi_response` look like the
-    request behind twenty methods that never issue one.
+    Every scan strips comments with `strip_comments` and the language's lexer:
+    `surface` and the TypeScript declaration readers (`ts_declarations`,
+    `_ts_object_members`, `_ts_typed_members`) and the JavaScript query-literal
+    reader `object_literal_keys` do too, so a multi-line template
+    literal holding `/*` is read the same way everywhere. A
+    docstring's `"GET"` and `"/sources"` example made seclai-python's
+    `_raise_for_openapi_response` look like the request behind twenty methods
+    that never issue one, and a trailing `// (default: 2000)` held a `)` that
+    ended a parameter list early. Triple-quoted strings are dropped (as `""`)
+    rather than kept, which is right for docstrings and harmless elsewhere:
+    no request path or query key is written in one.
     """
-    text = re.sub(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'|/\*[\s\S]*?\*/', "", text)
-    return re.sub(r"(?m)^[ \t]*(?://|#).*$", "", text)
+    return strip_comments(text, cfg.get("line_comment", "//"), cfg.get("lexer"), drop_triple=True)
 
 
 def endpoint_helpers(text: str, cfg: dict) -> dict[str, str]:
@@ -454,16 +644,16 @@ def endpoint_helpers(text: str, cfg: dict) -> dict[str, str]:
     """
     if "helper_re" not in cfg:
         return {}
-    ends = sorted({m.start()
-                   for pat in (cfg["helper_re"], cfg["method_re"], cfg.get("boundary_re")) if pat
-                   for m in re.finditer(pat, text, re.M)})
+    # dict.fromkeys: the JavaScript boundary_re IS helper_re; scan it once.
+    patterns = dict.fromkeys(p for p in (cfg["helper_re"], cfg["method_re"], cfg.get("boundary_re")) if p)
+    ends = sorted({m.start() for pat in patterns for m in re.finditer(pat, text, re.M)})
     out: dict[str, str] = {}
     for m in re.finditer(cfg["helper_re"], text, re.M):
         name = m.group(1)
         if name in cfg.get("skip", ()) or name in out:
             continue
         end = next((e for e in ends if e > m.start()), len(text))
-        body = strip_docs(text[m.start():end])
+        body = code_only(text[m.start():end], cfg)
         if block_call(body, cfg["verb_re"]):
             out[name] = body
     return out
@@ -471,7 +661,7 @@ def endpoint_helpers(text: str, cfg: dict) -> dict[str, str]:
 
 def helper_called(body: str, cfg: dict, helpers: dict[str, str]) -> str | None:
     """Name of the first endpoint helper a method body calls, if any."""
-    code = strip_docs(body)   # a comment naming a helper is not a call to it
+    code = code_only(body, cfg)   # a comment naming a helper is not a call to it
     first: tuple[int, str] | None = None
     for name in helpers:
         m = re.search(cfg["helper_call"].replace("{name}", re.escape(name)), code)
@@ -487,7 +677,10 @@ def request_blocks(texts: list[str], cfg: dict):
     defining one is read through that helper — ONE hop. `body` stays the public
     method's, so its declared return type is what `returns` compares;
     `request_body` is where query keys are read. `helper` is None for own requests.
+    Every text is read without comments or docstrings (see `code_only`), so a
+    commented-out request is not a request and a `)` in a comment is not code.
     """
+    texts = [code_only(t, cfg) for t in texts]
     shared: dict[str, str] = {}
     if cfg.get("helper_scope") == "package":
         for text in texts:
@@ -523,7 +716,7 @@ def object_literal_keys(lit: str) -> tuple[set[str], bool]:
     """
     keys: set[str] = set()
     ok = True
-    for member in split_args(strip_comments(lit)):
+    for member in split_args(strip_comments(lit, "//", "javascript")):  # JS only (`dict_members`)
         m = re.match(r"""(?:"([^"]+)"|'([^']+)'|([A-Za-z_$][\w$]*))\s*:""", member)
         if m:
             keys.add(next(g for g in m.groups() if g))
@@ -571,8 +764,9 @@ def query_builders(texts: list[str], cfg: dict) -> dict[str, tuple[set[str], boo
 
 
 def _calls(body: str, name: str) -> bool:
-    """A call to the free function `name(` — not `x.name(`, not `othername(`."""
-    return re.search(rf"(?<![\w.]){re.escape(name)}\(", strip_docs(body)) is not None
+    """A call to the free function `name(` — not `x.name(`, not `othername(`.
+    Only Go has query builders, so Go's comment syntax is the one stripped."""
+    return re.search(rf"(?<![\w.]){re.escape(name)}\(", strip_comments(body, "//", "go")) is not None
 
 
 def block_query_keys(body: str, cfg: dict,
@@ -1066,7 +1260,16 @@ def normalise_type(t: str, lang: str) -> str:
 
 
 def block_return(body: str, cfg: dict) -> str | None:
-    """The declared return type of the method a block starts with.
+    """The declared return type of the method a block starts with; None when it
+    declares none or cannot be read (`read_block_return` tells them apart)."""
+    return read_block_return(body, cfg)[0]
+
+
+def read_block_return(body: str, cfg: dict) -> tuple[str | None, bool]:
+    """(declared return type, unreadable) of the method a block starts with.
+    The block is known to be a method that makes a request, so anything short of
+    reading its return — or finding it has no annotation — is unreadable, and
+    `returns` must not count it as "nothing to check".
 
     Read by slicing the parameter list with paren matching rather than by regex:
     signatures wrap across lines and contain nested parens and generics, both of
@@ -1075,22 +1278,23 @@ def block_return(body: str, cfg: dict) -> str | None:
     """
     if "return_head_re" in cfg:
         m = re.match(cfg["return_head_re"], body, re.S)
-        return m.group(1).strip() if m else None
+        return (m.group(1).strip(), False) if m else (None, True)
     # Start at the paren the method anchor itself ends on. Taking the first `(`
     # in the block instead picks up Go's receiver — `func (c *Client) GetMe(` —
     # so the "return type" came back as the rest of the signature.
     anchor = re.match(cfg["method_re"], body, re.M)
     if not anchor:
-        return None
-    open_paren = body.find("(", anchor.end() - 1)
-    if open_paren == -1:
-        return None
-    params = balanced_slice(body, open_paren, "(", ")")
-    if params is None:
-        return None
-    rest = body[open_paren + len(params) + 2:]
-    m = re.match(cfg["return_re"], rest, re.S)
-    return m.group(1).strip() if m else None
+        return None, True
+    sliced = _after_params(body, body.find("(", anchor.end() - 1))
+    if sliced is None:
+        return None, True
+    ret, _ = _read_return_tail(body, sliced[1], cfg["lexer"])
+    if ret is None:
+        return None, True
+    if cfg["lexer"] == "go":
+        parts = split_args(ret)   # `*T, error` -> `*T`
+        return (parts[0] if parts else ""), False
+    return (ret or None), False   # no annotation declares nothing to check
 
 
 def cmd_returns(args) -> int:
@@ -1102,7 +1306,7 @@ def cmd_returns(args) -> int:
     if not lang:
         die(f"cannot detect SDK language in {repo}")
     cfg = LANGS[lang]
-    if "return_re" not in cfg and "return_head_re" not in cfg:
+    if "return_after_params" not in cfg and "return_head_re" not in cfg:
         print(f"{repo.name} [{lang}] — return types are not declared; nothing to check.")
         return 0
     files = source_files(repo, cfg)
@@ -1124,12 +1328,15 @@ def cmd_returns(args) -> int:
                         _schema_label(_json_schema(op, "response", code)))
                     break
 
-    mismatched, renamed, untyped, n, via_helper = [], [], [], 0, 0
+    mismatched, renamed, untyped, unreadable, n, via_helper = [], [], [], [], 0, 0
     texts = [path.read_text(encoding="utf-8", errors="replace") for path in files]
     for mname, body, call, _request_body, helper in request_blocks(texts, cfg):
         if call not in want:
             continue
-        declared = block_return(body, cfg)
+        declared, unread = read_block_return(body, cfg)
+        if unread:
+            unreadable.append((mname, call))
+            continue
         if declared is None:
             continue
         n += 1
@@ -1178,8 +1385,16 @@ def cmd_returns(args) -> int:
         for name, (verb, p), expect, declared in untyped:
             print(f"   {name}  ({verb} {p}): {declared}, spec declares {expect}")
 
+    if unreadable:
+        print(f"\nUNREADABLE ({len(unreadable)}) — request methods whose return type this "
+              "scan could not read; a shape mismatch there would go unreported:")
+        for name, (verb, p) in unreadable:
+            print(f"   {name}  ({verb} {p})")
     if mismatched:
         print(f"\n{len(mismatched)} return type(s) disagree with the spec in SHAPE.")
+        return 1
+    if unreadable:
+        print(f"\n{len(unreadable)} unreadable return type(s) — the result above is incomplete.")
         return 1
     print("\nno return type disagrees with the spec in shape")
     return 0
@@ -1187,35 +1402,167 @@ def cmd_returns(args) -> int:
 
 
 # ── surface ──────────────────────────────────────────────────────────────────
+def _after_params(text: str, open_paren: int) -> tuple[str, int] | None:
+    """(parameter list, index just past its closing `)`) for the `(` at
+    `open_paren`, sliced by paren matching. Shared by `surface` and `returns`, so
+    the offset past the `)` is written once."""
+    if open_paren < 0:
+        return None
+    params = balanced_slice(text, open_paren, "(", ")")
+    if params is None:
+        return None
+    return params, open_paren + len(params) + 2
+
+
+def _read_return_tail(text: str, i: int, lexer: str) -> tuple[str | None, bool]:
+    """(return type, unreadable). The type is None with unreadable False when
+    what follows is a statement, not a method; with unreadable True when the
+    scan never reached the body — the case `surface` must not stay quiet about.
+
+    A scan, not a regex. The type ends at the `{` that opens the body, at depth
+    0 — so `Promise<{ id: string }>` (its `{` is inside `<>`), an object type
+    literal right after `:` or a `|`, and Go's `interface{}` are read whole. The
+    regexes this replaced stopped at the first `{` and recorded `Promise<`, so a
+    change inside that type was invisible, and Go's matched only a `(...)` tuple,
+    so every method returning a lone `error` was missing from the surface.
+    """
+    if lexer == "csharp":
+        return "", False     # read from the head; see sig_groups
+    if lexer == "python":
+        m = re.compile(r"\s*(?:->\s*([^:]+?))?\s*:").match(text, i)
+        # Every match of Python's pattern is a `def`, so a miss is a misread.
+        return (_norm(m.group(1)), False) if m else (None, True)
+    j, n = i, len(text)
+    if lexer == "javascript":
+        m = re.compile(r"\s*:").match(text, j)
+        if m is None:
+            m = re.compile(r"\s*\{").match(text, j)
+            return ("", False) if m else (None, False)   # `foo(x);` is a call
+        j = m.end()
+    start, depth = j, 0
+    while j < n:
+        c = text[j]
+        if c in "\"'`":
+            end = _quoted_end(text, j)
+            if end is not None:
+                j = end
+                continue
+        if c in ";=" and depth == 0 and not text.startswith("=>", j):
+            return None, False   # a statement or a field initialiser, not a method
+        if c == "{" and depth == 0:
+            so_far = text[start:j].rstrip()
+            # A TypeScript `{` opens a type literal, not the body, wherever a type
+            # can start: after `|`, `&`, `=>`, `:`, `,`, and in a conditional type
+            # after `?` or `extends` (`T extends { a: 1 } ? { b: 2 } : never`).
+            literal = (lexer == "go" and re.search(r"\b(?:interface|struct)$", so_far)) or (
+                lexer == "javascript" and (
+                    not so_far or so_far.endswith(("|", "&", "=>", ":", ",", "?"))
+                    or re.search(r"\bextends$", so_far)))
+            if not literal:
+                ret = (_norm_ts if lexer == "javascript" else _norm)(text[start:j])
+                # A Go result tuple is recorded without its parens, `*Run, error`.
+                if lexer == "go" and ret.startswith("(") and balanced_slice(ret, 0, "(", ")") == ret[1:-1]:
+                    ret = _norm(ret[1:-1])
+                return ret, False
+            body = balanced_slice(text, j)
+            if body is None:
+                return None, True
+            j += len(body) + 2
+            continue
+        depth += _bracket(text, j)
+        j += 1
+    return None, True   # ran off the end: the body was never found
+
+
 def public_surface(text: str, cfg: dict) -> dict[str, set[tuple[str, str]]]:
     """method name -> {(return type, parameter list)}. A set, because C# and Go
-    both allow overloads/variants under one name."""
+    both allow overloads/variants under one name.
+
+    The parameter list is stored as its split, normalised members joined by
+    ", ", so a reformat — prettier or black wrapping a signature and adding a
+    trailing comma — is not a change. Python's bare `*` is kept: making a
+    parameter keyword-only is one.
+    """
+    return scan_surface(text, cfg)[0]
+
+
+def scan_surface(text: str, cfg: dict) -> tuple[dict[str, set[tuple[str, str]]], list[str]]:
+    """(`public_surface`, `unreadable_heads`) from one pass over `text`."""
     out: dict[str, set[tuple[str, str]]] = {}
-    order = cfg["sig_groups"]
-
-    def norm(x: str | None) -> str:
-        return " ".join((x or "").split())
-
-    tail_re = re.compile(cfg.get("sig_tail_re", ""), re.S)
+    unreadable: set[str] = set()
     # Comments are not signature, and stripped before slicing so a `)` or an
     # apostrophe in one cannot end the parameter list early.
-    text = strip_comments(text, cfg.get("line_comment", "//"))
+    text = strip_comments(text, cfg.get("line_comment", "//"), cfg["lexer"])
     for m in re.finditer(cfg["sig_re"], text, re.S):
-        open_paren = m.end() - 1
-        params = balanced_slice(text, open_paren, "(", ")")
-        if params is None:
-            continue
-        tail = tail_re.match(text, open_paren + len(params) + 2)
-        if tail is None:
-            continue
-        parts = dict(zip(order, m.groups() + (params,) + tail.groups()))
-        out.setdefault(norm(parts["name"]), set()).add((norm(parts["ret"]), norm(parts["params"])))
-    return out
+        status, name, entry = _read_head(text, m, cfg)
+        if status == "ok":
+            out.setdefault(name, set()).add(entry)
+        elif status == "unreadable":
+            unreadable.add(name)
+    return out, sorted(unreadable)
+
+
+def unreadable_heads(text: str, cfg: dict) -> list[str]:
+    """Names of public method heads `public_surface` matched but could not read.
+
+    Such a method is missing from the surface at that revision, so its removal
+    or change would report nothing. `surface` lists these and fails, which turns
+    any shape the scanner does not understand into a visible error rather than a
+    silent miss. A statement the pattern also matches (`foo(x);`) is not listed.
+    """
+    return scan_surface(text, cfg)[1]
+
+
+def _read_head(text: str, m: re.Match, cfg: dict) -> tuple[str, str, tuple[str, str] | None]:
+    """("ok", name, (return type, parameters)), ("skip", name, None) for a match
+    that is not a method, or ("unreadable", name, None)."""
+    order = cfg["sig_groups"]
+    name = _norm(dict(zip(order, m.groups()))["name"])
+    # Most patterns end on the `(`; JavaScript's stops before it, so a
+    # type-parameter list can come first.
+    at = m.end() - 1 if text[m.end() - 1] == "(" else m.end()
+    tparams = None
+    if cfg.get("type_params") and text.startswith("<", at):
+        tp = balanced_slice(text, at, "<", ">")
+        if tp is None:
+            return "unreadable", name, None
+        # Split and rejoined like the parameters, so prettier's trailing comma
+        # on a wrapped list is not a change.
+        tparams = ", ".join(_norm_ts(x) for x in split_args(tp))
+        at += len(tp) + 2
+        while at < len(text) and text[at] in " \t\n":
+            at += 1
+    if not text.startswith("(", at):
+        return ("unreadable" if tparams is not None else "skip"), name, None
+    sliced = _after_params(text, at)
+    if sliced is None:
+        return "unreadable", name, None
+    params, after = sliced
+    ret, unreadable = _read_return_tail(text, after, cfg["lexer"])
+    if ret is None:
+        return ("unreadable" if unreadable else "skip"), name, None
+    if tparams is not None:
+        ret = _join_type_params(tparams, ret)
+    parts = dict(zip(order, m.groups() + (params,)))
+    if "ret" not in parts:
+        parts["ret"] = ret
+    norm = _norm_ts if cfg["lexer"] == "javascript" else _norm
+    canon = ", ".join(norm(p) for p in split_args(params, keep_star=True))
+    return "ok", _norm(parts["name"]), (_norm(parts["ret"]), canon)
 
 
 
 # Kept as an alias: the tests and the older call sites name it `_params`.
 _params = split_args
+
+
+# A TypeScript parameter's head, `name?: `, and an object member's name and `?`.
+_TS_PARAM_HEAD_RE = re.compile(r"\s*([\w$]+\s*\??\s*:\s*)")
+_TS_MEMBER_NAME = r"(?:readonly\s+)?([\w$]+|\"[^\"]*\"|'[^']*')\s*(\?)?\s*"
+# A property member, `name?: type`, with the type captured.
+_TS_MEMBER_RE = re.compile(_TS_MEMBER_NAME + r":\s*(.*)$", re.S)
+# Any named member: a property, or a method `name(...)`.
+_TS_NAMED_MEMBER_RE = re.compile(_TS_MEMBER_NAME + r"[:(]")
 
 
 def _ts_inline_object(param: str) -> tuple[str, str, str] | None:
@@ -1225,44 +1572,68 @@ def _ts_inline_object(param: str) -> tuple[str, str, str] | None:
     The `{` must follow the annotation colon directly, so a default value such as
     `x = {}` or a generic `Partial<{...}>` never qualifies. None otherwise.
     """
-    m = re.match(r"\s*[\w$]+\s*\??\s*:\s*\{", param)
-    if not m:
+    m = _TS_PARAM_HEAD_RE.match(param)
+    if not m or not param.startswith("{", m.end()):
         return None
-    start = m.end() - 1
+    start = m.end()
     body = balanced_slice(param, start)
     if body is None:
         return None
     end = start + len(body) + 1
-    return (" ".join(param[:start].split()), body, " ".join(param[end + 1:].split()))
+    return (_norm(param[:start]), body, _norm(param[end + 1:]))
 
 
 def _ts_object_members(body: str) -> dict[str, tuple[bool, str]] | None:
     """member name -> (optional, normalised text) for an object-literal type body,
     split on depth-0 `;` or `,`. None when any member cannot be named (index
     signatures, call signatures, spread-like text) or a name repeats — the caller
-    then refuses to call the change compatible. Comments are dropped first:
+    then refuses to call the change compatible. Comments are dropped here even
+    though `public_surface` already stripped them: `classify_change` is also
+    called directly with raw signature text, and the bodies are a few lines, so
+    the second pass costs nothing worth a precondition. Comments are dropped first:
     seclai-javascript documents each member with `/** ... */`, which would
     otherwise hide the member's name, and a `,` or `;` inside one would split it.
     """
-    parts = split_args(strip_comments(body), ";,")
+    parts = split_args(strip_comments(body, "//", "javascript"), ";,")
     out: dict[str, tuple[bool, str]] = {}
     for raw in parts:
-        text = " ".join(raw.split())
+        text = _norm(raw)
         if not text:
             continue
-        m = re.match(r"(?:readonly\s+)?([\w$]+|\"[^\"]*\"|'[^']*')\s*(\?)?\s*[:(]", text)
+        m = _TS_NAMED_MEMBER_RE.match(text)
         if not m or m.group(1) in out:
             return None
         out[m.group(1)] = (bool(m.group(2)), text)
     return out
 
 
-_TS_MEMBER_RE = re.compile(r"(?:readonly\s+)?([\w$]+|\"[^\"]*\"|'[^']*')\s*(\?)?\s*:\s*(.*)$", re.S)
+
+def _arrow_at_top(t: str) -> bool:
+    """`t` is a function type: it has an `=>` at bracket depth 0."""
+    depth, j = 0, 0
+    while j < len(t):
+        if t[j] in "\"'`":
+            end = _quoted_end(t, j)
+            if end is not None:
+                j = end
+                continue
+        if depth == 0 and t.startswith("=>", j):
+            return True
+        depth += _bracket(t, j)
+        j += 1
+    return False
 
 
 def _ts_union(t: str) -> list[str]:
-    """Top-level `|` members of a type, whitespace-normalised and sorted."""
-    return sorted(" ".join(x.split()) for x in split_args(t, "|"))
+    """Top-level `|` members of a type, whitespace-normalised and sorted.
+
+    A function type is one member: in `(e: E) => T | undefined` the `|` belongs
+    to the return type, so splitting it there called a callback whose return
+    type changed "optional property widened to accept undefined".
+    """
+    if _arrow_at_top(t):
+        return [_norm(t)]
+    return sorted(_norm(x) for x in split_args(t, "|"))
 
 
 def _ts_widened_to_undefined(old: str, new: str) -> bool:
@@ -1314,9 +1685,8 @@ def _ts_wrapped_type(o: str, n: str) -> str | None:
     optionality and the default textually unchanged. Every old argument still
     fits both. None otherwise — including `Pick<>` and an `Omit<>` of another
     type."""
-    ho = re.match(r"\s*([\w$]+\s*\??\s*:\s*)", o)
-    hn = re.match(r"\s*([\w$]+\s*\??\s*:\s*)", n)
-    if not ho or not hn or " ".join(ho.group(1).split()) != " ".join(hn.group(1).split()):
+    ho, hn = _TS_PARAM_HEAD_RE.match(o), _TS_PARAM_HEAD_RE.match(n)
+    if not ho or not hn or _norm(ho.group(1)) != _norm(hn.group(1)):
         return None
     rest_o, rest_n = o[ho.end():], n[hn.end():]
     w = re.match(r"(Omit|Partial)\s*<", rest_n)
@@ -1336,8 +1706,7 @@ def _ts_wrapped_type(o: str, n: str) -> str | None:
             return None
     elif len(args) != 1:
         return None
-    norm = lambda x: " ".join(x.split())  # noqa: E731
-    return kind if norm(rest_o) == norm(args[0] + after) else None
+    return kind if _norm(rest_o) == _norm(args[0] + after) else None
 
 
 _TS_COMPATIBLE_LABELS = {
@@ -1398,10 +1767,9 @@ def _top_level_index(s: str, ch: str) -> int:
             if end is not None:
                 j, prev = end, ""
                 continue
-        if c in "<([{":
-            depth += 1
-        elif c in ")]}" or (c == ">" and prev != "="):
-            depth -= 1
+        b = _bracket(s, j)
+        if b:
+            depth += b
         elif c == ch and depth == 0:
             nxt = s[j + 1] if j + 1 < len(s) else ""
             if ch != "=" or (nxt not in "=>" and prev not in "=!<>"):
@@ -1414,8 +1782,8 @@ def _top_level_index(s: str, ch: str) -> int:
 def _union_members(t: str) -> set[str]:
     m = re.fullmatch(r"\s*Optional\[(.*)\]\s*", t, re.S)
     if m:
-        return {" ".join(x.split()) for x in split_args(m.group(1), "|")} | {"None"}
-    return {" ".join(x.split()) for x in split_args(t, "|")}
+        return {_norm(x) for x in split_args(m.group(1), "|")} | {"None"}
+    return {_norm(x) for x in split_args(t, "|")}
 
 
 def _py_param(p: str) -> tuple[str, str, str | None] | None:
@@ -1425,17 +1793,17 @@ def _py_param(p: str) -> tuple[str, str, str | None] | None:
     m = re.fullmatch(r"\s*([A-Za-z_]\w*)\s*(?::\s*(.+?))?\s*", head, re.S)
     if not m:
         return None
-    return m.group(1), " ".join((m.group(2) or "").split()), default
+    return m.group(1), _norm(m.group(2)), default
 
 
 def _ts_param(p: str) -> tuple[str, bool, str, str | None] | None:
     """(name, optional `?`, type, default) of one TypeScript parameter, or None."""
     eq = _top_level_index(p, "=")
-    head, default = (p, None) if eq < 0 else (p[:eq], " ".join(p[eq + 1:].split()))
+    head, default = (p, None) if eq < 0 else (p[:eq], _norm(p[eq + 1:]))
     m = re.fullmatch(r"\s*([A-Za-z_$][\w$]*)\s*(\?)?\s*(?::\s*(.+?))?\s*", head, re.S)
     if not m:
         return None
-    return m.group(1), bool(m.group(2)), " ".join((m.group(3) or "").split()), default
+    return m.group(1), bool(m.group(2)), _norm(m.group(3)), default
 
 
 def _gained_default(lang: str, o: str, n: str) -> bool:
@@ -1543,23 +1911,21 @@ _TS_BUILTIN = {"string", "number", "boolean", "undefined", "null", "unknown", "a
 def _ts_expr_end(text: str, i: int) -> int:
     """End of a type-alias expression starting at `i`: the first `;` at depth 0,
     or a blank line / new top-level declaration when the `;` is omitted."""
-    depth, j, prev = 0, i, ""
+    depth, j = 0, i
     while j < len(text):
         c = text[j]
         if c in "\"'`":
             end = _quoted_end(text, j)
             if end is not None:
-                j, prev = end, ""
+                j = end
                 continue
-        if c in "<([{":
-            depth += 1
-        elif c in ")]}" or (c == ">" and prev != "="):
-            depth -= 1
+        b = _bracket(text, j)
+        if b:
+            depth += b
         elif depth == 0 and (c == ";" or (c == "\n" and re.match(
                 r"\n\s*(?:\n|(?:export\s+)?(?:interface|type|const|function|class|import)\b)",
                 text[j:]))):
             return j
-        prev = c
         j += 1
     return len(text)
 
@@ -1576,7 +1942,7 @@ def ts_declarations(texts: list[str]) -> dict[str, tuple | None]:
             out[name] = decl
 
     for raw in texts:
-        text = strip_comments(raw)
+        text = strip_comments(raw, "//", "javascript")
         for m in re.finditer(r"(?m)^[ \t]*(?:export\s+)?(?:declare\s+)?interface\s+([\w$]+)\s*(<)?",
                              text):
             brace = text.find("{", m.end())
@@ -1589,7 +1955,7 @@ def ts_declarations(texts: list[str]) -> dict[str, tuple | None]:
             if ext and not bases:
                 put(m.group(1), None)
                 continue
-            whole = " ".join(text[m.start():brace + len(body) + 2].split())
+            whole = _norm(text[m.start():brace + len(body) + 2])
             put(m.group(1), ("interface", bases, body, whole))
         for m in re.finditer(r"(?m)^[ \t]*(?:export\s+)?(?:declare\s+)?type\s+([\w$]+)\s*(<)?", text):
             if m.group(2):
@@ -1600,8 +1966,8 @@ def ts_declarations(texts: list[str]) -> dict[str, tuple | None]:
                 continue
             start = m.end() + eq.end()
             end = _ts_expr_end(text, start)
-            expr = " ".join(text[start:end].split())
-            put(m.group(1), ("alias", expr, " ".join(text[m.start():end].split())))
+            expr = _norm(text[start:end])
+            put(m.group(1), ("alias", expr, _norm(text[m.start():end])))
     return out
 
 
@@ -1609,14 +1975,14 @@ def _ts_typed_members(body: str) -> dict[str, tuple[bool, str]] | None:
     """member -> (optional, type) for an object type body; None if any member
     is not a plain `name?: type` property (methods, index signatures, ...)."""
     out: dict[str, tuple[bool, str]] = {}
-    for raw in split_args(strip_comments(body), ";,"):
-        text = " ".join(raw.split())
+    for raw in split_args(strip_comments(body, "//", "javascript"), ";,"):
+        text = _norm(raw)
         if not text:
             continue
         m = _TS_MEMBER_RE.match(text)
         if not m or m.group(1) in out:
             return None
-        out[m.group(1).strip("\"'")] = (bool(m.group(2)), " ".join(m.group(3).split()))
+        out[m.group(1).strip("\"'")] = (bool(m.group(2)), _norm(m.group(3)))
     return out
 
 
@@ -1630,7 +1996,7 @@ def _ts_string_keys(k: str) -> set[str] | None:
 def ts_resolve(expr: str, decls: dict, seen: tuple[str, ...] = ()
                ) -> dict[str, tuple[bool, str]] | None:
     """Members of a TypeScript object type expression, or None if unresolvable."""
-    e = " ".join(expr.split())
+    e = _norm(expr)
     while e.startswith("(") and balanced_slice(e, 0, "(", ")") == e[1:-1]:
         e = e[1:-1].strip()
     if not e:
@@ -1727,6 +2093,82 @@ def ts_named_options_change(o: str, n: str, old_decls: dict, new_decls: dict) ->
     return kinds or {"same"}
 
 
+def _join_type_params(tparams: str, ret: str) -> str:
+    """A generic method's recorded return: `<T extends A>: Promise<T[]>`.
+
+    Kept with the return type rather than the parameters so that the optional-
+    parameter rules, which compare parameters by position, are unaffected. No
+    TypeScript type starts with `<...>:` (a generic function type is `<T>(`), so
+    `_split_type_params` can always take it apart again."""
+    return f"<{tparams}>: {ret}".rstrip()
+
+
+def _unwrap(t: str, wrapper: str) -> str | None:
+    """`X` when `t` is exactly `wrapper<X>` (`Promise<X>`, `Array<X>`), else None."""
+    if not t.startswith(wrapper + "<"):
+        return None
+    inner = balanced_slice(t, len(wrapper), "<", ">")
+    if inner is None or len(wrapper) + len(inner) + 2 != len(t):
+        return None
+    return inner.strip()
+
+
+def _array_element(t: str) -> str | None:
+    """`X` when `t` is an array of `X`: `X[]` for a name or a parenthesised
+    type, or `Array<X>`. A union like `A | B[]` is not an array, so the element
+    must be a single name (with type arguments) or wrapped in parens."""
+    inner = _unwrap(t, "Array")
+    if inner is not None:
+        return inner
+    if not t.endswith("[]"):
+        return None
+    el = t[:-2].strip()
+    if el.startswith("(") and balanced_slice(el, 0, "(", ")") == el[1:-1]:
+        return el[1:-1].strip()
+    m = re.fullmatch(r"[\w$.]+", el) or re.fullmatch(r"[\w$.]+(<.*>)", el)
+    if m and (m.lastindex is None or _unwrap(el, el[:el.index("<")]) is not None):
+        return el
+    return None
+
+
+def _narrowed_from_unknown(old: str, new: str) -> bool:
+    """True when `new` only replaces the `unknown` in `old` with a concrete type,
+    keeping everything around it — the one return change a caller cannot
+    notice except as better types.
+
+    `unknown` is the value the caller reads only when it is the whole return,
+    its array, or either inside `Promise<>`. The wrapper must survive: callers of
+    `unknown[]` call `.map`, and callers of `Promise<unknown>` `await` or
+    `.then`, so `unknown[]` -> `Promise<Thing>` breaks them. An `unknown`
+    anywhere else (a callback parameter, a constraint, `Record<string, unknown>`)
+    stays BREAKING.
+    """
+    if "unknown" in new:
+        return False
+    def concrete(x: str | None) -> bool:
+        return bool(x) and "unknown" not in x
+    if old == "unknown":
+        return True
+    if old == "unknown[]":
+        return concrete(_array_element(new))
+    if old == "Promise<unknown>":
+        return concrete(_unwrap(new, "Promise"))
+    if old == "Promise<unknown[]>":
+        inner = _unwrap(new, "Promise")
+        return inner is not None and concrete(_array_element(inner))
+    return False
+
+
+def _split_type_params(ret: str) -> tuple[str | None, str]:
+    """(type parameters, return type) of a recorded return; None when the method
+    is not generic."""
+    if ret.startswith("<"):
+        inner = balanced_slice(ret, 0, "<", ">")
+        if inner is not None and ret.startswith(":", len(inner) + 2):
+            return inner, ret[len(inner) + 3:].strip()
+    return None, ret
+
+
 def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str],
                     ts_decls: tuple[dict, dict] | None = None) -> tuple[str, str]:
     """(severity, label) for one signature change. severity is 'break' or 'warn'.
@@ -1740,6 +2182,13 @@ def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str],
     """
     old_ret, old_par = old
     new_ret, new_par = new
+    if lang == "javascript":
+        # A type parameter or its constraint changing cannot be proven safe from
+        # text: `<T extends A>` -> `<T extends B>` can reject every old call.
+        old_tp, old_ret = _split_type_params(old_ret)
+        new_tp, new_ret = _split_type_params(new_ret)
+        if old_tp != new_tp:
+            return "break", "type parameters changed"
     if old_par != new_par:
         op, np_ = split_args(old_par), split_args(new_par)
         if lang == "javascript" and old_ret == new_ret:
@@ -1776,7 +2225,13 @@ def classify_change(lang: str, old: tuple[str, str], new: tuple[str, str],
             return "warn", "optional parameters added — source compatible"
         return "break", "parameter list changed"
     if old_ret != new_ret:
-        if lang == "javascript" and "unknown" in old_ret and "unknown" not in new_ret:
+        # Only where `unknown` is the value the caller reads: the whole return,
+        # its array, or either inside `Promise<>`. Anywhere else it may be a
+        # parameter of a callback (`(x: unknown) => void`) or a constraint
+        # (`<T extends unknown>`), where narrowing rejects calls that worked, so
+        # it stays BREAKING; a covariant case like `() => unknown` is a false
+        # alarm this accepts.
+        if lang == "javascript" and _narrowed_from_unknown(old_ret, new_ret):
             return "warn", "return narrowed from unknown — safe for consumers"
         if lang == "python":
             return "warn", "return annotation changed — not enforced at runtime, but check the value did not change"
@@ -1801,6 +2256,201 @@ def _texts_at(repo: Path, rev: str | None, sub: str, suffix: str) -> list[str]:
             if p.returncode == 0:
                 out.append(p.stdout)
     return out
+
+
+def _go_package_texts(repo: Path, rev: str | None, sub: str) -> list[str]:
+    """The non-test `.go` files directly in `sub` (one Go package), at `rev` or
+    in the working tree. Listed at the rev itself, so a file deleted since the
+    tag still contributes its types to the baseline."""
+    if rev is None:
+        d = repo / sub
+        return [f.read_text(encoding="utf-8", errors="replace")
+                for f in sorted(d.glob("*.go")) if not f.name.endswith("_test.go")]
+    prefix = "" if sub in ("", ".") else sub.rstrip("/") + "/"
+    ls = subprocess.run(["git", "-C", str(repo), "ls-tree", "--name-only", rev, "--", prefix or "."],
+                        capture_output=True, text=True)
+    out = []
+    for name in ls.stdout.split():
+        if name.endswith(".go") and not name.endswith("_test.go") and "/" not in name[len(prefix):]:
+            p = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{name}"],
+                               capture_output=True, text=True)
+            if p.returncode == 0:
+                out.append(p.stdout)
+    return out
+
+
+_GO_TYPE_RE = re.compile(r"^type[ \t]+([A-Za-z_]\w*)(?:\[[^\]\n]*\])?[ \t]+", re.M)
+_GO_FIELD_RE = re.compile(r"^([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+(\S.*)$", re.S)
+_GO_EMBED_RE = re.compile(r"^\*?([A-Za-z_]\w*\.)?([A-Za-z_]\w*)(?:\[.*\])?$", re.S)
+
+
+def _go_struct_members(body: str) -> list[str] | None:
+    """A struct body (or `const`/`var` block) split into its declarations at
+    depth 0: a nested `struct { ... }` or `map[K]V` stays one member. A line
+    break splits only where Go would end the statement (after an identifier,
+    literal, `)`, `]` or `}`), so `"a" +` continues onto the next line. None
+    when it does not balance."""
+    out, cur, depth, j = [], [], 0, 0
+    while j < len(body):
+        ch = body[j]
+        if ch in "\"'`":
+            end = (body.find("`", j + 1) + 1 or None) if ch == "`" else _quoted_end(body, j)
+            if end is None:
+                return None
+            cur.append(body[j:end])
+            j = end
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+            if depth < 0:
+                return None
+        if depth == 0 and ch in "\n;":
+            member = "".join(cur)
+            tail = member.rstrip()
+            if (ch == ";" or not tail or tail[-1].isalnum() or tail[-1] in "_\"'`)]}"
+                    or tail.endswith(("++", "--")) or re.search(r"(?<![\w.])\d[\d_]*\.$", tail)):
+                out.append(member.strip())
+                cur = []
+                j += 1
+                continue
+        cur.append(ch)
+        j += 1
+    out.append("".join(cur).strip())
+    return None if depth else [m for m in out if m]
+
+
+def go_struct_fields(text: str) -> tuple[dict[str, dict[str, str] | str], list[str]]:
+    """(declarations, unreadable) for one Go package's source.
+
+    A declaration maps an EXPORTED name to {exported field: type} for a struct,
+    to the alias target string (`generated.X`) for `type A = B`, to "type T"
+    for any other type (`type Scope string` -> "type string"), and to
+    "const T" / "var T" for a package constant or variable, T its declared type
+    if any. A struct tag is dropped, and a nested struct's backtick tags too:
+    retagging changes the wire, not what compiles. An embedded field is named by its type,
+    as Go names it. A struct whose body does not balance, holds a member read as
+    neither a field nor an embedding, or embeds an unexported struct (whose
+    promoted fields this scan cannot list) is unreadable.
+    """
+    text = strip_comments(text, "//", "go")
+    decls: dict[str, dict[str, str] | str] = {}
+    # A grouped `type ( ... )` block is not read; say so rather than drop it.
+    unreadable: list[str] = ["type ( ... ) block"
+                             for _ in re.finditer(r"^type[ \t]*\(", text, re.M)]
+    for m in re.finditer(r"^(const|var)\b[ \t]*(\()?", text, re.M):
+        kind = m.group(1)
+        if m.group(2):
+            body = balanced_slice(text, m.end() - 1, "(", ")")
+            members = _go_struct_members(body) if body is not None else None
+            if members is None:
+                unreadable.append(f"{kind} ( ... ) block")
+                continue
+        else:
+            members = [text[m.end():].split("\n", 1)[0]]
+        last = ""
+        for mem in members:
+            left, eq, _ = mem.partition("=")
+            head = re.match(r"\s*([\w\s,]*?\w)(?:\s+([^,\s].*?))?\s*$", left)
+            if head is None:    # no name before the type or `=`
+                unreadable.append(f"{kind} ( ... ) block" if m.group(2) else f"{kind} {left.strip()}")
+                break
+            names, typ = head.groups()
+            if kind == "const" and not eq and not typ:
+                typ = last          # Go repeats the previous spec's type and value
+            last = typ or ""
+            for n in re.split(r"\s*,\s*", names):
+                if n[0].isupper():
+                    decls[n] = _norm(f"{kind} {typ or ''}")
+    for m in _GO_TYPE_RE.finditer(text):
+        name, rest = m.group(1), text[m.end():]
+        if not name[0].isupper():
+            continue
+        if rest.startswith("="):
+            decls[name] = _norm(rest[1:].split("\n", 1)[0])
+            continue
+        if not re.match(r"struct\s*\{", rest):
+            # `type Scope string`, interfaces, func types: the first line of the
+            # underlying type, so `string` -> `int` is a change.
+            decls[name] = _norm("type " + rest.split("\n", 1)[0])
+            continue
+        body = balanced_slice(text, m.end())
+        members = _go_struct_members(body) if body is not None else None
+        if members is None:
+            unreadable.append(f"type {name} struct")
+            continue
+        fields: dict[str, str] = {}
+        ok = True
+        for mem in members:
+            mem = re.sub(r"\s*`[^`]*`\s*$|\s*\"(?:[^\"\\]|\\.)*\"\s*$", "", mem)
+            e = _GO_EMBED_RE.match(mem)
+            f = _GO_FIELD_RE.match(mem)
+            if e and not f:
+                if not e.group(1) and e.group(2)[0].islower():
+                    ok = False
+                    break
+                fields[e.group(2)] = "embedded " + _norm(mem)
+            elif f:
+                for fname in re.split(r"\s*,\s*", f.group(1)):
+                    fields[fname] = _norm(re.sub(r"\s*`[^`]*`", "", f.group(2)))
+            else:
+                ok = False
+                break
+        if not ok:
+            unreadable.append(f"type {name} struct")
+            continue
+        decls[name] = {k: v for k, v in fields.items() if k[0].isupper()}
+    return decls, unreadable
+
+
+def _go_kind(entry: str) -> str:
+    """What a `go_field_surface` entry declares: "type", "const", "var" or "field".
+    A field's type text cannot start with these keywords; "struct" alone is a type."""
+    word = entry.split(" ", 1)[0]
+    return "type" if entry == "struct" or word == "type" else word if word in ("const", "var") else "field"
+
+
+def go_field_surface(seclai_texts: list[str], generated_texts: list[str]
+                     ) -> tuple[dict[str, str], list[str]]:
+    """(surface, unreadable) for package seclai (as `X`) and `generated/` (as
+    `generated.X`): `Type` -> "struct" and `Type.Field` -> field type for every
+    exported struct, `Name` -> its `go_struct_fields` value for every other
+    exported declaration, and "type = target" for any other alias. An alias to
+    an exported struct in either package (`type Req = generated.ReqApi`) is
+    listed with the fields it resolves to, since that is what its callers set.
+    """
+    pk: dict[str, dict] = {}
+    unreadable: list[str] = []
+    for prefix, texts in (("", seclai_texts), ("generated.", generated_texts)):
+        decls = {}
+        for t in texts:
+            d, u = go_struct_fields(t)
+            decls.update(d)
+            unreadable += [f"{n} in package {prefix.rstrip('.') or 'seclai'}" for n in u]
+        pk[prefix] = decls
+
+    def resolve(prefix: str, name: str, seen: tuple = ()) -> dict | None:
+        d = pk[prefix].get(name)
+        if isinstance(d, dict) or d is None or name in seen:
+            return d if isinstance(d, dict) else None
+        if d.startswith("generated."):
+            return resolve("generated.", d[len("generated."):], seen + (name,))
+        if "." in d or not re.fullmatch(r"\w+", d):
+            return None   # another package, or not a plain name: not ours to read
+        return resolve(prefix, d, seen + (name,))
+
+    out: dict[str, str] = {}
+    for prefix, decls in pk.items():
+        for name, d in decls.items():
+            fields = resolve(prefix, name)
+            if fields is None:
+                out[prefix + name] = d if _go_kind(d) != "field" else f"type = {d}"
+                continue
+            out[prefix + name] = "struct"
+            for f, t in fields.items():
+                out[f"{prefix}{name}.{f}"] = t
+    return out, unreadable
 
 
 def cmd_surface(args) -> int:
@@ -1847,7 +2497,8 @@ def cmd_surface(args) -> int:
     old_text = "\n".join(old_parts)
     new_text = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in files)
 
-    old, new = public_surface(old_text, cfg), public_surface(new_text, cfg)
+    (old, old_unread), (new, new_unread) = scan_surface(old_text, cfg), scan_surface(new_text, cfg)
+    unreadable = [(args.rev, n) for n in old_unread] + [("now", n) for n in new_unread]
     ts_decls = None
     if lang == "javascript":
         ts_decls = (ts_declarations(_texts_at(repo, args.rev, "src", ".ts")),
@@ -1856,8 +2507,34 @@ def cmd_surface(args) -> int:
     added = sorted(set(new) - set(old))
     changed = [k for k in sorted(set(old) & set(new)) if old[k] - new[k]]
 
-    print(f"{repo.name} [{lang}] — {len(old)} public method(s) at {args.rev}, {len(new)} now")
+    # Go: exported struct fields too. The request/response types are aliases of
+    # oapi-codegen structs in the public `generated` package, so removing or
+    # retyping a field breaks callers while every method signature is unchanged.
+    old_f, new_f = {}, {}
+    if lang == "go":
+        old_f, old_fu = go_field_surface(_go_package_texts(repo, args.rev, "."),
+                                         _go_package_texts(repo, args.rev, "generated"))
+        new_f, new_fu = go_field_surface(_go_package_texts(repo, None, "."),
+                                         _go_package_texts(repo, None, "generated"))
+        unreadable += [(args.rev, n) for n in old_fu] + [("now", n) for n in new_fu]
+        gone_types = {k for k in old_f if old_f[k] == "struct" and k not in new_f}
+        for k in sorted(set(old_f) - set(new_f)):
+            if k in gone_types or k.rsplit(".", 1)[0] not in gone_types:
+                removed.append(f"{k} ({_go_kind(old_f[k])})")
+        added += [f"{k} ({_go_kind(new_f[k])})" for k in sorted(set(new_f) - set(old_f))
+                  if _go_kind(new_f[k]) != "field" or k.rsplit(".", 1)[0] in old_f]
 
+    fields_note = (f"; {sum(v == 'struct' for v in old_f.values())} exported struct type(s) "
+                   f"at {args.rev}, {sum(v == 'struct' for v in new_f.values())} now") if lang == "go" else ""
+    print(f"{repo.name} [{lang}] — {len(old)} public method(s) at {args.rev}, {len(new)} now{fields_note}")
+
+    if unreadable:
+        print(f"\nUNREADABLE ({len(unreadable)}) — public method heads, or Go declarations, "
+              "this scan could not read; they are missing from the surface, so a change "
+              "to them would go "
+              "unreported. Fix the scanner (and add a test) before trusting this result:")
+        for rev, n in unreadable:
+            print(f"   {n}  (at {rev})")
     if removed:
         print(f"\nREMOVED ({len(removed)}) — every caller breaks:")
         for k in removed:
@@ -1870,14 +2547,19 @@ def cmd_surface(args) -> int:
         if len(gone) == 1 and len(now) == 1:
             sev, label = classify_change(lang, gone[0], now[0], ts_decls)
         (breaks if sev == "break" else warns).append((k, label, gone, now))
+    for k in sorted(set(old_f) & set(new_f)):
+        if old_f[k] != new_f[k]:
+            what = ("field type changed" if _go_kind(old_f[k]) == _go_kind(new_f[k]) == "field"
+                    else "declaration changed")
+            breaks.append((k, what, [(old_f[k], None)], [(new_f[k], None)]))
 
     def show(rows: list) -> None:
         for k, label, gone, now in rows:
             print(f"   {k} — {label}")
             for ret, params in gone:
-                print(f"       was: {ret} ({params[:100]})")
+                print(f"       was: {ret}" + ("" if params is None else f" ({params[:100]})"))
             for ret, params in now:
-                print(f"       now: {ret} ({params[:100]})")
+                print(f"       now: {ret}" + ("" if params is None else f" ({params[:100]})"))
 
     if breaks:
         print(f"\nBREAKING ({len(breaks)}) — a released signature no longer works:")
@@ -1892,6 +2574,9 @@ def cmd_surface(args) -> int:
     if removed or breaks:
         print(f"\n{len(removed) + len(breaks)} breaking change(s). Keep the old form and add "
               "alongside it, or bump the major.")
+        return 1
+    if unreadable:
+        print(f"\n{len(unreadable)} unreadable declaration(s) — the result above is incomplete.")
         return 1
     print("\nno breaking change — every released signature still works")
     return 0
@@ -1940,6 +2625,21 @@ def git_location(spec: Path, fallback: Path) -> tuple[Path, str]:
         die(f"{full} resolves outside its own work tree {root}; --since cannot read it")
 
 
+def affix_free(name: str) -> str:
+    """A schema name with its module qualification and `Api`/`Model` affixes
+    dropped, as seclai-csharp names its hand-written models:
+    `routers__api__agents__UpdateAgentRequest` -> `UpdateAgentRequest`,
+    `SlackTriggerConfigApiResponse` -> `SlackTriggerConfigResponse`,
+    `CloudDriveResponseModel` -> `CloudDriveResponse`. Only a trailing `Model`
+    and an `Api` before the last word go, so `EmbeddingModelListResponse`,
+    `ApiVersionResponse` and `UpdateApiVersionRequest` keep theirs. `models`
+    matches classes by it.
+    """
+    name = short_label(name)
+    name = re.sub(r"(?<=[a-z0-9])Model$", "", name)
+    return re.sub(r"(?<=[a-z0-9])Api(?=[A-Z][a-z0-9]*$)", "", name)
+
+
 def spec_schema_index(spec: dict) -> dict[str, list[tuple[str, set[str]]]]:
     """Short schema name -> [(full name, property names)].
 
@@ -1949,9 +2649,89 @@ def spec_schema_index(spec: dict) -> dict[str, list[tuple[str, set[str]]]]:
     """
     index: dict[str, list[tuple[str, set[str]]]] = {}
     for full, sch in (spec.get("components", {}).get("schemas") or {}).items():
-        short = full.rsplit("__", 1)[-1]
-        index.setdefault(short, []).append((full, set(sch.get("properties") or {})))
+        index.setdefault(short_label(full), []).append((full, set(sch.get("properties") or {})))
     return index
+
+
+def _element(label: str) -> tuple[bool, str]:
+    m = re.match(r"^array<(.+)>$", label)
+    return (True, m.group(1)) if m else (False, label)
+
+
+def operation_models(repo: Path, lang: str, spec: dict, classes: set[str]) -> dict[str, dict[str, set[str]]]:
+    """Model class -> {full schema name -> client methods} from the client itself.
+
+    A method that returns class X for an operation whose response is schema S,
+    or takes X as a parameter where the operation's request body is S, says X
+    models S. That is the client's own declaration, so it settles which of two
+    same-named schemas (`routers__api__sources__FileUploadResponse` and
+    `routers__api__contents__FileUploadResponse`) a class is, and links a class
+    named nothing like its schema (`ContentFileUploadResponse`). A list on one
+    side and an object on the other links nothing: that is a `returns` finding.
+    """
+    cfg = LANGS.get(lang)
+    if not cfg or "return_head_re" not in cfg:
+        return {}
+    ops = {}
+    for raw, item in spec.get("paths", {}).items():
+        for verb, op in item.items():
+            if verb in ("get", "post", "put", "patch", "delete"):
+                ops[(verb.upper(), normalise(raw))] = op
+    links: dict[str, dict[str, set[str]]] = {}
+
+    def link(cls: str, label: str, mname: str) -> None:
+        if cls in classes and "<" not in label and label not in ("object", "none", "unknown"):
+            links.setdefault(cls, {}).setdefault(label, set()).add(mname)
+
+    texts = [f.read_text(encoding="utf-8", errors="replace") for f in source_files(repo, cfg)]
+    for mname, body, call, _request_body, _helper in request_blocks(texts, cfg):
+        op = ops.get(call)
+        if op is None:
+            continue
+        declared, unread = read_block_return(body, cfg)
+        if declared and not unread:
+            got_arr, got = _element(normalise_type(declared, lang))
+            for code in ("200", "201", "202"):
+                if code in op.get("responses", {}):
+                    want_arr, want = _element(_schema_label(_json_schema(op, "response", code)))
+                    if got_arr == want_arr:
+                        link(got, want, mname)
+                    break
+        req = _schema_label(_json_schema(op, "request"))
+        anchor = re.search(cfg["method_re"], body)
+        sliced = _after_params(body, body.find("(", anchor.end() - 1)) if anchor else None
+        if sliced and req not in ("none", "object"):
+            types = {a.split()[0] for a in split_args(sliced[0]) if a.split()}
+            for t in types & classes:
+                link(t, req, mname)
+    return links
+
+
+def match_models(classes: set[str], spec: dict,
+                 links: dict[str, dict[str, set[str]]]) -> dict[str, list[str]]:
+    """Model class -> the full schema names it may model ([] when none).
+
+    By name first: the exact short name, else the `affix_free` spelling,
+    ignoring case (`HttpValidationError` is `HTTPValidationError`). A
+    class the client links to operations (`operation_models`) is narrowed to
+    the named candidates it is used for; when it is used for none of them, its
+    links replace them. More than one result is ambiguous and is reported so;
+    picking one would check a model against a schema it may not be.
+    """
+    fulls = list((spec.get("components", {}).get("schemas") or {}))
+    exact: dict[str, list[str]] = {}
+    loose: dict[str, list[str]] = {}
+    for full in fulls:
+        exact.setdefault(short_label(full), []).append(full)
+        loose.setdefault(affix_free(full).lower(), []).append(full)
+    out = {}
+    for cls in classes:
+        named = exact.get(cls) or loose.get(affix_free(cls).lower()) or []
+        used = set(links.get(cls, {}))
+        if used:
+            named = sorted(used & set(named)) or sorted(used)
+        out[cls] = named
+    return out
 
 
 def cmd_models(args) -> int:
@@ -1970,7 +2750,8 @@ def cmd_models(args) -> int:
         return 0
 
     spec = load_spec(args.rev, args.spec, repo)
-    index = spec_schema_index(spec)
+    props = {full: set(sch.get("properties") or {})
+             for full, sch in (spec.get("components", {}).get("schemas") or {}).items()}
 
     # `--since` narrows the report to properties the schema GAINED since a rev.
     # Without it the C# models show 27 findings, every one a coverage gap that
@@ -1980,63 +2761,77 @@ def cmd_models(args) -> int:
     gained: dict[str, set[str]] | None = None
     if args.since:
         spec_repo, rel = git_location(Path(args.spec), repo)
-        before = spec_schema_index(load_spec(args.since, rel, spec_repo))
+        old = load_spec(args.since, rel, spec_repo)
+        was_full = {f: set(s.get("properties") or {})
+                    for f, s in (old.get("components", {}).get("schemas") or {}).items()}
+        was_short = spec_schema_index(old)
         gained = {}
-        for short, cands in index.items():
-            now = set.union(*(p for _, p in cands))
-            was = set.union(*(p for _, p in before[short])) if short in before else set()
+        for full, now in props.items():
+            # A schema that only gained or lost its module qualification since
+            # the rev is the same schema: compare it with its old short name.
+            was = was_full.get(full)
+            if was is None:
+                was = set().union(*(p for _, p in was_short.get(short_label(full), [])))
             if now - was:
-                gained[short] = now - was
+                gained[full] = now - was
 
     files = sorted(repo.glob(cfg["glob"]))
     scope = f", {len(gained)} schema(s) changed since {args.since}" if gained is not None else ""
-    print(f"{repo.name} [{lang}] — {len(files)} model file(s), {len(index)} spec schema names{scope}")
+    print(f"{repo.name} [{lang}] — {len(files)} model file(s), {len(props)} spec schemas{scope}")
 
-    missing, extra, unmatched = [], [], []
+    models: dict[str, set[str]] = {}
     for f in files:
         text = f.read_text(encoding="utf-8", errors="replace")
         m = re.search(cfg["class_re"], text)
-        if not m:
-            continue
-        cls = m.group(1)
-        have = set(re.findall(cfg["prop_re"], text))
-        cands = index.get(cls)
+        if m:
+            models[m.group(1)] = set(re.findall(cfg["prop_re"], text))
+    matches = match_models(set(models), spec, operation_models(repo, lang, spec, set(models)))
+
+    missing, extra, unmatched, ambiguous = [], [], [], []
+    for cls in sorted(models):
+        have, cands = models[cls], matches[cls]
         if not cands:
             unmatched.append(cls)
             continue
+        if len(cands) > 1:
+            ambiguous.append((cls, cands))
         # With more than one candidate, only properties common to all of them are
         # unambiguously missing. A gate that guesses is a gate that gets muted.
-        want = set.intersection(*(p for _, p in cands))
+        want = set.intersection(*(props[c] for c in cands))
         if gained is not None:
-            want &= gained.get(cls, set())
+            want &= set().union(*(gained.get(c, set()) for c in cands))
         gone = want - have
         if gone:
-            missing.append((cls, sorted(gone), [n for n, _ in cands]))
+            missing.append((cls, sorted(gone), cands))
         if len(cands) == 1 and gained is None:
-            surplus = have - cands[0][1]
+            surplus = have - props[cands[0]]
             if surplus:
                 extra.append((cls, sorted(surplus)))
 
     if missing:
         print(f"\nMISSING PROPERTIES ({len(missing)}) — the spec declares these and the model does not:")
-        for cls, props, full in missing:
+        for cls, gone, full in missing:
             where = f"  [{', '.join(full)}]" if full != [cls] else ""
-            print(f"   {cls}{where}\n       {', '.join(props)}")
+            print(f"   {cls}{where}\n       {', '.join(gone)}")
     if extra:
         print(f"\nWARN — EXTRA PROPERTIES ({len(extra)}) — in the model, not in the schema:")
-        for cls, props in extra:
-            print(f"   {cls}: {', '.join(props)}")
-    if unmatched and not args.quiet_unmatched and gained is None:
-        print(f"\nWARN — NOT IN SPEC ({len(unmatched)}) — model classes with no matching schema:")
-        print("   " + ", ".join(sorted(unmatched)))
+        for cls, surplus in extra:
+            print(f"   {cls}: {', '.join(surplus)}")
+    if ambiguous:
+        print(f"\nWARN — AMBIGUOUS ({len(ambiguous)}) — the class matches several schemas and "
+              "nothing narrows it to one; only properties all of them declare are checked:")
+        for cls, cands in ambiguous:
+            print(f"   {cls}: {', '.join(cands)}")
 
     if unmatched:
         # Not a finding: the spec declares some request bodies inline rather than
         # as a named component, so CreateSourceRequest and UpdateSourceRequest —
         # both of which WERE left stale in 2026-07 — have nothing to match
-        # against. Say so, so the count is never read as full coverage.
+        # against. Say so, and name them, so the count is never read as full
+        # coverage.
         print(f"\n   note: {len(unmatched)} model class(es) have no named schema "
-              f"and are unchecked (inline request bodies land here).")
+              f"and are unchecked (inline request bodies land here)"
+              + ("." if args.quiet_unmatched else ":\n   " + ", ".join(unmatched)))
 
     if missing:
         print(f"\n{len(missing)} model(s) behind the spec.")
@@ -2095,7 +2890,7 @@ def main() -> int:
                    help="only report properties the schema gained since this spec rev "
                         "(the sync gate; without it every long-standing gap is listed)")
     p.add_argument("--quiet-unmatched", action="store_true",
-                   help="suppress the model-classes-with-no-schema report")
+                   help="count the model classes with no schema without naming them")
     p.set_defaults(func=cmd_models)
 
     p = sub.add_parser("spec-diff", help="paths/schemas added, removed or changed between revisions")
