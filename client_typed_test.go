@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -99,65 +100,144 @@ func TestClient_RunStreamingAgentAndWait_DropsIncludeReasoning(t *testing.T) {
 	}
 }
 
-// A stream that ends after its result event but before done returns the
-// result snapshot, which holds the answer, rather than the init one; done
-// still wins when it arrives.
-func TestClient_RunStreamingAgentAndWait_ResultEvent(t *testing.T) {
+// With ErrorOnIncomplete, the wait helper returns a run only on done, or on result with
+// ReturnOnResult. A timeout, a clean end or a broken stream before then is a
+// *StreamingError carrying the latest snapshot, also returned beside it; a
+// caller's cancellation is the bare context error.
+func TestClient_RunStreamingAgentAndWait_Endings(t *testing.T) {
 	const (
 		initEv   = "event: init\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"processing\"}\n\n"
 		resultEv = "event: result\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"processing\",\"output\":\"answer\",\"result_reported_at\":\"2026-11-05T00:00:00Z\"}\n\n"
 		doneEv   = "event: done\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"completed\",\"output\":\"final\"}\n\n"
 	)
-	for _, tc := range []struct{ name, stream, wantOutput, wantStatus string }{
-		{"ends after result", initEv + resultEv, "answer", "processing"},
-		{"done wins", initEv + resultEv + doneEv, "final", "completed"},
+	for _, tc := range []struct {
+		name, stream, then string // then: "eof", "hang" (until the client gives up) or "cut" (connection dropped mid-body)
+		returnOnResult     bool
+		cancel             bool // the caller cancels instead of a deadline passing
+		wantErr            string
+		wantOutput         string // "" for no Output
+		wantStatus         string
+	}{
+		{"done wins", initEv + resultEv + doneEv, "eof", false, false, "", "final", "completed"},
+		{"return on result", initEv + resultEv, "hang", true, false, "", "answer", "processing"},
+		{"ends after result", initEv + resultEv, "eof", false, false, "ended", "answer", "processing"},
+		{"ends after init", initEv, "eof", false, false, "ended", "", "processing"},
+		{"times out after result", initEv + resultEv, "hang", false, false, "timed out", "answer", "processing"},
+		{"cut after result", initEv + resultEv, "cut", false, false, "broke", "answer", "processing"},
+		{"buffered done at timeout", initEv + strings.TrimSuffix(doneEv, "\n"), "hang", false, false, "", "final", "completed"},
+		{"caller cancels", initEv + resultEv, "hang", false, true, "canceled", "answer", "processing"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var rec requestRecorder
-			c := newRecordingServer(t, &rec, 200, "text/event-stream", tc.stream)
-			res, err := c.RunStreamingAgentAndWait(context.Background(), "agent_1", AgentRunStreamRequest{})
-			if err != nil {
-				t.Fatalf("RunStreamingAgentAndWait: %v", err)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.then == "cut" {
+					conn, buf, _ := w.(http.Hijacker).Hijack()
+					defer conn.Close()
+					_, _ = fmt.Fprintf(buf, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n%x\r\n%s\r\n", len(tc.stream), tc.stream)
+					_ = buf.Flush()
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = io.WriteString(w, tc.stream)
+				w.(http.Flusher).Flush()
+				if tc.then == "hang" {
+					<-r.Context().Done()
+				}
+			}))
+			t.Cleanup(srv.Close)
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+
+			var ctx context.Context
+			var cancel context.CancelFunc
+			if tc.cancel {
+				ctx, cancel = context.WithCancel(context.Background())
+				time.AfterFunc(100*time.Millisecond, cancel)
+			} else {
+				ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 			}
-			if res.Output == nil || *res.Output != tc.wantOutput || string(res.Status) != tc.wantStatus {
-				t.Fatalf("got output %v status %q, want %q %q", res.Output, res.Status, tc.wantOutput, tc.wantStatus)
+			defer cancel()
+
+			res, err := c.RunStreamingAgentAndWaitWithOptions(ctx, "agent_1", AgentRunStreamRequest{}, &RunStreamingAgentAndWaitOptions{ReturnOnResult: tc.returnOnResult, ErrorOnIncomplete: true})
+			var streamErr *StreamingError
+			isStreamErr := errors.As(err, &streamErr)
+			switch tc.wantErr {
+			case "":
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			case "canceled":
+				if err != context.Canceled {
+					t.Fatalf("want the bare context.Canceled, got %T %v", err, err)
+				}
+			default:
+				if !isStreamErr || !strings.Contains(streamErr.Message, tc.wantErr) {
+					t.Fatalf("want a *StreamingError that %s, got %T %v", tc.wantErr, err, err)
+				}
+				if errors.Is(err, context.DeadlineExceeded) != (tc.wantErr == "timed out") {
+					t.Fatalf("errors.Is(err, context.DeadlineExceeded) wrong for %v", err)
+				}
+				if (streamErr.Err != nil) != (tc.wantErr != "ended") {
+					t.Fatalf("Err %v for %s", streamErr.Err, tc.wantErr)
+				}
+				if streamErr.Run != res || streamErr.RunID != "run_1" {
+					t.Fatalf("Run %p RunID %q, want the returned run %p and run_1", streamErr.Run, streamErr.RunID, res)
+				}
+				if strings.Contains(err.Error(), "a result had been reported") != (tc.wantOutput != "") {
+					t.Fatalf("message does not say whether a result was reported: %v", err)
+				}
+			}
+			if res == nil {
+				t.Fatal("want the latest snapshot, got nil")
+			}
+			gotOutput := ""
+			if res.Output != nil {
+				gotOutput = *res.Output
+			}
+			if gotOutput != tc.wantOutput || string(res.Status) != tc.wantStatus {
+				t.Fatalf("got output %q status %q, want %q %q", gotOutput, res.Status, tc.wantOutput, tc.wantStatus)
 			}
 		})
 	}
 }
 
-func TestClient_RunStreamingAgentAndWait_Timeout(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/agents/agent_1/runs/stream" {
-			w.WriteHeader(404)
-			return
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(200)
-		fl, _ := w.(http.Flusher)
-		_, _ = io.WriteString(w, "event: init\n")
-		_, _ = io.WriteString(w, "data: {}\n\n")
-		if fl != nil {
-			fl.Flush()
-		}
-		<-r.Context().Done()
-	}))
-	t.Cleanup(srv.Close)
-
-	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
-
-	_, err = c.RunStreamingAgentAndWait(ctx, "agent_1", AgentRunStreamRequest{Input: nil, Metadata: &map[string]JsonValue{}})
-	if err == nil {
-		t.Fatalf("expected error")
-	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected context deadline exceeded, got %T %v", err, err)
+// Without ErrorOnIncomplete the released endings are kept (see
+// client_released_behaviour_test.go), with two additions: the latest snapshot
+// is the result event's run when one arrived, and it is returned beside a bare
+// timeout or read error.
+func TestClient_RunStreamingAgentAndWait_DefaultEndingsKeepTheResult(t *testing.T) {
+	const stream = "event: init\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"processing\"}\n\n" +
+		"event: result\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"processing\",\"output\":\"answer\",\"result_reported_at\":\"2026-11-05T00:00:00Z\"}\n\n"
+	for _, tc := range []struct {
+		then    string
+		wantErr error
+	}{{"eof", nil}, {"hang", context.DeadlineExceeded}, {"cut", io.ErrUnexpectedEOF}} {
+		t.Run(tc.then, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.then == "cut" {
+					conn, buf, _ := w.(http.Hijacker).Hijack()
+					defer conn.Close()
+					_, _ = fmt.Fprintf(buf, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n%x\r\n%s\r\n", len(stream), stream)
+					_ = buf.Flush()
+					return
+				}
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = io.WriteString(w, stream)
+				w.(http.Flusher).Flush()
+				if tc.then == "hang" {
+					<-r.Context().Done()
+				}
+			}))
+			t.Cleanup(srv.Close)
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			res, err := c.RunStreamingAgentAndWait(ctx, "agent_1", AgentRunStreamRequest{})
+			if err != tc.wantErr {
+				t.Fatalf("got error %T %v, want %v", err, err, tc.wantErr)
+			}
+			if res == nil || res.Output == nil || *res.Output != "answer" {
+				t.Fatalf("got %+v, want the result run", res)
+			}
+		})
 	}
 }
 
@@ -1437,6 +1517,40 @@ func TestClient_RunAgentAndPoll_ReturnOnResult(t *testing.T) {
 			}
 			if polls != tc.wantPolls || string(resp.Status) != tc.wantStatus || resp.Output == nil || *resp.Output != "answer" {
 				t.Fatalf("polls %d status %q output %v, want %d %q answer", polls, resp.Status, resp.Output, tc.wantPolls, tc.wantStatus)
+			}
+		})
+	}
+}
+
+// The RunAgent response carries no step outputs, so with IncludeStepOutputs
+// a terminal first response does not end the poll: the run is fetched once
+// with step outputs. Without it, the first response is returned as it is.
+func TestClient_RunAgentAndPoll_IncludeStepOutputsFetchesFirst(t *testing.T) {
+	for _, includeSteps := range []bool{true, false} {
+		t.Run(fmt.Sprint(includeSteps), func(t *testing.T) {
+			var gets []string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method == http.MethodPost {
+					_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"completed","result_reported_at":"2026-11-05T00:00:00Z"}`)
+					return
+				}
+				gets = append(gets, r.URL.RawQuery)
+				_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"completed","result_reported_at":"2026-11-05T00:00:00Z","steps":[]}`)
+			}))
+			t.Cleanup(srv.Close)
+
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			resp, err := c.RunAgentAndPoll(context.Background(), "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Hour, IncludeStepOutputs: includeSteps, ReturnOnResult: true})
+			if err != nil {
+				t.Fatalf("RunAgentAndPoll: %v", err)
+			}
+			if includeSteps {
+				if len(gets) != 1 || gets[0] != "include_step_outputs=true" || resp.Steps == nil {
+					t.Fatalf("gets %v steps %v, want one fetch with step outputs", gets, resp.Steps)
+				}
+			} else if len(gets) != 0 || resp.Steps != nil {
+				t.Fatalf("gets %v, want the first response returned as it is", gets)
 			}
 		})
 	}

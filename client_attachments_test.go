@@ -142,27 +142,25 @@ func TestClient_SetMetadataKeys(t *testing.T) {
 	}
 }
 
-// A nil MetadataKeys is sent as null, so a zero-value request gets the API's
-// 422 instead of clearing every declared key; an empty slice clears them.
-func TestClient_SetMetadataKeys_NilIsSentAsNull(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		keys []MetadataKeyDeclaration
-		want string
-	}{
-		{"nil", nil, `{"metadata_keys":null}`},
-		{"empty", []MetadataKeyDeclaration{}, `{"metadata_keys":[]}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var rec requestRecorder
-			c := newRecordingServer(t, &rec, 200, "application/json", testMetadataKeys)
-			if _, err := c.SetMetadataKeys(context.Background(), "a_1", "t_1", SetMetadataKeysRequest{MetadataKeys: tc.keys}); err != nil {
-				t.Fatalf("SetMetadataKeys: %v", err)
-			}
-			if string(rec.rawBody) != tc.want {
-				t.Fatalf("body %s, want %s", rec.rawBody, tc.want)
-			}
-		})
+// A nil MetadataKeys is refused before anything is sent, rather than sent as
+// null for the API to refuse with 422; an empty slice clears the declaration.
+func TestClient_SetMetadataKeys_NilIsRefused(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "application/json", testMetadataKeys)
+	_, err := c.SetMetadataKeys(context.Background(), "a_1", "t_1", SetMetadataKeysRequest{})
+	var configErr *ConfigurationError
+	if !errors.As(err, &configErr) || configErr.Message != "SetMetadataKeys: MetadataKeys must not be nil; pass an empty slice to clear" {
+		t.Fatalf("want a *ConfigurationError, got %T %v", err, err)
+	}
+	if rec.method != "" {
+		t.Fatalf("a request was sent: %s %s", rec.method, rec.path)
+	}
+
+	if _, err := c.SetMetadataKeys(context.Background(), "a_1", "t_1", SetMetadataKeysRequest{MetadataKeys: []MetadataKeyDeclaration{}}); err != nil {
+		t.Fatalf("SetMetadataKeys: %v", err)
+	}
+	if string(rec.rawBody) != `{"metadata_keys":[]}` {
+		t.Fatalf("body %s, want an empty list", rec.rawBody)
 	}
 }
 

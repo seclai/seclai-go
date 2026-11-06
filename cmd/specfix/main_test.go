@@ -247,7 +247,9 @@ func TestRetainRemovedRequestFields_RestoresDeprecatedSlackInput(t *testing.T) {
 	if err := json.Unmarshal(input, &doc); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	retainRemovedRequestFields(doc)
+	if err := retainRemovedRequestFields(doc); err != nil {
+		t.Fatalf("retainRemovedRequestFields: %v", err)
+	}
 	omitUnsetRequestFields(doc)
 
 	props := doc.(map[string]any)["components"].(map[string]any)["schemas"].(map[string]any)["SetSlackTriggerConfigApiRequest"].(map[string]any)["properties"].(map[string]any)
@@ -260,14 +262,21 @@ func TestRetainRemovedRequestFields_RestoresDeprecatedSlackInput(t *testing.T) {
 	}
 }
 
-func TestRetainRemovedRequestFields_KeepsADeclaredProperty(t *testing.T) {
+// When the spec declares a retained property again, the entry is stale:
+// specfix fails rather than keep the entry, and leaves the spec's own
+// definition alone.
+func TestRetainRemovedRequestFields_FailsOnAStaleEntry(t *testing.T) {
 	declared := map[string]any{"type": "string", "description": "from the spec"}
 	doc := map[string]any{"components": map[string]any{"schemas": map[string]any{
 		"SetSlackTriggerConfigApiRequest": map[string]any{
 			"properties": map[string]any{"input": declared},
 		},
 	}}}
-	retainRemovedRequestFields(doc)
+	err := retainRemovedRequestFields(doc)
+	want := "stale entry `SetSlackTriggerConfigApiRequest.input` in the retained-fields list: the spec declares it again; remove the entry"
+	if err == nil || err.Error() != want {
+		t.Fatalf("got error %v, want %q", err, want)
+	}
 	if declared["deprecated"] != nil {
 		t.Fatalf("expected the spec's own property left alone, got %v", declared)
 	}

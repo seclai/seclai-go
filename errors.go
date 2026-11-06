@@ -54,21 +54,43 @@ func (e *APIValidationError) Error() string {
 }
 
 // StreamingError indicates a failure during an SSE streaming operation.
+//
+// When [Client.RunStreamingAgentAndWaitWithOptions] with ErrorOnIncomplete
+// times out, or its stream ends or breaks before the done event, Run holds the
+// latest snapshot it read: the result event's run if one arrived (its Output
+// is the answer), else the init one, else nil. Unwrap gives the cause, such as
+// [context.DeadlineExceeded], so errors.Is works on it.
 type StreamingError struct {
 	// Message describes what went wrong.
 	Message string
 	// RunID is the agent run ID when available, empty otherwise.
 	RunID string
+	// Run is the latest run snapshot read before the failure, or nil.
+	Run *AgentRunResponse
+	// Err is the underlying cause, or nil when the stream simply ended.
+	Err error
+}
+
+// Unwrap returns the underlying cause, or nil.
+func (e *StreamingError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
 }
 
 func (e *StreamingError) Error() string {
 	if e == nil {
 		return "seclai: streaming error"
 	}
-	if e.RunID != "" {
-		return fmt.Sprintf("seclai: streaming error (run %s): %s", e.RunID, e.Message)
+	msg := e.Message
+	if e.Err != nil {
+		msg += ": " + e.Err.Error()
 	}
-	return fmt.Sprintf("seclai: streaming error: %s", e.Message)
+	if e.RunID != "" {
+		return fmt.Sprintf("seclai: streaming error (run %s): %s", e.RunID, msg)
+	}
+	return fmt.Sprintf("seclai: streaming error: %s", msg)
 }
 
 // UnexpectedResponseError is returned when a successful (2xx) response cannot be

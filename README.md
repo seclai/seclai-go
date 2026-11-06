@@ -411,7 +411,7 @@ _ = client.DeleteAgentRun(ctx, "run_id")
 
 The SDK provides two streaming patterns over the SSE `/runs/stream` endpoint.
 
-**Block until done** — returns the final `done` payload or returns an error on timeout. If the stream ends before `done`, it returns the `result` event's run, sent once the run has reported its result (`ResultReportedAt` is set and `Output` is the answer), or else the `init` one. It reads only those payloads, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events:
+**Block until done** — returns the final `done` payload. It reads only the run payloads, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events. By default, if the stream ends before `done`, it returns the latest run it saw with a nil error: the `result` event's run if one arrived (`ResultReportedAt` is set and `Output` is the answer), else the `init` one. That run may not have finished, for example after a cut stream, so check its `Status` and `ResultReportedAt`. A timeout returns `context.DeadlineExceeded`, and a broken stream its read error, each with that latest run beside it:
 
 ```go
 // If ctx has no deadline, the SDK applies a default timeout.
@@ -421,7 +421,29 @@ run, err := client.RunStreamingAgentAndWait(ctx, "agent_id", seclai.AgentRunStre
 })
 ```
 
-**Channel-based** — yields every SSE event as `AgentRunEvent`. Take the run's answer from the `result` event; the `done` event's `Status` says whether the whole run succeeded, which can still fail after its result:
+We recommend `RunStreamingAgentAndWaitWithOptions` with `ErrorOnIncomplete`, which becomes the default in the next major version. It never returns an unfinished run as if it were final: a timeout, or a stream that ends or breaks before `done`, returns a `*StreamingError` whose `Run` holds the latest snapshot (the same run is returned beside it). A timeout still satisfies `errors.Is(err, context.DeadlineExceeded)`, and cancelling `ctx` returns the snapshot with `ctx.Err()`.
+
+Add `ReturnOnResult` to return as soon as the run reports its result, without waiting for `done`. The run may still be in progress: its `Status` may not be terminal and the run can still fail, so check `ResultReportedAt`, not `Status`. On a timeout or a cut stream, read the answer from the error's `Run`:
+
+<!-- sdksync:check -->
+```go
+input := "Hello"
+run, err := client.RunStreamingAgentAndWaitWithOptions(ctx, "agent_id", seclai.AgentRunStreamRequest{
+	Input: &input,
+}, &seclai.RunStreamingAgentAndWaitOptions{ErrorOnIncomplete: true, ReturnOnResult: true})
+streamErr, _ := err.(*seclai.StreamingError)
+switch {
+case err == nil:
+	fmt.Println(*run.Output, run.ResultReportedAt != nil)
+case streamErr != nil && streamErr.Run != nil && streamErr.Run.ResultReportedAt != nil:
+	// The run reported its answer before the stream stopped.
+	fmt.Println(*streamErr.Run.Output)
+default:
+	fmt.Println(err)
+}
+```
+
+**Channel-based** — yields every SSE event as `AgentRunEvent`. Take the run's answer from the `result` event; the `done` event's `Status` says whether the whole run succeeded, which can still fail after its result. When the server answers with plain JSON instead of an SSE stream, the channel yields only a `done` event, so read the answer from its `Run`:
 
 ```go
 events, errCh := client.RunStreamingAgent(ctx, "agent_id", seclai.AgentRunStreamRequest{
@@ -437,16 +459,24 @@ if err := <-errCh; err != nil {
 
 ### Polling
 
-For environments where SSE is not practical, poll for a completed run. Set
+For environments where SSE is not practical, poll for a completed run. When
+`ctx` ends first, the last polled snapshot is returned with `ctx.Err()`. Set
 `ReturnOnResult` to return as soon as the run has reported its result
-(`ResultReportedAt` is set), while later steps may still run:
+(`ResultReportedAt` is set). The run may still be in progress: its `Status`
+may not be terminal and the run can still fail, so check `ResultReportedAt`,
+not `Status`:
 
 ```go
+input := "Hello"
 result, err := client.RunAgentAndPoll(ctx, "agent_id", seclai.AgentRunRequest{
-	Input: "Hello",
+	Input: &input,
 }, &seclai.RunAgentAndPollOptions{
-	PollInterval: 2 * time.Second,
+	PollInterval:   2 * time.Second,
+	ReturnOnResult: true,
 })
+if err == nil && result.ResultReportedAt != nil {
+	fmt.Println(*result.Output)
+}
 ```
 
 ### Agent input uploads
@@ -508,7 +538,8 @@ custom key, or lacks a required one, is refused with a 400. `SetMetadataKeys`
 replaces the whole declaration, so declare a custom key with it before sending
 that key in a run's `Metadata`; the API answers 400 when the agent still
 references a key no trigger of its branch declares. An empty, non-nil
-`MetadataKeys` clears the declaration; a nil one is refused with a 422. A nil
+`MetadataKeys` clears the declaration; a nil one is refused with a
+`*ConfigurationError` before anything is sent. A nil
 `Required` is treated as false, and only a `custom` key can be required.
 
 <!-- sdksync:check -->
@@ -1330,15 +1361,22 @@ if err != nil {
 | `*ConfigurationError` | Missing API key, invalid base URL |
 | `*APIStatusError` | Non-2xx HTTP response |
 | `*APIValidationError` | HTTP 422 (embeds `APIStatusError`), except from the `Download*` methods, which return `*APIStatusError` for every non-2xx |
-| `*StreamingError` | SSE stream ended unexpectedly |
+| `*StreamingError` | SSE stream ended with no run; with `ErrorOnIncomplete`, it timed out, ended or broke before `done`, and `Run` holds the latest snapshot |
 | `*UnexpectedResponseError` | A 2xx response that is not the list its method reads |
 
 ## Low-level access
 
-Use `client.Do()` for direct API requests. `apiPath` is sent as given: escape
-IDs in it with `url.PathEscape`, and a `%XX` in it is kept as an escape. `.` and
-`..` segments are resolved before sending, and `url.PathEscape` leaves them as
-they are, so reject an ID of `.` or `..` (or write its dots as `%2E`):
+Use `client.Do()` for direct API requests. By default `apiPath` is taken as
+unescaped and escaped as a whole, as in earlier releases: pass IDs in it raw,
+since a `%` is sent as `%25`. Set `Options.EscapedDoPaths`, recommended and the
+default from the next major version, to send `apiPath` as given: escape IDs in
+it with `url.PathEscape`, and a `%XX` in it is kept as an escape. `.` and `..`
+segments are resolved before sending, and `url.PathEscape` leaves them as they
+are, so reject an ID of `.` or `..` (or, with `EscapedDoPaths`, write its dots
+as `%2E`). Reject a blank ID too, which `Do` cannot detect:
+`"/agents/" + id + "/runs"` with an empty `id` collapses to `/agents/runs`,
+another endpoint, and `"/agents/" + id` is `/agents/`, a path `Do` sends as it
+is:
 
 ```go
 var result MyType

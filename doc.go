@@ -88,7 +88,7 @@
 //   - [APIStatusError]: non-2xx HTTP responses
 //   - [APIValidationError]: HTTP 422 validation errors (embeds APIStatusError), except from
 //     the Download* methods, which return [APIStatusError] for every non-2xx response
-//   - [StreamingError]: SSE stream failures (includes RunID when available)
+//   - [StreamingError]: SSE stream failures (includes RunID, and the latest run snapshot in Run, when available)
 //   - [UnexpectedResponseError]: a 2xx response that is not the list its method reads
 //
 // # Low-Level Access

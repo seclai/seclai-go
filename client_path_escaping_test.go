@@ -99,6 +99,8 @@ func TestClient_PathIDsAreEscapedOnce_OnEveryRoute(t *testing.T) {
 	}
 }
 
+// With Options.EscapedDoPaths, Do sends apiPath as given. The released
+// default is pinned in client_released_behaviour_test.go.
 func TestClient_Do_PathHandling(t *testing.T) {
 	cases := []struct{ prefix, apiPath, want string }{
 		{"", "/agents/a%201", "/agents/a%201"},         // already escaped: sent as given
@@ -117,6 +119,7 @@ func TestClient_Do_PathHandling(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.prefix+" "+tc.apiPath, func(t *testing.T) {
 			c, seen := pathServer(t, tc.prefix, `{}`)
+			c.escapedDoPaths = true
 			if err := c.Do(context.Background(), http.MethodGet, tc.apiPath, nil, nil, nil, nil); err != nil {
 				t.Fatalf("Do: %v", err)
 			}
