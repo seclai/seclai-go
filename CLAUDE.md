@@ -2,7 +2,7 @@
 
 ## Changing and reviewing code
 
-The rules for writing a change (Gate 3, a cold review of your own diff before you
+The rules for writing a change (the cold-review gate on your own diff before you
 report) and for producing review findings are shared by every SDK repo. They are
 vendored from `sdk-tools` with the review-triage skill:
 
