@@ -101,6 +101,9 @@ type Options struct {
 	APIVersion string
 
 	// HTTPClient is used for requests. Defaults to a client with a 30s timeout.
+	// Its Timeout, the 30s default included, also bounds reading a stream, so
+	// pass a client without a Timeout for streams that run longer (see
+	// https://github.com/seclai/seclai-go/issues/21).
 	HTTPClient *http.Client
 }
 
@@ -1737,10 +1740,12 @@ type RunAgentAndPollOptions struct {
 // its result. The initial RunAgent response is checked before the first wait;
 // with opts.IncludeStepOutputs, which that response lacks, a response that
 // would end the poll is fetched again at once with step outputs, and that
-// snapshot is checked instead. The context controls the overall timeout. When
-// it ends, the last run polled is returned with ctx.Err(), also when it ends
-// a GetAgentRun; when a GetAgentRun fails otherwise, the last run is returned
-// with that error. Either way its RunId is kept.
+// snapshot is checked instead. The context controls the overall timeout.
+// When ctx ends during the wait between polls, the last run polled is
+// returned with ctx.Err(). When a GetAgentRun fails, the last run polled is
+// returned with that error, which wraps ctx's error when ctx caused it: use
+// errors.Is(err, context.DeadlineExceeded) to test for a deadline. Either way
+// the run's RunId is kept.
 func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body AgentRunRequest, opts *RunAgentAndPollOptions) (*AgentRunResponse, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -1788,9 +1793,6 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 
 		next, err := c.GetAgentRun(ctx, run.RunId, getOpts)
 		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
-				return run, ctxErr
-			}
 			return run, err
 		}
 		run, lacksSteps = next, false

@@ -1605,8 +1605,8 @@ func TestClient_RunAgentAndPoll_FetchErrorKeepsTheRun(t *testing.T) {
 	}
 }
 
-// A GetAgentRun cut short by ctx returns the bare context error, as the wait
-// between polls does, so err == context.DeadlineExceeded holds.
+// A GetAgentRun cut short by ctx returns the last run with the fetch's own
+// error, which wraps the deadline.
 func TestClient_RunAgentAndPoll_DeadlineDuringAFetch(t *testing.T) {
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1623,36 +1623,8 @@ func TestClient_RunAgentAndPoll_DeadlineDuringAFetch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	res, err := c.RunAgentAndPoll(ctx, "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Millisecond})
-	if err != context.DeadlineExceeded || res == nil || res.RunId != "run_1" {
-		t.Fatalf("got %v, %T %v; want run_1 with the bare context.DeadlineExceeded", res, err, err)
-	}
-}
-
-// roundTripFunc lets a test answer requests without a server.
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
-// A GetAgentRun that fails on its own as ctx ends keeps its own error: only a
-// failure caused by ctx becomes ctx.Err().
-func TestClient_RunAgentAndPoll_APIErrorAsTheContextEnds(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	answer := func(r *http.Request, status int, body string) *http.Response {
-		return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}
-	}
-	hc := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if r.Method == http.MethodPost {
-			return answer(r, 200, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"processing"}`), nil
-		}
-		cancel() // ctx ends just as the API answers 500
-		return answer(r, 500, `{}`), nil
-	})}
-	c, _ := NewClient(Options{APIKey: "k", BaseURL: "http://seclai.test", HTTPClient: hc})
-	res, err := c.RunAgentAndPoll(ctx, "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Millisecond})
-	var statusErr *APIStatusError
-	if !errors.As(err, &statusErr) || res == nil || res.RunId != "run_1" {
-		t.Fatalf("got %v, %T %v; want run_1 with the *APIStatusError", res, err, err)
+	if !errors.Is(err, context.DeadlineExceeded) || err == context.DeadlineExceeded || res == nil || res.RunId != "run_1" {
+		t.Fatalf("got %v, %T %v; want run_1 with the fetch error wrapping the deadline", res, err, err)
 	}
 }
 
