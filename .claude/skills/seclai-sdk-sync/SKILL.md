@@ -240,12 +240,13 @@ or `generated/` is compared by its fields, so re-pointing it at a struct with
 the same fields is not seen either; if the old target is removed, its REMOVED
 line still catches that. An alias to a struct in another package (`type File =
 openapi_types.File`) is compared by its target's name only. Tags and comments
-are ignored, in nested structs too. A struct it cannot read, or one embedding an
-unexported struct, is UNREADABLE, as for a method head. Methods on generated
-types (union accessors such as `AsValidationErrorLoc0`) are not read. It found
-one shipped break: v1.8.0 renamed `generated.InsufficientCreditsDetail.Error`
-and `generated.InsufficientCreditsResponse.Detail`. C# has the same blind spot
-for model properties, and it is not covered.
+are ignored; in a nested struct only backtick tags are, the form oapi-codegen
+writes. A struct it cannot read, or one embedding an unexported struct, is
+UNREADABLE, as for a method head. Methods on generated types (union accessors
+such as `AsValidationErrorLoc0`) are not read. It found one shipped break:
+v1.8.0 renamed `generated.InsufficientCreditsDetail.Error` and
+`generated.InsufficientCreditsResponse.Detail`. C# has the same blind spot for
+model properties, and it is not covered.
 
 An optional parameter inserted *mid-list* is graded breaking, not a warning: in
 C# a positional `M(id, token)` then tries to bind `token` to the new parameter.

@@ -2285,8 +2285,11 @@ _GO_EMBED_RE = re.compile(r"^\*?([A-Za-z_]\w*\.)?([A-Za-z_]\w*)(?:\[.*\])?$", re
 
 
 def _go_struct_members(body: str) -> list[str] | None:
-    """A struct body split into its field declarations, at depth 0: a nested
-    `struct { ... }` or `map[K]V` stays one member. None when it does not balance."""
+    """A struct body (or `const`/`var` block) split into its declarations at
+    depth 0: a nested `struct { ... }` or `map[K]V` stays one member. A line
+    break splits only where Go would end the statement (after an identifier,
+    literal, `)`, `]` or `}`), so `"a" +` continues onto the next line. None
+    when it does not balance."""
     out, cur, depth, j = [], [], 0, 0
     while j < len(body):
         ch = body[j]
@@ -2303,11 +2306,16 @@ def _go_struct_members(body: str) -> list[str] | None:
             depth -= 1
             if depth < 0:
                 return None
-        if ch in "\n;" and depth == 0:
-            out.append("".join(cur).strip())
-            cur = []
-        else:
-            cur.append(ch)
+        if depth == 0 and ch in "\n;":
+            member = "".join(cur)
+            tail = member.rstrip()
+            if (ch == ";" or not tail or tail[-1].isalnum() or tail[-1] in "_\"'`)]}"
+                    or tail.endswith(("++", "--")) or re.search(r"(?<![\w.])\d[\d_]*\.$", tail)):
+                out.append(member.strip())
+                cur = []
+                j += 1
+                continue
+        cur.append(ch)
         j += 1
     out.append("".join(cur).strip())
     return None if depth else [m for m in out if m]
@@ -2320,8 +2328,8 @@ def go_struct_fields(text: str) -> tuple[dict[str, dict[str, str] | str], list[s
     to the alias target string (`generated.X`) for `type A = B`, to "type T"
     for any other type (`type Scope string` -> "type string"), and to
     "const T" / "var T" for a package constant or variable, T its declared type
-    if any. A struct tag is dropped, nested ones too: retagging
-    changes the wire, not what compiles. An embedded field is named by its type,
+    if any. A struct tag is dropped, and a nested struct's backtick tags too:
+    retagging changes the wire, not what compiles. An embedded field is named by its type,
     as Go names it. A struct whose body does not balance, holds a member read as
     neither a field nor an embedding, or embeds an unexported struct (whose
     promoted fields this scan cannot list) is unreadable.
@@ -2335,7 +2343,7 @@ def go_struct_fields(text: str) -> tuple[dict[str, dict[str, str] | str], list[s
         kind = m.group(1)
         if m.group(2):
             body = balanced_slice(text, m.end() - 1, "(", ")")
-            members = _go_struct_members(body[1:-1]) if body is not None else None
+            members = _go_struct_members(body) if body is not None else None
             if members is None:
                 unreadable.append(f"{kind} ( ... ) block")
                 continue
@@ -2344,7 +2352,11 @@ def go_struct_fields(text: str) -> tuple[dict[str, dict[str, str] | str], list[s
         last = ""
         for mem in members:
             left, eq, _ = mem.partition("=")
-            names, typ = re.match(r"\s*([\w\s,]*?\w)(?:\s+([^,\s].*?))?\s*$", left).groups()
+            head = re.match(r"\s*([\w\s,]*?\w)(?:\s+([^,\s].*?))?\s*$", left)
+            if head is None:    # no name before the type or `=`
+                unreadable.append(f"{kind} ( ... ) block" if m.group(2) else f"{kind} {left.strip()}")
+                break
+            names, typ = head.groups()
             if kind == "const" and not eq and not typ:
                 typ = last          # Go repeats the previous spec's type and value
             last = typ or ""
