@@ -26,7 +26,7 @@
 
 ### Fixed
 
-- Stop the `HTTPClient`'s `Timeout`, 30s by default, from cutting `RunStreamingAgentAndWait` and `RunStreamingAgent` streams while they are read; `ctx` alone bounds a stream now
+- Stop the default HTTP client's 30s timeout from cutting `RunStreamingAgentAndWait` and `RunStreamingAgent` streams while they are read. When no `HTTPClient` is given, the streaming methods now use a client with no timeout that waits at most 30s for the response headers, and `ctx` bounds the rest. An `HTTPClient` you pass is used as it is, so its `Timeout` still bounds a stream
 - Refuse a blank or whitespace-only ID in a request path with a `*ConfigurationError`, in every method and without sending a request. An empty segment used to be collapsed into another endpoint: `ListAgentRuns` with an empty agent ID requested `GET /agents/runs`, and `GetAgent` with one requested `GET /agents/`
 - Return step outputs from `RunAgentAndPoll` with `IncludeStepOutputs` when the run is already finished in the `RunAgent` response, which carries none: the run is now fetched once with step outputs before that response is checked
 - Send IDs in request paths escaped once. Every method escaped an ID and then escaped it again, so an ID containing a space, `/`, `%` or a non-ASCII character reached the API as, for example, `a%25201` instead of `a%201` and was not found; an ID of `.` or `..` is now sent as `%2E` or `%2E%2E`, so it is not taken as a dot segment

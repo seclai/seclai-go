@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -266,6 +267,48 @@ func TestClient_Streams_OutliveTheHTTPClientTimeout(t *testing.T) {
 	}
 	if err := <-errs; err != nil || len(got) != 1 || got[0] != "done" {
 		t.Fatalf("RunStreamingAgent: events %v, err %v", got, err)
+	}
+}
+
+// The default client's stream client still bounds the wait for response
+// headers, so a server that never answers cannot hang either stream method.
+func TestClient_Streams_DefaultClientBoundsTheHeaderWait(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release // never sends headers
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) }) // runs before srv.Close
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	tr, ok := c.streamHTTPClient.Transport.(*http.Transport)
+	if !ok || tr.ResponseHeaderTimeout != 30*time.Second || c.streamHTTPClient.Timeout != 0 {
+		t.Fatalf("stream client %+v, want no Timeout and a 30s header bound", c.streamHTTPClient)
+	}
+	tr.ResponseHeaderTimeout = 50 * time.Millisecond // shrunk for the test
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, err := c.RunStreamingAgentAndWait(ctx, "agent_1", AgentRunStreamRequest{})
+	_, errs := c.RunStreamingAgent(ctx, "agent_1", AgentRunStreamRequest{})
+	err2 := <-errs
+	if err == nil || err2 == nil || ctx.Err() != nil || time.Since(start) > time.Second {
+		t.Fatalf("errors %v, %v after %v; want both to end at the header bound", err, err2, time.Since(start))
+	}
+}
+
+// A caller's HTTPClient is used as it is, so its Timeout still bounds a stream.
+func TestClient_Streams_CustomClientKeepsItsTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.(http.Flusher).Flush()
+		time.Sleep(150 * time.Millisecond)
+		_, _ = io.WriteString(w, "event: done\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"completed\"}\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL, HTTPClient: &http.Client{Timeout: 50 * time.Millisecond}})
+	if _, err := c.RunStreamingAgentAndWait(context.Background(), "agent_1", AgentRunStreamRequest{}); err == nil {
+		t.Fatal("want the caller's Timeout to cut the stream")
 	}
 }
 
@@ -1587,11 +1630,11 @@ func TestClient_RunAgentAndPoll_IncludeStepOutputsFetchesFirst(t *testing.T) {
 // With IncludeStepOutputs, a RunAgent response that would not end the poll
 // is not fetched again at once: the poll waits its interval first.
 func TestClient_RunAgentAndPoll_IncludeStepOutputsWaitsWhenUnfinished(t *testing.T) {
-	gets := 0
+	var gets atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodGet {
-			gets++
+			gets.Add(1)
 		}
 		_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"processing"}`)
 	}))
@@ -1600,8 +1643,8 @@ func TestClient_RunAgentAndPoll_IncludeStepOutputsWaitsWhenUnfinished(t *testing
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	_, err := c.RunAgentAndPoll(ctx, "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Hour, IncludeStepOutputs: true})
-	if err != context.DeadlineExceeded || gets != 0 {
-		t.Fatalf("err %v after %d fetches, want the deadline before any fetch", err, gets)
+	if err != context.DeadlineExceeded || gets.Load() != 0 {
+		t.Fatalf("err %v after %d fetches, want the deadline before any fetch", err, gets.Load())
 	}
 }
 
@@ -1629,6 +1672,29 @@ func TestClient_RunAgentAndPoll_FetchErrorKeepsTheRun(t *testing.T) {
 				t.Fatalf("got %v, %v; want run_1 with the *APIStatusError", res, err)
 			}
 		})
+	}
+}
+
+// A GetAgentRun cut short by ctx returns the bare context error, as the wait
+// between polls does, so err == context.DeadlineExceeded holds.
+func TestClient_RunAgentAndPoll_DeadlineDuringAFetch(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet {
+			<-release // answers only after the deadline
+			return
+		}
+		_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"processing"}`)
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) }) // runs before srv.Close
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	res, err := c.RunAgentAndPoll(ctx, "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Millisecond})
+	if err != context.DeadlineExceeded || res == nil || res.RunId != "run_1" {
+		t.Fatalf("got %v, %T %v; want run_1 with the bare context.DeadlineExceeded", res, err, err)
 	}
 }
 
