@@ -70,7 +70,7 @@ Do not guess the next version. Releases are cut by `seclai/github-tag-action` in
 - contains `#minor` → minor bump
 - otherwise → `DEFAULT_BUMP: patch`
 
-Put `#minor` / `#major` in a branch commit message; never tell the user that the PR title will do. A change that adds endpoints needs `#minor` in a commit message, or it ships as a patch and the heading you write will not match the tag that gets cut. Confirm the intended bump with the user when it isn't stated, and flag the mismatch risk if no branch commit message carries the keyword.
+Put `#minor` / `#major` in a branch commit message; never tell the user that the PR title will do. The keyword reaches `main` in the squash commit's message, so keep it when editing the message in the merge dialog. A change that adds endpoints needs `#minor` in a commit message, or it ships as a patch and the heading you write will not match the tag that gets cut. Confirm the intended bump with the user when it isn't stated, and flag the mismatch risk if no branch commit message carries the keyword.
 
 Check `git tag --sort=-v:refname | head -1` for the current latest, then apply the bump.
 
