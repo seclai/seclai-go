@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Seclai Go SDK Docs (v1.10.0)</title>
+  <title>Seclai Go SDK Docs (v1.11.0)</title>
   <style>
     :root { color-scheme: light dark; }
     body { max-width: 960px; margin: 0 auto; padding: 24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
@@ -15,7 +15,7 @@
 </head>
 <body>
   <h1>Seclai Go SDK</h1>
-  <p class="meta">Version: <code>1.10.0</code></p>
+  <p class="meta">Version: <code>1.11.0</code></p>
   <p class="meta">Generated from <code>go doc</code>.</p>
   <pre><code>
 === github.com/seclai/seclai-go ===
@@ -177,11 +177,23 @@ const (
 	// APIVersion20261104 is the 2026-11-04 API version.
 	APIVersion20261104 = &#34;2026-11-04&#34;
 
+	// APIVersion20261108 is the 2026-11-08 API version.
+	APIVersion20261108 = &#34;2026-11-08&#34;
+
+	// APIVersion20261109 is the 2026-11-09 API version.
+	APIVersion20261109 = &#34;2026-11-09&#34;
+
+	// APIVersion20261114 is the 2026-11-14 API version.
+	APIVersion20261114 = &#34;2026-11-14&#34;
+
+	// APIVersion20261119 is the 2026-11-19 API version.
+	APIVersion20261119 = &#34;2026-11-19&#34;
+
 	// APIVersionDefault is the baseline applied to an unpinned, header-less caller.
 	APIVersionDefault = APIVersion20260701
 
 	// APIVersionLatest is the newest version known to this SDK release. It may lag the server.
-	APIVersionLatest = APIVersion20261104
+	APIVersionLatest = APIVersion20261119
 )
     Dated API versions known to this release, for use with [Options.APIVersion].
 
@@ -231,6 +243,10 @@ var KnownAPIVersions = []string{
 	APIVersion20261028,
 	APIVersion20261102,
 	APIVersion20261104,
+	APIVersion20261108,
+	APIVersion20261109,
+	APIVersion20261114,
+	APIVersion20261119,
 }
     KnownAPIVersions lists every version this release was built against,
     oldest first.
@@ -266,10 +282,21 @@ type APIStatusError struct {
 	URL string
 	// ResponseText is the raw response body, if available.
 	ResponseText string
+
+	// Has unexported fields.
 }
     APIStatusError is returned for non-2xx HTTP responses.
 
 func (e *APIStatusError) Error() string
+
+func (e *APIStatusError) Header() http.Header
+    Header returns the response&#39;s headers, such as Retry-After, or the
+    Content-Range of a 416 from a ranged download, which gives the file&#39;s size.
+    It returns nil when no response headers are known. When the response had
+    headers, as every response from net/http&#39;s own transport does, the error
+    holds them, so its value does not equal an APIStatusError built by hand
+    (with == or reflect.DeepEqual); compare StatusCode and the other fields
+    instead.
 
 type APIValidationError struct {
 	APIStatusError
@@ -592,19 +619,25 @@ func (c *Client) BlockEmailSender(ctx context.Context, body BlockEmailSenderRequ
     blocklist. Idempotent. Requires an account owner or admin.
 
 func (c *Client) CancelAgentRun(ctx context.Context, runID string) (*AgentRunResponse, error)
-    CancelAgentRun cancels an in-progress agent run and returns its updated
-    state.
+    CancelAgentRun cancels an agent run that has not ended (queued, pending,
+    processing, waiting_human or waiting_scheduled) and returns its updated
+    state. The run ends with status cancelled from API version 2026-11-08,
+    and failed on earlier versions. When the run was started by another agent&#39;s
+    call_agent step that is still waiting for it, the outermost calling run is
+    cancelled, with every run below it that has not reported its result.
 
     Cancellation is DELETE on the run resource — the API exposes no POST
     .../cancel route, and no operation that deletes a run. Rejected when the run
-    has already reached a terminal state.
+    has already ended (completed, failed or cancelled).
 
 func (c *Client) CancelExperiment(ctx context.Context, experimentID string) (json.RawMessage, error)
     CancelExperiment cancels a running model playground experiment.
 
 func (c *Client) CancelQueuedEmailRuns(ctx context.Context) (*CancelQueuedRunsResponse, error)
-    CancelQueuedEmailRuns fails all of the account&#39;s QUEUED (over-quota parked)
-    inbound-email runs. Requires an account owner or admin.
+    CancelQueuedEmailRuns cancels all of the account&#39;s QUEUED (over-quota
+    parked) inbound-email runs. Each ends with status cancelled from API version
+    2026-11-08, and failed on earlier versions. Requires an account owner or
+    admin.
 
 func (c *Client) CancelSourceEmbeddingMigration(ctx context.Context, sourceID string) (*SourceEmbeddingMigrationResponse, error)
     CancelSourceEmbeddingMigration cancels an in-progress embedding migration.
@@ -803,14 +836,36 @@ func (c *Client) Do(ctx context.Context, method, apiPath string, query map[strin
     is sent.
 
 func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachmentID, downloadName string) (*http.Response, error)
-    DownloadAgentRunAttachment downloads a file attachment emitted by a step
-    in an agent run. Returns the raw HTTP response so the caller can stream the
-    body. The caller must close the response body.
+    DownloadAgentRunAttachment downloads a file of an agent run: one a step
+    emitted, or one the run started with. Returns the raw HTTP response so the
+    caller can stream the body. The caller must close the response body.
 
-    attachmentID is the URL-safe-base64-encoded storage_key of the attachment
-    (as surfaced in run output manifests and webhook/email payloads).
+    attachmentID is the id of an entry in the run&#39;s or a step&#39;s attachments, or
+    the URL-safe-base64-encoded storage key that webhook and email links carry.
     downloadName is an optional filename hint for the download disposition;
     pass &#34;&#34; to omit it.
+
+    It adds no Range header; use Client.DownloadAgentRunAttachmentWithOptions to
+    download part of the file.
+
+func (c *Client) DownloadAgentRunAttachmentWithOptions(ctx context.Context, runID, attachmentID string, opts DownloadAgentRunAttachmentOptions) (*http.Response, error)
+    DownloadAgentRunAttachmentWithOptions downloads a file of an agent run (one
+    a step emitted, or one the run started with), or part of it. Returns the raw
+    HTTP response so the caller can stream the body. The caller must close the
+    response body.
+
+    attachmentID is as for Client.DownloadAgentRunAttachment. With a range set
+    in opts, a successful request is answered with one of:
+      - 206 Partial Content with the requested bytes and a Content-Range header;
+      - 200 OK with the whole file, when the file is empty;
+      - 416 Range Not Satisfiable, returned as an *APIStatusError, when the
+        range starts at or past the end of a non-empty file. The file&#39;s size
+        is in the error&#39;s headers: Header().Get(&#34;Content-Range&#34;) is &#34;bytes
+        */&lt;size&gt;&#34;.
+
+    Every 200 and 206 carries Accept-Ranges: bytes and Content-Length. Check
+    resp.StatusCode to tell a partial response from a whole one. An invalid
+    combination of range fields returns a *ConfigurationError and sends nothing.
 
 func (c *Client) DownloadContentAttachment(ctx context.Context, contentVersionID, attachmentID string) (*http.Response, error)
     DownloadContentAttachment downloads an attached file&#39;s bytes. Returns the
@@ -1359,11 +1414,12 @@ func (c *Client) RunAgent(ctx context.Context, agentID string, body AgentRunRequ
 
 func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body AgentRunRequest, opts *RunAgentAndPollOptions) (*AgentRunResponse, error)
     RunAgentAndPoll runs an agent and polls until it reaches a terminal status
-    (completed or failed), or, with opts.ReturnOnResult, until it has reported
-    its result. The initial RunAgent response is checked before the first wait;
-    with opts.IncludeStepOutputs, which that response lacks, a response that
-    would end the poll is fetched again at once with step outputs, and that
-    snapshot is checked instead. The context controls the overall timeout.
+    (completed, failed or cancelled), or, with opts.ReturnOnResult, until it
+    has reported its result. The initial RunAgent response is checked before
+    the first wait; with opts.IncludeStepOutputs, which that response lacks, a
+    response that would end the poll is fetched again at once with step outputs,
+    and that snapshot is checked instead. The context controls the overall
+    timeout.
 
     When ctx ends during the wait between polls, the last run polled is returned
     with ctx.Err(). When a poll&#39;s GetAgentRun fails, the last run polled is
@@ -1425,9 +1481,10 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
     when ctx has none), or the HTTP client&#39;s Timeout (30s with the default
     client; see [Options.HTTPClient]).
 
-    body.IncludeReasoning is not sent: this method reads only the run snapshots,
-    so reasoning events would be streamed only to be discarded while counting
-    against the timeout. Use Client.RunStreamingAgent to receive them.
+    body.IncludeReasoning and body.IncludeCommentary are not sent: this method
+    reads only the run snapshots, so reasoning and commentary events would
+    be streamed only to be discarded while counting against the timeout.
+    Use Client.RunStreamingAgent to receive them.
 
 func (c *Client) Search(ctx context.Context, opts SearchOptions) (json.RawMessage, error)
     Search performs a general search across resources.
@@ -1776,6 +1833,37 @@ type DocsSearchResponse = generated.RoutersApiDocsSearchDocsSearchResponse
 type DocsSearchResultResponse = generated.DocsSearchResultResponse
     DocsSearchResultResponse is a single documentation search hit.
 
+type DownloadAgentRunAttachmentOptions struct {
+	// DownloadName is an optional filename hint for the download disposition;
+	// &#34;&#34; omits it.
+	DownloadName string
+	// RangeStart is the offset of the first byte to download.
+	RangeStart *int64
+	// RangeEnd is the offset of the last byte to download, inclusive. It needs
+	// RangeStart.
+	RangeEnd *int64
+	// RangeSuffix downloads the last RangeSuffix bytes of the file. It cannot be
+	// combined with RangeStart or RangeEnd.
+	RangeSuffix *int64
+}
+    DownloadAgentRunAttachmentOptions controls
+    Client.DownloadAgentRunAttachmentWithOptions. The zero value downloads the
+    whole file with no filename hint, as Client.DownloadAgentRunAttachment does.
+
+    The range fields build the request&#39;s Range header. Set at most one form:
+      - none: the SDK adds no Range header;
+      - RangeStart alone: bytes from RangeStart to the end of the file
+        (&#34;bytes=&lt;start&gt;-&#34;);
+      - RangeStart and RangeEnd: bytes RangeStart through RangeEnd,
+        both inclusive (&#34;bytes=&lt;start&gt;-&lt;end&gt;&#34;); RangeEnd must not be less than
+        RangeStart;
+      - RangeSuffix alone: the last RangeSuffix bytes (&#34;bytes=-&lt;suffix&gt;&#34;);
+        it must be greater than 0.
+
+    Offsets count bytes from 0 and must not be negative. Any other combination
+    (RangeEnd without RangeStart, RangeSuffix with either of the others) is
+    refused with a *ConfigurationError before a request is sent.
+
 type EffortOptionsResponse = generated.EffortOptionsResponse
     EffortOptionsResponse is the set of reasoning-effort values a model accepts.
 
@@ -2117,7 +2205,11 @@ type ListAgentEvaluationResultsOptions struct {
 
 type ListAgentExamplesOptions struct {
 	ListOptions
-	// Query keeps only entries containing every one of these words.
+	// Query describes what the agent should do. From API version 2026-11-09,
+	// entries are ranked by how well they match it, by words and meaning, best
+	// first, and a query of several words that are all filler (&#34;create an
+	// agent&#34;) counts as no query; earlier versions keep only entries containing every one of its
+	// words.
 	Query string
 	// UseCase keeps only entries for this use case.
 	UseCase string
@@ -2130,7 +2222,7 @@ type ListAgentRunsOptions struct {
 	Page int
 	// Limit is the maximum number of items per page.
 	Limit int
-	// Status filters runs by status (e.g. &#34;completed&#34;, &#34;failed&#34;, &#34;running&#34;).
+	// Status filters runs by status (e.g. &#34;completed&#34;, &#34;failed&#34;, &#34;processing&#34;).
 	Status string
 }
     ListAgentRunsOptions controls optional query parameters for ListAgentRuns.
@@ -2626,7 +2718,7 @@ type RunAgentAndPollOptions struct {
 	// its Output is the run&#39;s answer and does not change, but its Status may
 	// not be terminal: later steps may still run and the run can still fail.
 	// Check ResultReportedAt, not Status. When false, polling continues until
-	// the run is completed or failed.
+	// the run is completed, failed or cancelled.
 	ReturnOnResult bool
 }
     RunAgentAndPollOptions controls polling behavior.
@@ -4518,13 +4610,13 @@ type AgentDefinitionResponse struct {
 	// ChangeId Current change ID (use as expected_change_id when updating).
 	ChangeId string `json:&#34;change_id&#34;`
 
-	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, if_else, switch, and others.
+	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, text, for_each, if_else, switch, parallel, and others.
 	Definition map[string]interface{} `json:&#34;definition&#34;`
 
 	// SchemaVersion Agent schema version.
 	SchemaVersion string `json:&#34;schema_version&#34;`
 
-	// Warnings Validation warnings, if any.
+	// Warnings Validation warnings, if any. Each has `step_path`, `message` and `severity` (`info` or `warning`).
 	Warnings *[]map[string]string `json:&#34;warnings&#34;`
 }
     AgentDefinitionResponse defines model for AgentDefinitionResponse.
@@ -4573,7 +4665,7 @@ type AgentExampleListResponse struct {
     AgentExampleListResponse defines model for AgentExampleListResponse.
 
 type AgentExportResponse struct {
-	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, max_credits_per_run, max_credits_per_period, max_runs_per_hour, max_runs_per_day, max_runs_total, created_at, updated_at.
+	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, max_credits_per_run, max_credits_per_period, max_runs_per_hour, max_runs_per_day, max_runs_total, gallery_example (a copy of a gallery example&#39;s setup guidance, or null), created_at, updated_at.
 	Agent map[string]interface{} `json:&#34;agent&#34;`
 
 	// AlertConfigs Alert configurations.
@@ -4585,7 +4677,7 @@ type AgentExportResponse struct {
 	// EvaluationCriteria Evaluation criteria for agent steps.
 	EvaluationCriteria *[]map[string]interface{} `json:&#34;evaluation_criteria&#34;`
 
-	// ExportVersion Schema version of the export format (currently &#34;6&#34;).
+	// ExportVersion Schema version of the export format (currently &#34;7&#34;).
 	ExportVersion string `json:&#34;export_version&#34;`
 
 	// ExportedAt ISO-8601 timestamp of when the export was generated.
@@ -4704,7 +4796,7 @@ type AgentRunResponse struct {
 	// Priority Indicates if the run was treated as a priority execution.
 	Priority bool `json:&#34;priority&#34;`
 
-	// ResultReportedAt When the run reported success: for an agent whose `report_success` is `on_result`, once its result step published, or once its run started if it has no result step; else when the run completed.  From then on `output` is the run&#39;s answer and never changes; stop polling here if you only need the answer.  `status` still follows every step, so a run can report success and later fail.  Null until the run reports, for a run that failed before reporting, and for runs that ended before this field existed.
+	// ResultReportedAt When the run reported success: for an agent whose `report_success` is `on_result`, once the step carrying `run_result` published, or once its run started if no step carries it; else when the run completed.  From then on `output` is the run&#39;s answer and never changes; stop polling here if you only need the answer.  `status` still follows every step, so a run can report success and later fail.  Null until the run reports, for a run that failed before reporting, and for runs that ended before this field existed.
 	ResultReportedAt *time.Time `json:&#34;result_reported_at&#34;`
 
 	// RunId Unique identifier for the agent run.
@@ -4769,7 +4861,10 @@ type AgentRunStepResponse struct {
     AgentRunStepResponse defines model for AgentRunStepResponse.
 
 type AgentRunStreamRequest struct {
-	// IncludeReasoning Receive `stream_reasoning` events carrying the model&#39;s reasoning while it thinks. They are sent only for a `streaming_result` step whose author enabled `show_reasoning`, and never when a governance policy redacts that step.
+	// IncludeCommentary Receive `stream_commentary` events carrying the text a model on OpenAI&#39;s Responses API writes outside its final answer, with its `phase` and `message` number. They are sent only for a `prompt_call` whose `run_result` enables `show_commentary`, and never when a governance policy redacts that step.
+	IncludeCommentary *bool `json:&#34;include_commentary,omitempty&#34;`
+
+	// IncludeReasoning Receive `stream_reasoning` events carrying the model&#39;s reasoning while it thinks. They are sent only for a `prompt_call` whose `run_result` enables `show_reasoning`, and never when a governance policy redacts that step.
 	IncludeReasoning *bool `json:&#34;include_reasoning,omitempty&#34;`
 
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
@@ -9226,7 +9321,7 @@ type CreateAlertConfigRequest struct {
 	// AlertType Alert type
 	AlertType string `json:&#34;alert_type&#34;`
 
-	// CooldownMinutes Cooldown period in minutes. Omit to use the per-alert-type default (1440 for credit alerts, 60 otherwise).
+	// CooldownMinutes Cooldown period in minutes. Omit to use the alert type&#39;s default.
 	CooldownMinutes *int `json:&#34;cooldown_minutes,omitempty&#34;`
 
 	// DistributionType Distribution type (owner, owner_admins, selected_members)
@@ -9302,7 +9397,7 @@ type CreateEvaluationCriteriaRequest struct {
     CreateEvaluationCriteriaRequest Request body for creating an evaluation
     criteria.
 
-    step_id names the display_result or streaming_result step to score.
+    step_id names the step carrying run_result, the run&#39;s answer, to score.
     The evaluation mode and sample frequency are set at the agent level,
     not per-criteria.
 
@@ -10981,13 +11076,15 @@ type GenerationTierListResponse struct {
     shape; 2026-07-27+ clients get the canonical “{data, pagination}“ envelope.
 
 type GenerationTierResponse struct {
-	CreditsPerUnit *int    `json:&#34;credits_per_unit&#34;`
-	Modality       string  `json:&#34;modality&#34;`
-	ModelId        string  `json:&#34;model_id&#34;`
-	ModelName      string  `json:&#34;model_name&#34;`
-	PriceLabel     *string `json:&#34;price_label&#34;`
-	Tier           string  `json:&#34;tier&#34;`
-	UnitLabel      *string `json:&#34;unit_label&#34;`
+	// AspectRatios The aspect ratios the tier&#39;s model can be asked for, and so the values a media_generation image generator&#39;s aspect_ratio pin may take. Empty for audio and video tiers and for an image model that takes no ratio.
+	AspectRatios   *[]string `json:&#34;aspect_ratios,omitempty&#34;`
+	CreditsPerUnit *int      `json:&#34;credits_per_unit&#34;`
+	Modality       string    `json:&#34;modality&#34;`
+	ModelId        string    `json:&#34;model_id&#34;`
+	ModelName      string    `json:&#34;model_name&#34;`
+	PriceLabel     *string   `json:&#34;price_label&#34;`
+	Tier           string    `json:&#34;tier&#34;`
+	UnitLabel      *string   `json:&#34;unit_label&#34;`
 }
     GenerationTierResponse defines model for GenerationTierResponse.
 
@@ -12562,7 +12659,7 @@ func (r ListAgentEvaluationResultsApiAgentsAgentIdEvaluationResultsGetResponse) 
     StatusCode returns HTTPResponse.StatusCode
 
 type ListAgentExamplesApiAgentsExamplesGetParams struct {
-	// Query Words every match must contain.
+	// Query What the agent should do; before 2026-11-09, words every match must contain.
 	Query *string `form:&#34;query,omitempty&#34; json:&#34;query,omitempty&#34;`
 
 	// UseCase Only entries for this use case.
@@ -14331,6 +14428,7 @@ type PendingProcessingCompletedFailedStatus string
     PendingProcessingCompletedFailedStatus.
 
 const (
+	PendingProcessingCompletedFailedStatusCancelled        PendingProcessingCompletedFailedStatus = &#34;cancelled&#34;
 	PendingProcessingCompletedFailedStatusCompleted        PendingProcessingCompletedFailedStatus = &#34;completed&#34;
 	PendingProcessingCompletedFailedStatusFailed           PendingProcessingCompletedFailedStatus = &#34;failed&#34;
 	PendingProcessingCompletedFailedStatusPending          PendingProcessingCompletedFailedStatus = &#34;pending&#34;
@@ -14766,7 +14864,7 @@ type RoutersApiAgentsCreateAgentRequest struct {
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, replaces any template-derived workflow and pre-fills metadata/trigger fields the request does not specify explicitly. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
 	AgentDefinition *map[string]interface{} `json:&#34;agent_definition,omitempty&#34;`
 
-	// AgentTemplate Agent gallery entry to start from: a `key` from GET /agents/examples, or `blank`. The keys retrieval_example and simple_qa remain accepted for their gallery entries.
+	// AgentTemplate Agent gallery entry to start from: a `key` from GET /agents/examples, or `blank`. The keys retrieval_example and simple_qa remain accepted for their gallery entries. An entry&#39;s safety policies, which its summary may describe, are not created on an agent created here.
 	AgentTemplate *string `json:&#34;agent_template,omitempty&#34;`
 
 	// CreateMissingResources For an `agent_template`: create each creatable resource slot left out of `resource_bindings`, and group the agent with them in a new solution. When false, an unbound slot the template needs is an error.
@@ -15680,10 +15778,10 @@ type SchemasModelResponsesPromptModelResponse struct {
 	Family           *string                `json:&#34;family&#34;`
 	FamilyGeneration *float32               `json:&#34;family_generation&#34;`
 
-	// GenerationCreditsPerUnit Per-unit credit cost for a dedicated media-generation model, in the unit named by ``generation_params.pricing_unit`` (per image / per second / per character / per output token). Multiply by the produced unit count (images, seconds, characters) for the run cost. None for models with no generation descriptor. This rate applies when the model is used in a generate_image/audio/video step; a model that also serves the chat path is billed per token there instead, using the input/output token rates on this same record. When `generation_params.price_varies_by` is set the model has one rate per value of that option and this is the **highest** of them — read `generation_credits_per_variant` for the real spread rather than presenting this as the price.
+	// GenerationCreditsPerUnit Per-unit credit cost for a dedicated media-generation model, in the unit named by ``generation_params.pricing_unit`` (per image / per second / per character / per output token). Multiply by the produced unit count (images, seconds, characters) for the run cost. None for models with no generation descriptor. This rate applies when the model is used in a generate_image/audio/video step; a model that also serves the chat path is billed per token there instead, using the input/output token rates on this same record. When `generation_params.price_varies_by` is set the model has one rate per value (or combination) and this is the **highest** of them — read `generation_credits_per_variant` for the real spread rather than presenting this as the price.
 	GenerationCreditsPerUnit *float32 `json:&#34;generation_credits_per_unit&#34;`
 
-	// GenerationCreditsPerVariant Per-unit credit cost keyed by the value of the option named in `generation_params.price_varies_by` (e.g. `{&#39;720p&#39;: 1330, &#39;1080p&#39;: 1995}`). None for a model with a single rate, where `generation_credits_per_unit` already describes it exactly.
+	// GenerationCreditsPerVariant Per-unit credit cost keyed by the value of the option named in `generation_params.price_varies_by` (e.g. `{&#39;720p&#39;: 1330, &#39;1080p&#39;: 1995}`); when it names several options (a list), the key joins their values with &#39;:&#39; in that order (`&#39;1080p:audio&#39;`). None for a model with a single rate, where `generation_credits_per_unit` already describes it exactly.
 	GenerationCreditsPerVariant *map[string]float32 `json:&#34;generation_credits_per_variant&#34;`
 
 	// GenerationParams Media-generation descriptor (modality, pricing_unit, and modality-specific constraints). NULL for text LLMs; present for image/audio/video generation models. See schemas.generation_params. A present descriptor does NOT imply the model is generation-only: some models serve both paths (they generate media AND hold a chat conversation). Read `chat_capable` to tell whether a model with a descriptor can also be used as a chat model — do not branch on this field being non-null alone, and do not re-derive the answer from `supported_output_media`.
@@ -15893,6 +15991,7 @@ type SendTestEmailResponse struct {
 
 type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams struct {
 	DownloadName *string `form:&#34;download_name,omitempty&#34; json:&#34;download_name,omitempty&#34;`
+	Range        *string `json:&#34;Range,omitempty&#34;`
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user&#39;s default account is used. Ignored for API key authentication — the key&#39;s account is always used.
 	XAccountId *XAccountId `json:&#34;X-Account-Id,omitempty&#34;`
@@ -15905,11 +16004,10 @@ type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams 
     ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet.
 
 type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse struct {
-	Body                                []byte
-	HTTPResponse                        *http.Response
-	ApplicationvndSeclaiManifestJSON200 *openapi_types.File
-	JSON422                             *HTTPValidationError
-	JSON503                             *ServiceUnavailableError
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON422      *HTTPValidationError
+	JSON503      *ServiceUnavailableError
 }
 
 func ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse(rsp *http.Response) (*ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse, error)
