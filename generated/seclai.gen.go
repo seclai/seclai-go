@@ -63,6 +63,7 @@ const (
 
 // Defines values for PendingProcessingCompletedFailedStatus.
 const (
+	PendingProcessingCompletedFailedStatusCancelled        PendingProcessingCompletedFailedStatus = "cancelled"
 	PendingProcessingCompletedFailedStatusCompleted        PendingProcessingCompletedFailedStatus = "completed"
 	PendingProcessingCompletedFailedStatusFailed           PendingProcessingCompletedFailedStatus = "failed"
 	PendingProcessingCompletedFailedStatusPending          PendingProcessingCompletedFailedStatus = "pending"
@@ -242,13 +243,13 @@ type AgentDefinitionResponse struct {
 	// ChangeId Current change ID (use as expected_change_id when updating).
 	ChangeId string `json:"change_id"`
 
-	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, streaming_result, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, display_result, merge, for_each, if_else, switch, and others.
+	// Definition The agent definition containing name, description, tags, and step workflow tree. Step types include prompt_call, retrieval, regex_replace, evaluate_step, extract_data, extract_content, add_chat_turn, load_chat_history, add_memory, search_memory, load_memory, send_email, webhook_call, call_agent, write_metadata, write_content_attachment, load_content_attachment, load_content, text, for_each, if_else, switch, parallel, and others.
 	Definition map[string]interface{} `json:"definition"`
 
 	// SchemaVersion Agent schema version.
 	SchemaVersion string `json:"schema_version"`
 
-	// Warnings Validation warnings, if any.
+	// Warnings Validation warnings, if any. Each has `step_path`, `message` and `severity` (`info` or `warning`).
 	Warnings *[]map[string]string `json:"warnings"`
 }
 
@@ -288,7 +289,7 @@ type AgentExampleListResponse struct {
 
 // AgentExportResponse Portable JSON snapshot of an agent definition.
 type AgentExportResponse struct {
-	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, max_credits_per_run, max_credits_per_period, max_runs_per_hour, max_runs_per_day, max_runs_total, created_at, updated_at.
+	// Agent Agent metadata and full definition. Keys: name, description, schema_version, definition, default_evaluation_tier, evaluation_mode, sampling_config, max_retries, retry_on_failure, prompt_model_auto_upgrade_strategy, prompt_model_auto_rollback_enabled, prompt_model_auto_rollback_triggers, max_credits_per_run, max_credits_per_period, max_runs_per_hour, max_runs_per_day, max_runs_total, gallery_example (a copy of a gallery example's setup guidance, or null), created_at, updated_at.
 	Agent map[string]interface{} `json:"agent"`
 
 	// AlertConfigs Alert configurations.
@@ -300,7 +301,7 @@ type AgentExportResponse struct {
 	// EvaluationCriteria Evaluation criteria for agent steps.
 	EvaluationCriteria *[]map[string]interface{} `json:"evaluation_criteria"`
 
-	// ExportVersion Schema version of the export format (currently "6").
+	// ExportVersion Schema version of the export format (currently "7").
 	ExportVersion string `json:"export_version"`
 
 	// ExportedAt ISO-8601 timestamp of when the export was generated.
@@ -419,7 +420,7 @@ type AgentRunResponse struct {
 	// Priority Indicates if the run was treated as a priority execution.
 	Priority bool `json:"priority"`
 
-	// ResultReportedAt When the run reported success: for an agent whose `report_success` is `on_result`, once its result step published, or once its run started if it has no result step; else when the run completed.  From then on `output` is the run's answer and never changes; stop polling here if you only need the answer.  `status` still follows every step, so a run can report success and later fail.  Null until the run reports, for a run that failed before reporting, and for runs that ended before this field existed.
+	// ResultReportedAt When the run reported success: for an agent whose `report_success` is `on_result`, once the step carrying `run_result` published, or once its run started if no step carries it; else when the run completed.  From then on `output` is the run's answer and never changes; stop polling here if you only need the answer.  `status` still follows every step, so a run can report success and later fail.  Null until the run reports, for a run that failed before reporting, and for runs that ended before this field existed.
 	ResultReportedAt *time.Time `json:"result_reported_at"`
 
 	// RunId Unique identifier for the agent run.
@@ -484,7 +485,10 @@ type AgentRunStepResponse struct {
 
 // AgentRunStreamRequest defines model for AgentRunStreamRequest.
 type AgentRunStreamRequest struct {
-	// IncludeReasoning Receive `stream_reasoning` events carrying the model's reasoning while it thinks. They are sent only for a `streaming_result` step whose author enabled `show_reasoning`, and never when a governance policy redacts that step.
+	// IncludeCommentary Receive `stream_commentary` events carrying the text a model on OpenAI's Responses API writes outside its final answer, with its `phase` and `message` number. They are sent only for a `prompt_call` whose `run_result` enables `show_commentary`, and never when a governance policy redacts that step.
+	IncludeCommentary *bool `json:"include_commentary,omitempty"`
+
+	// IncludeReasoning Receive `stream_reasoning` events carrying the model's reasoning while it thinks. They are sent only for a `prompt_call` whose `run_result` enables `show_reasoning`, and never when a governance policy redacts that step.
 	IncludeReasoning *bool `json:"include_reasoning,omitempty"`
 
 	// Input Input to provide to the agent upon running for agents with dynamic triggers.
@@ -1148,7 +1152,7 @@ type CreateAlertConfigRequest struct {
 	// AlertType Alert type
 	AlertType string `json:"alert_type"`
 
-	// CooldownMinutes Cooldown period in minutes. Omit to use the per-alert-type default (1440 for credit alerts, 60 otherwise).
+	// CooldownMinutes Cooldown period in minutes. Omit to use the alert type's default.
 	CooldownMinutes *int `json:"cooldown_minutes,omitempty"`
 
 	// DistributionType Distribution type (owner, owner_admins, selected_members)
@@ -1169,7 +1173,7 @@ type CreateAlertConfigRequest struct {
 
 // CreateEvaluationCriteriaRequest Request body for creating an evaluation criteria.
 //
-// step_id names the display_result or streaming_result step to score. The
+// step_id names the step carrying run_result, the run's answer, to score. The
 // evaluation mode and sample frequency are set at the
 // agent level, not per-criteria.
 type CreateEvaluationCriteriaRequest struct {
@@ -1930,13 +1934,15 @@ type GenerationTierListResponse struct {
 
 // GenerationTierResponse defines model for GenerationTierResponse.
 type GenerationTierResponse struct {
-	CreditsPerUnit *int    `json:"credits_per_unit"`
-	Modality       string  `json:"modality"`
-	ModelId        string  `json:"model_id"`
-	ModelName      string  `json:"model_name"`
-	PriceLabel     *string `json:"price_label"`
-	Tier           string  `json:"tier"`
-	UnitLabel      *string `json:"unit_label"`
+	// AspectRatios The aspect ratios the tier's model can be asked for, and so the values a media_generation image generator's aspect_ratio pin may take. Empty for audio and video tiers and for an image model that takes no ratio.
+	AspectRatios   *[]string `json:"aspect_ratios,omitempty"`
+	CreditsPerUnit *int      `json:"credits_per_unit"`
+	Modality       string    `json:"modality"`
+	ModelId        string    `json:"model_id"`
+	ModelName      string    `json:"model_name"`
+	PriceLabel     *string   `json:"price_label"`
+	Tier           string    `json:"tier"`
+	UnitLabel      *string   `json:"unit_label"`
 }
 
 // GovernanceAiAcceptResponse Response from accepting a governance AI assistant plan.
@@ -3425,7 +3431,7 @@ type RoutersApiAgentsCreateAgentRequest struct {
 	// AgentDefinition Optional payload in the same format produced by GET /agents/{id}/export. When provided, replaces any template-derived workflow and pre-fills metadata/trigger fields the request does not specify explicitly. Validation errors include line/column references against a canonical pretty-printed echo of the supplied payload.
 	AgentDefinition *map[string]interface{} `json:"agent_definition,omitempty"`
 
-	// AgentTemplate Agent gallery entry to start from: a `key` from GET /agents/examples, or `blank`. The keys retrieval_example and simple_qa remain accepted for their gallery entries.
+	// AgentTemplate Agent gallery entry to start from: a `key` from GET /agents/examples, or `blank`. The keys retrieval_example and simple_qa remain accepted for their gallery entries. An entry's safety policies, which its summary may describe, are not created on an agent created here.
 	AgentTemplate *string `json:"agent_template,omitempty"`
 
 	// CreateMissingResources For an `agent_template`: create each creatable resource slot left out of `resource_bindings`, and group the agent with them in a new solution. When false, an unbound slot the template needs is an error.
@@ -4231,10 +4237,10 @@ type SchemasModelResponsesPromptModelResponse struct {
 	Family           *string                `json:"family"`
 	FamilyGeneration *float32               `json:"family_generation"`
 
-	// GenerationCreditsPerUnit Per-unit credit cost for a dedicated media-generation model, in the unit named by ``generation_params.pricing_unit`` (per image / per second / per character / per output token). Multiply by the produced unit count (images, seconds, characters) for the run cost. None for models with no generation descriptor. This rate applies when the model is used in a generate_image/audio/video step; a model that also serves the chat path is billed per token there instead, using the input/output token rates on this same record. When `generation_params.price_varies_by` is set the model has one rate per value of that option and this is the **highest** of them — read `generation_credits_per_variant` for the real spread rather than presenting this as the price.
+	// GenerationCreditsPerUnit Per-unit credit cost for a dedicated media-generation model, in the unit named by ``generation_params.pricing_unit`` (per image / per second / per character / per output token). Multiply by the produced unit count (images, seconds, characters) for the run cost. None for models with no generation descriptor. This rate applies when the model is used in a generate_image/audio/video step; a model that also serves the chat path is billed per token there instead, using the input/output token rates on this same record. When `generation_params.price_varies_by` is set the model has one rate per value (or combination) and this is the **highest** of them — read `generation_credits_per_variant` for the real spread rather than presenting this as the price.
 	GenerationCreditsPerUnit *float32 `json:"generation_credits_per_unit"`
 
-	// GenerationCreditsPerVariant Per-unit credit cost keyed by the value of the option named in `generation_params.price_varies_by` (e.g. `{'720p': 1330, '1080p': 1995}`). None for a model with a single rate, where `generation_credits_per_unit` already describes it exactly.
+	// GenerationCreditsPerVariant Per-unit credit cost keyed by the value of the option named in `generation_params.price_varies_by` (e.g. `{'720p': 1330, '1080p': 1995}`); when it names several options (a list), the key joins their values with ':' in that order (`'1080p:audio'`). None for a model with a single rate, where `generation_credits_per_unit` already describes it exactly.
 	GenerationCreditsPerVariant *map[string]float32 `json:"generation_credits_per_variant"`
 
 	// GenerationParams Media-generation descriptor (modality, pricing_unit, and modality-specific constraints). NULL for text LLMs; present for image/audio/video generation models. See schemas.generation_params. A present descriptor does NOT imply the model is generation-only: some models serve both paths (they generate media AND hold a chat conversation). Read `chat_capable` to tell whether a model with a descriptor can also be used as a chat model — do not branch on this field being non-null alone, and do not re-derive the answer from `supported_output_media`.
@@ -4515,7 +4521,7 @@ type GetNonManualEvaluationSummaryApiAgentsEvaluationResultsNonManualSummaryGetP
 
 // ListAgentExamplesApiAgentsExamplesGetParams defines parameters for ListAgentExamplesApiAgentsExamplesGet.
 type ListAgentExamplesApiAgentsExamplesGetParams struct {
-	// Query Words every match must contain.
+	// Query What the agent should do; before 2026-11-09, words every match must contain.
 	Query *string `form:"query,omitempty" json:"query,omitempty"`
 
 	// UseCase Only entries for this use case.
@@ -6338,6 +6344,7 @@ type UploadFileToSourceApiSourcesSourceConnectionIdUploadPostParams struct {
 // ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams defines parameters for ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGet.
 type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams struct {
 	DownloadName *string `form:"download_name,omitempty" json:"download_name,omitempty"`
+	Range        *string `json:"Range,omitempty"`
 
 	// XAccountId Target a different organization account (OAuth only). When omitted, the user's default account is used. Ignored for API key authentication — the key's account is always used.
 	XAccountId *XAccountId `json:"X-Account-Id,omitempty"`
@@ -24663,26 +24670,37 @@ func NewServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRequ
 
 	if params != nil {
 
-		if params.XAccountId != nil {
+		if params.Range != nil {
 			var headerParam0 string
 
-			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "Range", runtime.ParamLocationHeader, *params.Range)
 			if err != nil {
 				return nil, err
 			}
 
-			req.Header.Set("X-Account-Id", headerParam0)
+			req.Header.Set("Range", headerParam0)
+		}
+
+		if params.XAccountId != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "X-Account-Id", runtime.ParamLocationHeader, *params.XAccountId)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Account-Id", headerParam1)
 		}
 
 		if params.SeclaiVersion != nil {
-			var headerParam1 string
+			var headerParam2 string
 
-			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
+			headerParam2, err = runtime.StyleParamWithLocation("simple", false, "Seclai-Version", runtime.ParamLocationHeader, *params.SeclaiVersion)
 			if err != nil {
 				return nil, err
 			}
 
-			req.Header.Set("Seclai-Version", headerParam1)
+			req.Header.Set("Seclai-Version", headerParam2)
 		}
 
 	}
@@ -29934,6 +29952,7 @@ type ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRespons
 	Body                                []byte
 	HTTPResponse                        *http.Response
 	ApplicationvndSeclaiManifestJSON200 *openapi_types.File
+	ApplicationvndSeclaiManifestJSON206 *openapi_types.File
 	JSON422                             *HTTPValidationError
 	JSON503                             *ServiceUnavailableError
 }
@@ -39372,6 +39391,13 @@ func ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRe
 		}
 		response.ApplicationvndSeclaiManifestJSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 206:
+		var dest openapi_types.File
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationvndSeclaiManifestJSON206 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest HTTPValidationError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -39387,6 +39413,9 @@ func ParseServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetRe
 		response.JSON503 = &dest
 
 	case rsp.StatusCode == 200:
+	// Content-type (video/*) unsupported
+
+	case rsp.StatusCode == 206:
 		// Content-type (video/*) unsupported
 
 	}
