@@ -29161,7 +29161,7 @@
     },
     "/v2/agent-runs/{run_id}/attachments/{attachment_id}": {
       "get": {
-        "description": "Streams the bytes of a file of the given agent run: one a step emitted, or one the run started with.  ``attachment_id`` is the ``id`` of an entry in the run's or a step's ``attachments``, or the URL-safe-base64-encoded storage key, which webhook and email links carry.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- The calling account must own ``run_id``; lookup failures (missing run, cross-account run, soft-deleted agent, a run whose trace was purged, a file not in the run) all collapse to a single 404 to prevent cross-tenant existence enumeration.\n\nMIME handling:\n- Inline-safe MIMEs (image/*, audio/*, video/*, application/pdf, text/plain, application/vnd.seclai.manifest+json) are served with their declared type.\n- Everything else is served as ``application/octet-stream`` with an attachment disposition to prevent stored-XSS.\n\nByte ranges:\n- Every 200 and 206 carries ``Accept-Ranges: bytes`` and ``Content-Length``.\n- One range of a non-empty file (``bytes=start-end``, ``bytes=start-`` or ``bytes=-suffix`` with a positive suffix) is answered with 206 and ``Content-Range``, or with 416 and ``Content-Range: bytes */<size>`` when it starts at or past the end of the file or ends before it starts.\n- Any other ``Range``, including more than one range, is ignored and the whole file is served.",
+        "description": "Streams the bytes of a file of the given agent run: one a step emitted, or one the run started with.  ``attachment_id`` is the ``id`` of an entry in the run's or a step's ``attachments``, or the URL-safe-base64-encoded storage key, which webhook and email links carry.\n\nAuth & scoping:\n- Requires `X-API-Key` header or OAuth Bearer token.\n- The calling account must own ``run_id``; lookup failures (missing run, cross-account run, soft-deleted agent, a run whose trace was purged, a file not in the run) all collapse to a single 404 to prevent cross-tenant existence enumeration.\n\nMIME handling:\n- Inline-safe MIMEs (image/*, audio/*, video/*, application/pdf, text/plain) are served with their declared type.\n- Everything else is served as ``application/octet-stream`` with an attachment disposition to prevent stored-XSS.\n\nByte ranges:\n- Every 200 and 206 carries ``Accept-Ranges: bytes`` and ``Content-Length``.\n- One range of a non-empty file (``bytes=start-end``, ``bytes=start-`` or ``bytes=-suffix`` with a positive suffix) is answered with 206 and ``Content-Range``, or with 416 and ``Content-Range: bytes */<size>`` when it starts at or past the end of the file or ends before it starts.\n- Any other ``Range``, including more than one range, is ignored and the whole file is served.",
         "operationId": "serve_agent_run_attachment_api_v2_agent_runs__run_id__attachments__attachment_id__get",
         "parameters": [
           {
@@ -29238,12 +29238,6 @@
                   "type": "string"
                 }
               },
-              "application/vnd.seclai.manifest+json": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              },
               "audio/*": {
                 "schema": {
                   "format": "binary",
@@ -29269,7 +29263,21 @@
                 }
               }
             },
-            "description": "Attachment bytes streamed with the resolved MIME type (inline-safe types keep their declared type; everything else is ``application/octet-stream``)."
+            "description": "Attachment bytes streamed with the resolved MIME type (inline-safe types keep their declared type; everything else is ``application/octet-stream``).",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Always ``bytes``.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "The number of bytes in this response's body.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "206": {
             "content": {
@@ -29285,12 +29293,6 @@
                   "type": "string"
                 }
               },
-              "application/vnd.seclai.manifest+json": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              },
               "audio/*": {
                 "schema": {
                   "format": "binary",
@@ -29316,10 +29318,38 @@
                 }
               }
             },
-            "description": "The one byte range the ``Range`` header asked for."
+            "description": "The one byte range the ``Range`` header asked for.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Always ``bytes``.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "The number of bytes in this response's body.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "Content-Range": {
+                "description": "``bytes <start>-<end>/<size>``: the inclusive range served and the size in bytes of the file as served.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "416": {
-            "description": "The ``Range`` cannot be satisfied for this file."
+            "description": "The ``Range`` cannot be satisfied for this file.",
+            "headers": {
+              "Content-Range": {
+                "description": "``bytes */<size>``: the size in bytes of the file as served.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
