@@ -36,10 +36,11 @@ type APIStatusError struct {
 
 // Header returns the response's headers, such as Retry-After, or the
 // Content-Range of a 416 from a ranged download, which gives the file's size.
-// It returns nil when no response headers are known. Because an error the
-// client returns holds its response's headers, its value does not equal an
-// APIStatusError built by hand (with == or reflect.DeepEqual); compare
-// StatusCode and the other fields instead.
+// It returns nil when no response headers are known. When the response had
+// headers, as every response from net/http's own transport does, the error
+// holds them, so its value does not equal an APIStatusError built by hand
+// (with == or reflect.DeepEqual); compare StatusCode and the other fields
+// instead.
 func (e *APIStatusError) Header() http.Header {
 	if e == nil || e.header == nil {
 		return nil
