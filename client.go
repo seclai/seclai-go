@@ -405,16 +405,16 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, nil, apiError(resp.StatusCode, method, reqURL.String(), raw)
+		return nil, nil, apiError(resp.StatusCode, method, reqURL.String(), resp.Header, raw)
 	}
 	return raw, reqURL, nil
 }
 
-// apiError builds the error for a non-2xx response from its status and body:
-// an *APIValidationError for a 422, carrying the decoded validation detail
-// when the body has one, and an *APIStatusError otherwise.
-func apiError(statusCode int, method, reqURL string, raw []byte) error {
-	statusErr := APIStatusError{StatusCode: statusCode, Method: method, URL: reqURL, ResponseText: strings.TrimSpace(string(raw))}
+// apiError builds the error for a non-2xx response from its status, headers
+// and body: an *APIValidationError for a 422, carrying the decoded validation
+// detail when the body has one, and an *APIStatusError otherwise.
+func apiError(statusCode int, method, reqURL string, header http.Header, raw []byte) error {
+	statusErr := APIStatusError{StatusCode: statusCode, Method: method, URL: reqURL, ResponseText: strings.TrimSpace(string(raw)), header: headerRef(header)}
 	if statusCode == http.StatusUnprocessableEntity {
 		var ve HTTPValidationError
 		if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
@@ -555,7 +555,11 @@ func (c *Client) ListAgents(ctx context.Context, opts ListOptions) (*AgentListRe
 // ListAgentExamplesOptions controls query parameters for [Client.ListAgentExamples].
 type ListAgentExamplesOptions struct {
 	ListOptions
-	// Query keeps only entries containing every one of these words.
+	// Query describes what the agent should do. From API version 2026-11-09,
+	// entries are ranked by how well they match it, by words and meaning, best
+	// first, and a query of several words that are all filler ("create an
+	// agent") counts as no query; earlier versions keep only entries containing every one of its
+	// words.
 	Query string
 	// UseCase keeps only entries for this use case.
 	UseCase string
@@ -714,7 +718,7 @@ type ListAgentRunsOptions struct {
 	Page int
 	// Limit is the maximum number of items per page.
 	Limit int
-	// Status filters runs by status (e.g. "completed", "failed", "running").
+	// Status filters runs by status (e.g. "completed", "failed", "processing").
 	Status string
 }
 
@@ -769,11 +773,16 @@ func (c *Client) DeleteAgentRun(ctx context.Context, runID string) error {
 	return err
 }
 
-// CancelAgentRun cancels an in-progress agent run and returns its updated state.
+// CancelAgentRun cancels an agent run that has not ended (queued, pending,
+// processing, waiting_human or waiting_scheduled) and returns its updated
+// state. The run ends with status cancelled from API version 2026-11-08, and
+// failed on earlier versions. When the run was started by another agent's
+// call_agent step that is still waiting for it, the outermost calling run is
+// cancelled, with every run below it that has not reported its result.
 //
 // Cancellation is DELETE on the run resource — the API exposes no
 // POST .../cancel route, and no operation that deletes a run.
-// Rejected when the run has already reached a terminal state.
+// Rejected when the run has already ended (completed, failed or cancelled).
 func (c *Client) CancelAgentRun(ctx context.Context, runID string) (*AgentRunResponse, error) {
 	var out AgentRunResponse
 	if err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/agents/runs/%s", pathSegment(runID)), nil, nil, nil, &out); err != nil {
@@ -880,19 +889,112 @@ func (c *Client) SetMetadataKeys(ctx context.Context, agentID, triggerID string,
 	return &out, nil
 }
 
-// DownloadAgentRunAttachment downloads a file attachment emitted by a step in an
-// agent run. Returns the raw HTTP response so the caller can stream the body. The
+// DownloadAgentRunAttachment downloads a file of an agent run: one a step
+// emitted, or one the run started with. Returns the raw HTTP response so the caller can stream the body. The
 // caller must close the response body.
 //
-// attachmentID is the URL-safe-base64-encoded storage_key of the attachment (as
-// surfaced in run output manifests and webhook/email payloads). downloadName is an
+// attachmentID is the id of an entry in the run's or a step's attachments, or the
+// URL-safe-base64-encoded storage key that webhook and email links carry. downloadName is an
 // optional filename hint for the download disposition; pass "" to omit it.
+//
+// It adds no Range header; use [Client.DownloadAgentRunAttachmentWithOptions]
+// to download part of the file.
 func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachmentID, downloadName string) (*http.Response, error) {
-	var query map[string]string
-	if downloadName != "" {
-		query = map[string]string{"download_name": downloadName}
+	return c.DownloadAgentRunAttachmentWithOptions(ctx, runID, attachmentID, DownloadAgentRunAttachmentOptions{DownloadName: downloadName})
+}
+
+// DownloadAgentRunAttachmentOptions controls
+// [Client.DownloadAgentRunAttachmentWithOptions]. The zero value downloads the
+// whole file with no filename hint, as [Client.DownloadAgentRunAttachment] does.
+//
+// The range fields build the request's Range header. Set at most one form:
+//   - none: the SDK adds no Range header;
+//   - RangeStart alone: bytes from RangeStart to the end of the file ("bytes=<start>-");
+//   - RangeStart and RangeEnd: bytes RangeStart through RangeEnd, both inclusive
+//     ("bytes=<start>-<end>"); RangeEnd must not be less than RangeStart;
+//   - RangeSuffix alone: the last RangeSuffix bytes ("bytes=-<suffix>"); it must
+//     be greater than 0.
+//
+// Offsets count bytes from 0 and must not be negative. Any other combination
+// (RangeEnd without RangeStart, RangeSuffix with either of the others) is
+// refused with a [*ConfigurationError] before a request is sent.
+type DownloadAgentRunAttachmentOptions struct {
+	// DownloadName is an optional filename hint for the download disposition;
+	// "" omits it.
+	DownloadName string
+	// RangeStart is the offset of the first byte to download.
+	RangeStart *int64
+	// RangeEnd is the offset of the last byte to download, inclusive. It needs
+	// RangeStart.
+	RangeEnd *int64
+	// RangeSuffix downloads the last RangeSuffix bytes of the file. It cannot be
+	// combined with RangeStart or RangeEnd.
+	RangeSuffix *int64
+}
+
+// rangeHeader returns the Range header value opts asks for, "" when it sets no
+// range, or a *ConfigurationError for a combination the method refuses.
+func (opts DownloadAgentRunAttachmentOptions) rangeHeader() (string, error) {
+	fail := func(msg string) (string, error) {
+		return "", &ConfigurationError{Message: "DownloadAgentRunAttachmentOptions: " + msg}
 	}
-	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/v2/agent-runs/%s/attachments/%s", pathSegment(runID), pathSegment(attachmentID)), query)
+	switch {
+	case opts.RangeSuffix != nil:
+		if opts.RangeStart != nil || opts.RangeEnd != nil {
+			return fail("RangeSuffix cannot be combined with RangeStart or RangeEnd")
+		}
+		if *opts.RangeSuffix <= 0 {
+			return fail(fmt.Sprintf("RangeSuffix must be greater than 0, got %d", *opts.RangeSuffix))
+		}
+		return fmt.Sprintf("bytes=-%d", *opts.RangeSuffix), nil
+	case opts.RangeStart != nil:
+		if *opts.RangeStart < 0 {
+			return fail(fmt.Sprintf("RangeStart must not be negative, got %d", *opts.RangeStart))
+		}
+		if opts.RangeEnd == nil {
+			return fmt.Sprintf("bytes=%d-", *opts.RangeStart), nil
+		}
+		if *opts.RangeEnd < *opts.RangeStart {
+			return fail(fmt.Sprintf("RangeEnd (%d) must not be less than RangeStart (%d)", *opts.RangeEnd, *opts.RangeStart))
+		}
+		return fmt.Sprintf("bytes=%d-%d", *opts.RangeStart, *opts.RangeEnd), nil
+	case opts.RangeEnd != nil:
+		return fail("RangeEnd needs RangeStart; use RangeSuffix for the last bytes of the file")
+	}
+	return "", nil
+}
+
+// DownloadAgentRunAttachmentWithOptions downloads a file of an agent run (one a
+// step emitted, or one the run started with), or part of it. Returns the raw HTTP response so the
+// caller can stream the body. The caller must close the response body.
+//
+// attachmentID is as for [Client.DownloadAgentRunAttachment]. With a range set
+// in opts, a successful request is answered with one of:
+//   - 206 Partial Content with the requested bytes and a Content-Range header;
+//   - 200 OK with the whole file, when the file is empty;
+//   - 416 Range Not Satisfiable, returned as an [*APIStatusError], when the
+//     range starts at or past the end of a non-empty file. The file's size is
+//     in the error's headers: Header().Get("Content-Range") is "bytes */<size>".
+//
+// Every 200 and 206 carries Accept-Ranges: bytes and Content-Length. Check
+// resp.StatusCode to tell a partial response from a whole one. An invalid
+// combination of range fields returns a [*ConfigurationError] and sends
+// nothing.
+func (c *Client) DownloadAgentRunAttachmentWithOptions(ctx context.Context, runID, attachmentID string, opts DownloadAgentRunAttachmentOptions) (*http.Response, error) {
+	rangeValue, err := opts.rangeHeader()
+	if err != nil {
+		return nil, err
+	}
+	var query map[string]string
+	if opts.DownloadName != "" {
+		query = map[string]string{"download_name": opts.DownloadName}
+	}
+	var headers http.Header
+	if rangeValue != "" {
+		headers = http.Header{}
+		headers.Set("Range", rangeValue)
+	}
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/v2/agent-runs/%s/attachments/%s", pathSegment(runID), pathSegment(attachmentID)), query, headers)
 }
 
 // doRaw issues a request without a body and returns the 2xx response
@@ -900,7 +1002,9 @@ func (c *Client) DownloadAgentRunAttachment(ctx context.Context, runID, attachme
 // response is read, closed and returned as an *APIStatusError, a 422 included.
 // Keep it that way: v1.7.x shipped that type for download 422s, and callers
 // type-assert on it, so returning *APIValidationError here is a breaking change.
-func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[string]string) (*http.Response, error) {
+// headers are set after the client's default headers, replacing a default of
+// the same name; nil adds none.
+func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[string]string, headers http.Header) (*http.Response, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -915,6 +1019,9 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	for k, v := range c.defaultHeaders {
 		req.Header.Set(k, v)
 	}
+	for k, vs := range headers {
+		req.Header[k] = append([]string(nil), vs...)
+	}
 	if err := c.applyAuth(ctx, req); err != nil {
 		return nil, err
 	}
@@ -925,7 +1032,7 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw))}
+		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw)), header: headerRef(resp.Header)}
 	}
 	return resp, nil
 }
@@ -1399,13 +1506,15 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 // when ctx has none), or the HTTP client's Timeout (30s with the default
 // client; see [Options.HTTPClient]).
 //
-// body.IncludeReasoning is not sent: this method reads only the run snapshots,
-// so reasoning events would be streamed only to be discarded while counting
-// against the timeout. Use [Client.RunStreamingAgent] to receive them.
+// body.IncludeReasoning and body.IncludeCommentary are not sent: this method
+// reads only the run snapshots, so reasoning and commentary events would be
+// streamed only to be discarded while counting against the timeout. Use
+// [Client.RunStreamingAgent] to receive them.
 func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentID string, body AgentRunStreamRequest, opts *RunStreamingAgentAndWaitOptions) (*AgentRunResponse, error) {
 	returnOnResult := opts != nil && opts.ReturnOnResult
 	errorOnIncomplete := opts != nil && opts.ErrorOnIncomplete
 	body.IncludeReasoning = nil
+	body.IncludeCommentary = nil
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1445,7 +1554,7 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
-		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
+		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), resp.Header, raw)
 	}
 
 	reader := bufio.NewReader(resp.Body)
@@ -1639,7 +1748,7 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			raw, _ := io.ReadAll(resp.Body)
-			errCh <- apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
+			errCh <- apiError(resp.StatusCode, http.MethodPost, reqURL.String(), resp.Header, raw)
 			return
 		}
 
@@ -1735,13 +1844,26 @@ type RunAgentAndPollOptions struct {
 	// its Output is the run's answer and does not change, but its Status may
 	// not be terminal: later steps may still run and the run can still fail.
 	// Check ResultReportedAt, not Status. When false, polling continues until
-	// the run is completed or failed.
+	// the run is completed, failed or cancelled.
 	ReturnOnResult bool
 }
 
+// isTerminalRunStatus reports whether an agent run with status s has ended.
+// API versions from 2026-11-08 report a cancelled run as cancelled; earlier
+// ones report it as failed.
+func isTerminalRunStatus(s generated.PendingProcessingCompletedFailedStatus) bool {
+	switch s {
+	case generated.PendingProcessingCompletedFailedStatusCompleted,
+		generated.PendingProcessingCompletedFailedStatusFailed,
+		generated.PendingProcessingCompletedFailedStatusCancelled:
+		return true
+	}
+	return false
+}
+
 // RunAgentAndPoll runs an agent and polls until it reaches a terminal status
-// (completed or failed), or, with opts.ReturnOnResult, until it has reported
-// its result. The initial RunAgent response is checked before the first wait;
+// (completed, failed or cancelled), or, with opts.ReturnOnResult, until it has
+// reported its result. The initial RunAgent response is checked before the first wait;
 // with opts.IncludeStepOutputs, which that response lacks, a response that
 // would end the poll is fetched again at once with step outputs, and that
 // snapshot is checked instead. The context controls the overall timeout.
@@ -1782,7 +1904,7 @@ func (c *Client) RunAgentAndPoll(ctx context.Context, agentID string, body Agent
 	defer ticker.Stop()
 
 	for {
-		finished := run.Status == "completed" || run.Status == "failed" ||
+		finished := isTerminalRunStatus(run.Status) ||
 			(returnOnResult && run.ResultReportedAt != nil)
 		if finished && !lacksSteps {
 			return run, nil
@@ -1895,7 +2017,7 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
+		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), resp.Header, raw)
 	}
 	return raw, nil
 }
@@ -2112,8 +2234,9 @@ func (c *Client) GetInboundEmailStatus(ctx context.Context) (*InboundEmailStatus
 	return &out, nil
 }
 
-// CancelQueuedEmailRuns fails all of the account's QUEUED (over-quota parked)
-// inbound-email runs. Requires an account owner or admin.
+// CancelQueuedEmailRuns cancels all of the account's QUEUED (over-quota parked)
+// inbound-email runs. Each ends with status cancelled from API version
+// 2026-11-08, and failed on earlier versions. Requires an account owner or admin.
 func (c *Client) CancelQueuedEmailRuns(ctx context.Context) (*CancelQueuedRunsResponse, error) {
 	var out CancelQueuedRunsResponse
 	if err := c.do(ctx, http.MethodPost, "/agents/inbound-email-status/cancel-queued", nil, nil, nil, &out); err != nil {
@@ -2587,7 +2710,7 @@ func (c *Client) DeleteSourceExport(ctx context.Context, sourceID, exportID stri
 // DownloadSourceExport downloads a source export. Returns the raw HTTP response
 // so the caller can stream the body. The caller must close the response body.
 func (c *Client) DownloadSourceExport(ctx context.Context, sourceID, exportID string) (*http.Response, error) {
-	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports/%s/download", pathSegment(sourceID), pathSegment(exportID)), nil)
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/sources/%s/exports/%s/download", pathSegment(sourceID), pathSegment(exportID)), nil, nil)
 }
 
 // EstimateSourceExport estimates the cost/size of a source export.
@@ -2835,7 +2958,7 @@ func (c *Client) ListContentAttachmentEmbeddings(ctx context.Context, contentVer
 // still being indexed. The attachment's FileWithheld field says which. It
 // answers 402 when the account has no credits left.
 func (c *Client) DownloadContentAttachment(ctx context.Context, contentVersionID, attachmentID string) (*http.Response, error) {
-	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/file", pathSegment(contentVersionID), pathSegment(attachmentID)), nil)
+	return c.doRaw(ctx, http.MethodGet, fmt.Sprintf("/contents/%s/attachments/%s/file", pathSegment(contentVersionID), pathSegment(attachmentID)), nil, nil)
 }
 
 // ── Solutions ───────────────────────────────────────────────────────────────

@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.11.0] - 2026-11-27
+
+### Changed
+
+- Return API errors that carry their response's headers, read with the new `Header()` below. When the response has headers, as every response from `net/http`'s own transport does, an `APIStatusError` or `APIValidationError` the client returns therefore no longer equals, compared by value (`*err == want`, `reflect.DeepEqual`, testify's `assert.Equal`), one built by hand with the same fields, and with `==` two errors from different responses no longer equal each other; compare `StatusCode` and the other fields, or use `errors.As`. Both types are still comparable with `==`
+- Move `APIVersionLatest` to `2026-11-19`, which opts a client on it into four versions. A run cancelled with `CancelAgentRun` or `CancelQueuedEmailRuns` ends with status `cancelled` rather than `failed` (`2026-11-08`). `ListAgentExamples` takes `Query` as a description of what the agent should do and ranks entries by how well they match it, by words and meaning, best first, rather than keeping only entries containing every word; a query of several words that are all filler ("create an agent") counts as no query (`2026-11-09`). Starting a run of an agent whose definition fails to validate, with `RunAgent`, `RunStreamingAgent` or the helpers built on them, returns a 409 and starts no run, where older versions return the run already failed with the validation error as its cause (`2026-11-14`). `CreateAlertConfig` accepts the agent alert type `step_failure_continued` (`2026-11-19`)
+- On every API version, `CancelAgentRun` now also cancels a `pending`, `waiting_human` or `waiting_scheduled` run, and cancelling a run started by another agent's `call_agent` step that is still waiting for it cancels the outermost calling run, and every run below it that has not reported its result
+- Sync the bundled OpenAPI spec and regenerate the `generated` package from it. It adds no paths or schemas; its descriptions now name the step carrying `run_result` as the run's answer, in place of `streaming_result` and `display_result` steps. The agent run attachment download declares a `Range` request header, which adds `Range` to `generated.ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetParams`, and its 206 and 416 responses, and documents the `Accept-Ranges`, `Content-Length` and `Content-Range` headers of its responses
+
+### Added
+
+- Add `DownloadAgentRunAttachmentWithOptions` and `DownloadAgentRunAttachmentOptions` to download part of an agent run attachment. `RangeStart`, `RangeEnd` (inclusive) and `RangeSuffix` build the `Range` header (`bytes=<start>-`, `bytes=<start>-<end>` or `bytes=-<suffix>`); any other combination, a negative offset, a `RangeEnd` before `RangeStart` or a `RangeSuffix` of 0 returns a `*ConfigurationError` before anything is sent. The API answers 206 with a `Content-Range` header, 200 with the whole file when it is empty, and 416, returned as an `*APIStatusError`, when the range starts at or past the end of a non-empty file. `DownloadAgentRunAttachment` is unchanged and adds no `Range` header
+- Add `Header()` to `APIStatusError`, which returns the response's headers, such as `Retry-After`, on every non-2xx response: from JSON requests, streaming requests, uploads and downloads, and on the `APIStatusError` embedded in an `APIValidationError`. On a 416 from `DownloadAgentRunAttachmentWithOptions`, `Header().Get("Content-Range")` is `bytes */<size>`, giving the file's size
+- Add `IncludeCommentary` to `AgentRunStreamRequest`, which asks for `stream_commentary` events carrying the text a model on OpenAI's Responses API writes outside its final answer, for a `prompt_call` whose `run_result` enables `show_commentary`. `RunStreamingAgent` sends it and yields the events; `RunStreamingAgentAndWait` and `RunStreamingAgentAndWaitWithOptions` leave it out of the request, as they do `IncludeReasoning`
+- Add `AspectRatios` to `GenerationTierResponse`, the aspect ratios the tier's model can be asked for
+- Add `generated.PendingProcessingCompletedFailedStatusCancelled`, the `cancelled` agent run status
+- Add the `APIVersion20261108`, `APIVersion20261109`, `APIVersion20261114` and `APIVersion20261119` constants
+
+### Removed
+
+- Remove `ApplicationvndSeclaiManifestJSON200` from `generated.ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse`, as the spec no longer declares a `+json` body for the download. The field never held a value: the parser decoded a manifest download as JSON and returned an error before setting it. A `Generated()` caller reads the file's bytes from `Body`, which now succeeds for every file. Code that names the field must drop it
+
+### Fixed
+
+- Stop `RunAgentAndPoll` at status `cancelled`, as it stops at `completed` and `failed`. A run cancelled on API version `2026-11-08` or later, which an account pinned to it or a client with `Options.AllowUnknownAPIVersion` could already receive, was polled until `ctx` ended
+
 ## [1.10.0] - 2026-11-05
 
 ### Changed
@@ -269,6 +295,7 @@ _Stable release. No functional changes since 0.0.2._
 
 _Initial release._
 
+[1.11.0]: https://github.com/seclai/seclai-go/releases/tag/v1.11.0
 [1.10.0]: https://github.com/seclai/seclai-go/releases/tag/v1.10.0
 [1.9.0]: https://github.com/seclai/seclai-go/releases/tag/v1.9.0
 [1.8.0]: https://github.com/seclai/seclai-go/releases/tag/v1.8.0

@@ -813,7 +813,9 @@ func TestTypedLists_OtherRawErrorsPassThroughUnchanged(t *testing.T) {
 	_, rawErr := c.GetAgentsUsingMemoryBank(context.Background(), "mb_123")
 	_, typedErr := c.Typed().GetAgentsUsingMemoryBank(context.Background(), "mb_123")
 	var rawStatus, typedStatus *APIStatusError
-	if !errors.As(rawErr, &rawStatus) || !errors.As(typedErr, &typedStatus) || *rawStatus != *typedStatus {
+	if !errors.As(rawErr, &rawStatus) || !errors.As(typedErr, &typedStatus) ||
+		rawStatus.StatusCode != typedStatus.StatusCode || rawStatus.Method != typedStatus.Method ||
+		rawStatus.URL != typedStatus.URL || rawStatus.ResponseText != typedStatus.ResponseText {
 		t.Fatalf("raw returned %v and typed %v; want the same *APIStatusError", rawErr, typedErr)
 	}
 	var shapeErr *UnexpectedResponseError

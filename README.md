@@ -149,7 +149,7 @@ baseline applies and responses keep their current shapes. Upgrading this module
 alone never changes the wire contract.
 
 Known versions are package constants (`APIVersion20260701` through
-`APIVersion20261104`, one per version in the table below, plus
+`APIVersion20261119`, one per version in the table below, plus
 `APIVersionDefault`, `APIVersionLatest` and `KnownAPIVersions`). A version
 this release was **not** built against makes `NewClient` fail: a newer version
 can reshape responses, and this client would decode them incorrectly rather than
@@ -243,7 +243,11 @@ this client decodes; its row says how:
 | `2026-10-21` | `APIVersion20261021` | `GetNonManualEvaluationSummary` leaves results whose evaluator returned no verdict out of `Failed`, `PassRate` and `FailureRate` (they are in `Error` on every version); a criteria summary's `AverageScore` averages only passed and failed results; `TestDraftEvaluation` sends a null score and verdict for an `error` result, which decode to 0 and false, rather than 0.5 and false |
 | `2026-10-28` | `APIVersion20261028` | An `if_else` or `switch` step's `Output` is the result of the arm it took (its input when that arm is empty or it took none), with that arm's files in `Attachments`, rather than a `{"branch": ...}` marker naming the arm. The arm it took is in the step's `Decision` |
 | `2026-11-02` | `APIVersion20261102` | A definition or sampling-rule write other than an import that references a metadata key no trigger declares is refused: `UpdateAgentDefinition` answers 400, and `UpdateAgent` setting `SamplingConfig` answers 422; older versions declare each such key optional instead. Declare keys with `SetMetadataKeys` first |
-| `2026-11-04` | `APIVersion20261104` | Refuses evaluation mode `eval_and_retry`, a new evaluation-criteria `step_id` that is not a `display_result` or `streaming_result` step, and `retry_triggered: true` on a recorded evaluation result, each with a 400. Older versions store `eval_and_retry` as `sample_and_flag` and accept any `step_id` |
+| `2026-11-04` | `APIVersion20261104` | Refuses evaluation mode `eval_and_retry`, a new evaluation-criteria `step_id` that does not name the step carrying `run_result` (the run's answer), and `retry_triggered: true` on a recorded evaluation result, each with a 400. Older versions store `eval_and_retry` as `sample_and_flag` and accept any `step_id` |
+| `2026-11-08` | `APIVersion20261108` | A cancelled agent run, from `CancelAgentRun` or `CancelQueuedEmailRuns`, ends with status `cancelled` rather than `failed`. `RunAgentAndPoll` stops at `cancelled` on every version |
+| `2026-11-09` | `APIVersion20261109` | `ListAgentExamples` takes `Query` as a description of what the agent should do and ranks entries by how well they match it, by words and meaning, best first; a query of several words that are all filler ("create an agent") counts as no query. Older versions keep only entries containing every word |
+| `2026-11-14` | `APIVersion20261114` | Starting a run of an agent whose definition fails to validate, with `RunAgent`, `RunStreamingAgent` or the helpers built on them, returns a 409 and starts no run. Older versions return the run, already failed with the validation error as its cause |
+| `2026-11-19` | `APIVersion20261119` | `CreateAlertConfig` accepts the agent alert type `step_failure_continued` |
 
 ## Typed responses
 
@@ -411,7 +415,7 @@ _ = client.DeleteAgentRun(ctx, "run_id")
 
 The SDK provides two streaming patterns over the SSE `/runs/stream` endpoint.
 
-**Block until done** — returns the final `done` payload. It reads only the run payloads, so it does not send `IncludeReasoning`; use `RunStreamingAgent` to receive reasoning events. By default, if the stream ends before `done`, it returns the latest run it saw with a nil error: the `result` event's run if one arrived (`ResultReportedAt` is set and `Output` is the answer), else the `init` one. That run may not have finished, for example after a cut stream, so check its `Status` and `ResultReportedAt`. A timeout or a broken stream returns the error, with that latest run beside it.
+**Block until done** — returns the final `done` payload. It reads only the run payloads, so it does not send `IncludeReasoning` or `IncludeCommentary`; use `RunStreamingAgent` to receive reasoning or commentary events. By default, if the stream ends before `done`, it returns the latest run it saw with a nil error: the `result` event's run if one arrived (`ResultReportedAt` is set and `Output` is the answer), else the `init` one. That run may not have finished, for example after a cut stream, so check its `Status` and `ResultReportedAt`. A timeout or a broken stream returns the error, with that latest run beside it.
 
 Whichever bound passes first ends the wait: `ctx`'s deadline (60s by default when `ctx` has none), or the HTTP client's `Timeout` (30s with the default client; see `Options.HTTPClient`):
 
@@ -445,7 +449,7 @@ default:
 }
 ```
 
-**Channel-based** — yields every SSE event as `AgentRunEvent`. Take the run's answer from the `result` event; the `done` event's `Status` says whether the whole run succeeded, which can still fail after its result. When the server answers with plain JSON instead of an SSE stream, the channel yields only a `done` event, so read the answer from its `Run`:
+**Channel-based** — yields every SSE event as `AgentRunEvent`. Take the run's answer from the `result` event; the `done` event's `Status` says whether the whole run succeeded, which can still fail after its result. When the server answers with plain JSON instead of an SSE stream, the channel yields only a `done` event, so read the answer from its `Run`. Set `IncludeReasoning` or `IncludeCommentary` to also receive `stream_reasoning` or `stream_commentary` events, sent for a `prompt_call` whose `run_result` enables `show_reasoning` or `show_commentary`; their `Data` is the event's JSON:
 
 ```go
 events, errCh := client.RunStreamingAgent(ctx, "agent_id", seclai.AgentRunStreamRequest{
@@ -461,7 +465,8 @@ if err := <-errCh; err != nil {
 
 ### Polling
 
-For environments where SSE is not practical, poll for a completed run. When
+For environments where SSE is not practical, poll until the run is
+`completed`, `failed` or `cancelled`. When
 `ctx` ends during the wait between polls, the last polled run is returned with
 `ctx.Err()`. When a poll's `GetAgentRun` fails, the last polled run is
 returned with that fetch's error; a failed starting `RunAgent` returns nil. Set
@@ -577,12 +582,48 @@ if updated.Warnings != nil {
 
 ### Agent run attachments
 
+<!-- sdksync:check -->
 ```go
-// Download a file emitted by a step in an agent run. The attachmentID is the
-// URL-safe-base64 storage_key surfaced in run output manifests / webhooks.
+// Download a file of an agent run. attachmentID is the Id of an entry in the
+// run's or a step's Attachments, or the URL-safe-base64 storage key that
+// webhook and email links carry.
 // Pass "" for downloadName to omit the filename hint. The caller closes the body.
-resp, _ := client.DownloadAgentRunAttachment(ctx, "run_id", "attachment_id", "")
-defer resp.Body.Close() // raw *http.Response — stream or save the bytes
+resp, err := client.DownloadAgentRunAttachment(ctx, "run_id", "attachment_id", "")
+if err == nil {
+	defer resp.Body.Close() // raw *http.Response — stream or save the bytes
+}
+```
+
+`DownloadAgentRunAttachmentWithOptions` downloads part of the file by sending a
+`Range` header built from `RangeStart`, `RangeEnd` (inclusive) and
+`RangeSuffix`. Set `RangeStart` alone for `bytes=<start>-`, `RangeStart` and
+`RangeEnd` for `bytes=<start>-<end>`, or `RangeSuffix` alone for the last bytes
+(`bytes=-<suffix>`). Any other combination, a negative offset, a `RangeEnd`
+before `RangeStart` or a `RangeSuffix` of 0 returns a `*ConfigurationError`
+before anything is sent; with no range field set, the SDK adds no `Range` header.
+
+The API answers `206 Partial Content` with a `Content-Range` header, `200` with
+the whole file when the file is empty, and `416`, returned as an
+`*APIStatusError`, when the range starts at or past the end of a non-empty file;
+the file's size is then in the headers the error's `Header()` returns, whose
+`Content-Range` is `bytes */<size>`. Check `resp.StatusCode` to tell a part from the whole.
+
+<!-- sdksync:check -->
+```go
+start, end := int64(0), int64(1023)
+resp, err := client.DownloadAgentRunAttachmentWithOptions(ctx, "run_id", "attachment_id",
+	seclai.DownloadAgentRunAttachmentOptions{RangeStart: &start, RangeEnd: &end})
+if err != nil {
+	if statusErr, ok := err.(*seclai.APIStatusError); ok && statusErr.StatusCode == 416 {
+		// e.g. "bytes */4096": the range starts past the end of the file
+		fmt.Println("Content-Range:", statusErr.Header().Get("Content-Range"))
+	}
+	return
+}
+defer resp.Body.Close()
+if resp.StatusCode == 206 { // 200 means the whole file came back
+	fmt.Println("got", resp.Header.Get("Content-Range")) // e.g. "bytes 0-1023/4096"
+}
 ```
 
 ### Agent AI assistant
@@ -1206,7 +1247,7 @@ rejections, _ := client.ListInboundEmailRejections(ctx, seclai.InboundEmailRejec
 
 // Account-wide overload circuit breaker
 status, _ := client.GetInboundEmailStatus(ctx)
-_, _ = client.CancelQueuedEmailRuns(ctx) // fail all QUEUED (over-quota parked) runs
+_, _ = client.CancelQueuedEmailRuns(ctx) // cancel all QUEUED (over-quota parked) runs
 _, _ = client.ResumeInboundEmail(ctx)    // one-shot; re-arms if still overloaded
 ```
 

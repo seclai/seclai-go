@@ -101,6 +101,59 @@ func TestClient_RunStreamingAgentAndWait_DropsIncludeReasoning(t *testing.T) {
 	}
 }
 
+// include_commentary asks for stream_commentary events, which the wait helper
+// would discard too, so it is left out the same way as include_reasoning.
+func TestClient_RunStreamingAgentAndWait_DropsIncludeCommentary(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "text/event-stream",
+		"event: done\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"completed\"}\n\n")
+
+	input := "hi"
+	commentary := true
+	body := AgentRunStreamRequest{Input: &input, IncludeCommentary: &commentary}
+	if _, err := c.RunStreamingAgentAndWaitWithOptions(context.Background(), "agent_1", body, &RunStreamingAgentAndWaitOptions{ErrorOnIncomplete: true}); err != nil {
+		t.Fatalf("RunStreamingAgentAndWaitWithOptions: %v", err)
+	}
+	rec.expect(t, http.MethodPost, "/agents/agent_1/runs/stream", "")
+	if string(rec.rawBody) != `{"input":"hi"}` {
+		t.Fatalf("expected include_commentary left out, got %s", rec.rawBody)
+	}
+	if body.IncludeCommentary == nil || !*body.IncludeCommentary {
+		t.Fatal("the caller's request was changed")
+	}
+}
+
+// RunStreamingAgent yields every event, so it sends include_reasoning and
+// include_commentary as given, and passes a stream_commentary event through.
+func TestClient_RunStreamingAgent_SendsIncludeCommentary(t *testing.T) {
+	var rec requestRecorder
+	c := newRecordingServer(t, &rec, 200, "text/event-stream",
+		"event: stream_commentary\ndata: {\"phase\":\"commentary\",\"message\":0,\"text\":\"Looking it up\"}\n\n"+
+			"event: done\ndata: {\"attempts\":[],\"error_count\":0,\"priority\":true,\"run_id\":\"run_1\",\"status\":\"completed\"}\n\n")
+
+	input := "hi"
+	yes := true
+	events, errCh := c.RunStreamingAgent(context.Background(), "agent_1", AgentRunStreamRequest{Input: &input, IncludeReasoning: &yes, IncludeCommentary: &yes})
+	var names []string
+	var commentary string
+	for evt := range events {
+		names = append(names, evt.Event)
+		if evt.Event == "stream_commentary" {
+			commentary = evt.Data
+		}
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("RunStreamingAgent: %v", err)
+	}
+	rec.expect(t, http.MethodPost, "/agents/agent_1/runs/stream", "")
+	if rec.body["include_commentary"] != true || rec.body["include_reasoning"] != true {
+		t.Fatalf("expected include_commentary and include_reasoning sent, got %s", rec.rawBody)
+	}
+	if strings.Join(names, ",") != "stream_commentary,done" || commentary != `{"phase":"commentary","message":0,"text":"Looking it up"}` {
+		t.Fatalf("events %v, commentary %q", names, commentary)
+	}
+}
+
 // With ErrorOnIncomplete, the wait helper returns a run only on done, or on result with
 // ReturnOnResult. A timeout, a clean end or a broken stream before then is a
 // *StreamingError carrying the latest snapshot, also returned beside it; a
@@ -1523,6 +1576,45 @@ func TestClient_RunAgentAndPoll_ReturnOnResult(t *testing.T) {
 	}
 }
 
+// A cancelled run, which API versions from 2026-11-08 report as cancelled
+// rather than failed, ends the poll: from a poll, and from the RunAgent
+// response itself, which is then returned without a poll.
+func TestClient_RunAgentAndPoll_StopsAtCancelled(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		start     string
+		wantPolls int32
+	}{
+		{"polled", "processing", 1},
+		{"at start", "cancelled", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var polls atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method == http.MethodPost {
+					_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"`+tc.start+`"}`)
+					return
+				}
+				polls.Add(1)
+				_, _ = io.WriteString(w, `{"attempts":[],"error_count":0,"priority":false,"run_id":"run_1","status":"cancelled"}`)
+			}))
+			t.Cleanup(srv.Close)
+
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			resp, err := c.RunAgentAndPoll(ctx, "a_1", AgentRunRequest{}, &RunAgentAndPollOptions{PollInterval: time.Millisecond})
+			if err != nil {
+				t.Fatalf("RunAgentAndPoll: %v", err)
+			}
+			if resp.Status != generated.PendingProcessingCompletedFailedStatusCancelled || polls.Load() != tc.wantPolls {
+				t.Fatalf("status %q after %d polls, want cancelled after %d", resp.Status, polls.Load(), tc.wantPolls)
+			}
+		})
+	}
+}
+
 // The RunAgent response carries no step outputs, so with IncludeStepOutputs
 // a terminal first response does not end the poll: the run is fetched once
 // with step outputs. Without it, the first response is returned as it is.
@@ -2833,6 +2925,7 @@ func TestAPIVersionConstants_TrackTheSpec(t *testing.T) {
 		APIVersion20260928, APIVersion20260930, APIVersion20261003, APIVersion20261005,
 		APIVersion20261013, APIVersion20261016, APIVersion20261018, APIVersion20261019,
 		APIVersion20261021, APIVersion20261028, APIVersion20261102, APIVersion20261104,
+		APIVersion20261108, APIVersion20261109, APIVersion20261114, APIVersion20261119,
 	}
 	if strings.Join(KnownAPIVersions, ",") != strings.Join(known, ",") {
 		t.Fatalf("KnownAPIVersions %v does not list every constant %v", KnownAPIVersions, known)
