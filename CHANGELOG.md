@@ -20,7 +20,7 @@
 
 ### Removed
 
-- **Breaking:** Remove `ApplicationvndSeclaiManifestJSON200` from `generated.ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse`, as the spec no longer declares a `+json` body for the download. The field never held a value: the parser decoded a manifest download as JSON and returned an error before setting it. A `Generated()` caller reads the file's bytes from `Body`, which now succeeds for every file. Code that names the field must drop it
+- Remove `ApplicationvndSeclaiManifestJSON200` from `generated.ServeAgentRunAttachmentApiV2AgentRunsRunIdAttachmentsAttachmentIdGetResponse`, as the spec no longer declares a `+json` body for the download. The field never held a value: the parser decoded a manifest download as JSON and returned an error before setting it. A `Generated()` caller reads the file's bytes from `Body`, which now succeeds for every file. Code that names the field must drop it
 
 ### Fixed
 

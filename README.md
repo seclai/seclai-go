@@ -583,8 +583,9 @@ if updated.Warnings != nil {
 ### Agent run attachments
 
 ```go
-// Download a file emitted by a step in an agent run. The attachmentID is the
-// URL-safe-base64 storage_key surfaced in run output manifests / webhooks.
+// Download a file of an agent run. attachmentID is the Id of an entry in the
+// run's or a step's Attachments, or the URL-safe-base64 storage key that
+// webhook and email links carry.
 // Pass "" for downloadName to omit the filename hint. The caller closes the body.
 resp, _ := client.DownloadAgentRunAttachment(ctx, "run_id", "attachment_id", "")
 defer resp.Body.Close() // raw *http.Response — stream or save the bytes
