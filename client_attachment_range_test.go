@@ -110,17 +110,17 @@ func TestDownloadAgentRunAttachment_NoRangeHeaderWhenUnset(t *testing.T) {
 
 func TestDownloadAgentRunAttachmentWithOptions_InvalidRangeSendsNothing(t *testing.T) {
 	cases := map[string]DownloadAgentRunAttachmentOptions{
-		"end without start":   {RangeEnd: i64(10)},
-		"end before start":    {RangeStart: i64(10), RangeEnd: i64(9)},
-		"negative start":      {RangeStart: i64(-1)},
-		"negative end":        {RangeStart: i64(0), RangeEnd: i64(-1)},
-		"negative end alone":  {RangeEnd: i64(-1)},
-		"suffix with start":   {RangeStart: i64(0), RangeSuffix: i64(10)},
-		"suffix with end":     {RangeEnd: i64(10), RangeSuffix: i64(10)},
-		"suffix with both":    {RangeStart: i64(0), RangeEnd: i64(10), RangeSuffix: i64(10)},
-		"zero suffix":         {RangeSuffix: i64(0)},
-		"negative suffix":     {RangeSuffix: i64(-5)},
-		"download name stays": {DownloadName: "a.pdf", RangeEnd: i64(3)},
+		"end without start":                     {RangeEnd: i64(10)},
+		"end before start":                      {RangeStart: i64(10), RangeEnd: i64(9)},
+		"negative start":                        {RangeStart: i64(-1)},
+		"negative end":                          {RangeStart: i64(0), RangeEnd: i64(-1)},
+		"negative end alone":                    {RangeEnd: i64(-1)},
+		"suffix with start":                     {RangeStart: i64(0), RangeSuffix: i64(10)},
+		"suffix with end":                       {RangeEnd: i64(10), RangeSuffix: i64(10)},
+		"suffix with both":                      {RangeStart: i64(0), RangeEnd: i64(10), RangeSuffix: i64(10)},
+		"zero suffix":                           {RangeSuffix: i64(0)},
+		"negative suffix":                       {RangeSuffix: i64(-5)},
+		"end without start, with download name": {DownloadName: "a.pdf", RangeEnd: i64(3)},
 	}
 	for name, opts := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -179,5 +179,8 @@ func TestDownloadAgentRunAttachmentWithOptions_RangeNotSatisfiable(t *testing.T)
 	statusErr, ok := err.(*APIStatusError)
 	if !ok || statusErr.StatusCode != http.StatusRequestedRangeNotSatisfiable {
 		t.Fatalf("expected a 416 *APIStatusError, got %T %v", err, err)
+	}
+	if got := statusErr.Header().Get("Content-Range"); got != "bytes */10" {
+		t.Fatalf("Header().Get(\"Content-Range\") = %q, want %q", got, "bytes */10")
 	}
 }

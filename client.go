@@ -405,16 +405,16 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, nil, apiError(resp.StatusCode, method, reqURL.String(), raw)
+		return nil, nil, apiError(resp.StatusCode, method, reqURL.String(), resp.Header, raw)
 	}
 	return raw, reqURL, nil
 }
 
-// apiError builds the error for a non-2xx response from its status and body:
-// an *APIValidationError for a 422, carrying the decoded validation detail
-// when the body has one, and an *APIStatusError otherwise.
-func apiError(statusCode int, method, reqURL string, raw []byte) error {
-	statusErr := APIStatusError{StatusCode: statusCode, Method: method, URL: reqURL, ResponseText: strings.TrimSpace(string(raw))}
+// apiError builds the error for a non-2xx response from its status, headers
+// and body: an *APIValidationError for a 422, carrying the decoded validation
+// detail when the body has one, and an *APIStatusError otherwise.
+func apiError(statusCode int, method, reqURL string, header http.Header, raw []byte) error {
+	statusErr := APIStatusError{StatusCode: statusCode, Method: method, URL: reqURL, ResponseText: strings.TrimSpace(string(raw)), header: headerRef(header)}
 	if statusCode == http.StatusUnprocessableEntity {
 		var ve HTTPValidationError
 		if len(raw) > 0 && json.Unmarshal(raw, &ve) == nil && ve.Detail != nil {
@@ -718,7 +718,7 @@ type ListAgentRunsOptions struct {
 	Page int
 	// Limit is the maximum number of items per page.
 	Limit int
-	// Status filters runs by status (e.g. "completed", "failed", "running").
+	// Status filters runs by status (e.g. "completed", "failed", "processing").
 	Status string
 }
 
@@ -973,7 +973,8 @@ func (opts DownloadAgentRunAttachmentOptions) rangeHeader() (string, error) {
 //   - 206 Partial Content with the requested bytes and a Content-Range header;
 //   - 200 OK with the whole file, when the file is empty;
 //   - 416 Range Not Satisfiable, returned as an [*APIStatusError], when the
-//     range starts at or past the end of a non-empty file.
+//     range starts at or past the end of a non-empty file. The file's size is
+//     in the error's headers: Header().Get("Content-Range") is "bytes */<size>".
 //
 // Every 200 and 206 carries Accept-Ranges: bytes and Content-Length. Check
 // resp.StatusCode to tell a partial response from a whole one. An invalid
@@ -1031,7 +1032,7 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw))}
+		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw)), header: headerRef(resp.Header)}
 	}
 	return resp, nil
 }
@@ -1553,7 +1554,7 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
-		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
+		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), resp.Header, raw)
 	}
 
 	reader := bufio.NewReader(resp.Body)
@@ -1747,7 +1748,7 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			raw, _ := io.ReadAll(resp.Body)
-			errCh <- apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
+			errCh <- apiError(resp.StatusCode, http.MethodPost, reqURL.String(), resp.Header, raw)
 			return
 		}
 
@@ -2016,7 +2017,7 @@ func (c *Client) doUpload(ctx context.Context, apiPath string, req UploadFileReq
 
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), raw)
+		return nil, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), resp.Header, raw)
 	}
 	return raw, nil
 }

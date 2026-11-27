@@ -2,6 +2,7 @@ package seclai
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -250,3 +251,76 @@ func TestLoadSsoProfile_EnvVarOverride(t *testing.T) {
 		t.Errorf("expected region from env, got %q", profile.SsoRegion)
 	}
 }
+
+// Each path that builds an *APIStatusError through apiError (the JSON request,
+// both streaming requests and the upload) keeps the response headers on it. The
+// raw download path (doRaw) is covered in client_attachment_range_test.go.
+func TestAPIStatusError_CarriesResponseHeaders(t *testing.T) {
+	paths := []struct {
+		name string
+		call func(c *Client) error
+	}{
+		{"json request", func(c *Client) error {
+			return c.Do(context.Background(), http.MethodGet, "/sources/", nil, nil, nil, nil)
+		}},
+		{"streaming and wait", func(c *Client) error {
+			_, err := c.RunStreamingAgentAndWait(context.Background(), "agent_1", AgentRunStreamRequest{})
+			return err
+		}},
+		{"streaming", func(c *Client) error {
+			ch, errCh := c.RunStreamingAgent(context.Background(), "agent_1", AgentRunStreamRequest{})
+			for range ch {
+			}
+			return <-errCh
+		}},
+		{"upload", func(c *Client) error {
+			_, err := c.UploadFileToSource(context.Background(), "src_1", UploadFileRequest{File: []byte("x"), FileName: "a.txt"})
+			return err
+		}},
+	}
+	for _, p := range paths {
+		t.Run(p.name+" 503", func(t *testing.T) {
+			c := headerErrorServer(t, http.StatusServiceUnavailable, `{"detail":"busy"}`)
+			var statusErr *APIStatusError
+			if err := p.call(c); !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusServiceUnavailable {
+				t.Fatalf("expected a 503 *APIStatusError, got %T %v", err, err)
+			}
+			if got := statusErr.Header().Get("Retry-After"); got != "30" {
+				t.Fatalf("Header().Get(\"Retry-After\") = %q, want %q", got, "30")
+			}
+		})
+		t.Run(p.name+" 422", func(t *testing.T) {
+			c := headerErrorServer(t, http.StatusUnprocessableEntity, `{"detail":[{"msg":"bad"}]}`)
+			var valErr *APIValidationError
+			if err := p.call(c); !errors.As(err, &valErr) {
+				t.Fatalf("expected an *APIValidationError, got %T %v", err, err)
+			}
+			if got := valErr.Header().Get("Retry-After"); got != "30" {
+				t.Fatalf("Header().Get(\"Retry-After\") = %q, want %q", got, "30")
+			}
+		})
+	}
+}
+
+func headerErrorServer(t *testing.T, status int, body string) *Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Retry-After", "30")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	c, err := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	return c
+}
+
+// APIStatusError and APIValidationError were comparable with == at v1.10.0;
+// this stops compiling if a field makes either of them incomparable.
+var (
+	_ = APIStatusError{} == APIStatusError{}
+	_ = APIValidationError{} == APIValidationError{}
+)

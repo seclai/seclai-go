@@ -600,8 +600,9 @@ before anything is sent; with no range field set, the SDK adds no `Range` header
 
 The API answers `206 Partial Content` with a `Content-Range` header, `200` with
 the whole file when the file is empty, and `416`, returned as an
-`*APIStatusError`, when the range starts at or past the end of a non-empty file. Check
-`resp.StatusCode` to tell a part from the whole.
+`*APIStatusError`, when the range starts at or past the end of a non-empty file;
+the file's size is then in the headers the error's `Header()` returns, whose
+`Content-Range` is `bytes */<size>`. Check `resp.StatusCode` to tell a part from the whole.
 
 <!-- sdksync:check -->
 ```go
@@ -610,7 +611,8 @@ resp, err := client.DownloadAgentRunAttachmentWithOptions(ctx, "run_id", "attach
 	seclai.DownloadAgentRunAttachmentOptions{RangeStart: &start, RangeEnd: &end})
 if err != nil {
 	if statusErr, ok := err.(*seclai.APIStatusError); ok && statusErr.StatusCode == 416 {
-		fmt.Println("the range starts past the end of the file")
+		// e.g. "bytes */4096": the range starts past the end of the file
+		fmt.Println("Content-Range:", statusErr.Header().Get("Content-Range"))
 	}
 	return
 }
