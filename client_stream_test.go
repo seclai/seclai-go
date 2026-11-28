@@ -705,3 +705,70 @@ func TestClient_Download_Timeouts(t *testing.T) {
 		}
 	})
 }
+
+// With the default client, a download's non-2xx error body that stalls is
+// read for a bounded time, even when ctx has no deadline, and the error is
+// the *APIStatusError carrying what was read.
+func TestClient_Download_ErrorBodyReadIsBounded(t *testing.T) {
+	const short = 100 * time.Millisecond
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "200")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = io.WriteString(w, "bad gate")
+		w.(http.Flusher).Flush()
+		<-release
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	scaleDefaultClientTimeouts(t, c, short)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.DownloadSourceExport(context.Background(), "src_1", "exp_1")
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		var apiErr *APIStatusError
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadGateway || apiErr.ResponseText != "bad gate" {
+			t.Fatalf("got %T %v, want the 502 with the body read so far", err, err)
+		}
+	case <-time.After(30 * short):
+		t.Fatal("reading the stalled error body did not end")
+	}
+}
+
+// With the default client, a stream request's non-2xx error body that
+// stalls is read for a bounded time, even when ctx has no deadline.
+func TestClient_RunStreamingAgent_ErrorBodyReadIsBounded(t *testing.T) {
+	const short = 100 * time.Millisecond
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "200")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = io.WriteString(w, "bad gate")
+		w.(http.Flusher).Flush()
+		<-release
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	scaleDefaultClientTimeouts(t, c, short)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := collectEvents(t, c, context.Background())
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		var apiErr *APIStatusError
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadGateway || apiErr.ResponseText != "bad gate" {
+			t.Fatalf("got %T %v, want the 502 with the body read so far", err, err)
+		}
+	case <-time.After(30 * short):
+		t.Fatal("reading the stalled error body did not end")
+	}
+}

@@ -1091,7 +1091,7 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := c.readErrorBody(resp.Body, cancel)
 		resp.Body.Close()
 		cancel(nil)
 		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw)), header: headerRef(resp.Header)}
@@ -1713,11 +1713,12 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 // defaultStreamWait is the deadline the wait helpers give a ctx without one.
 const defaultStreamWait = 60 * time.Second
 
-// ErrDefaultStreamTimeout is in the chain of the error that
+// ErrDefaultStreamTimeout is in the chain of the timeout error that
 // [Client.RunStreamingAgentAndWait] and
 // [Client.RunStreamingAgentAndWaitWithOptions] return when the 60s deadline
 // they give a ctx without one passes, whether before or after the response
-// headers arrive. With ErrorOnIncomplete, once the stream has opened, the
+// headers arrive. An [*APIStatusError] whose body read the deadline cut is
+// returned as it is. With ErrorOnIncomplete, once the stream has opened, the
 // error is a [*StreamingError] whose Err holds it. [Client.RunStreamingAgent]
 // adds no default deadline, so its errors never match it.
 //
@@ -1804,8 +1805,8 @@ type AgentRunEvent struct {
 	Data string
 	// Run is the parsed AgentRunResponse of a run snapshot or status change
 	// ("init", "status", "update", "result" or "done") when its data could
-	// be decoded, and for "error" and "timeout", whose Run has RunId set and
-	// Status empty. It is nil for other events, such as "stream_token".
+	// be decoded, and for "error" and "timeout" when their data could be
+	// decoded, whose Run has RunId from their run_id and Status empty. It is nil for other events, such as "stream_token".
 	Run *AgentRunResponse
 }
 
@@ -1908,7 +1909,7 @@ func (c *Client) streamRunEvents(ctx context.Context, agentID string, body Agent
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := c.readErrorBody(resp.Body, cancel)
 		return false, apiError(resp.StatusCode, http.MethodPost, reqURL.String(), resp.Header, raw)
 	}
 
@@ -1972,6 +1973,19 @@ func (c *Client) doStream(ctx context.Context, cancel context.CancelCauseFunc, r
 	}
 	op := req.Method[:1] + strings.ToLower(req.Method[1:]) // as net/http writes it
 	return nil, &url.Error{Op: op, URL: req.URL.String(), Err: streamHeaderTimeoutError{c.streamHeaderTimeout}}
+}
+
+// readErrorBody reads the body of a non-2xx response to a stream or download
+// request, whose cancel ends the request. With the default client, the read
+// is bounded by streamHeaderTimeout counted from when the headers arrived
+// (their wait is bounded separately); a body cut off is kept as read.
+func (c *Client) readErrorBody(body io.Reader, cancel context.CancelCauseFunc) []byte {
+	if c.streamHeaderTimeout > 0 {
+		timer := time.AfterFunc(c.streamHeaderTimeout, func() { cancel(errStreamHeaderTimeout) })
+		defer timer.Stop()
+	}
+	raw, _ := io.ReadAll(body)
+	return raw
 }
 
 // errStreamHeaderTimeout is the cause doStream cancels a request with when
