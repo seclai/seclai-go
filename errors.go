@@ -86,9 +86,10 @@ func (e *APIValidationError) Error() string {
 //
 // When [Client.RunStreamingAgentAndWaitWithOptions] with ErrorOnIncomplete
 // times out, or its stream ends or breaks, after the stream has opened and
-// before the done event, Run holds the latest snapshot it read: the result
-// event's run if one arrived (its Output is the answer), else the init one,
-// else nil. Unwrap gives the underlying cause.
+// before the done event, and in either mode when the server ends the stream
+// with an error or timeout event, Run holds the latest snapshot it read: the
+// result event's run if one arrived (its Output is the answer), else the init
+// one, else nil. Unwrap gives the underlying cause.
 type StreamingError struct {
 	// Message describes what went wrong.
 	Message string
@@ -96,7 +97,8 @@ type StreamingError struct {
 	RunID string
 	// Run is the latest run snapshot read before the failure, or nil.
 	Run *AgentRunResponse
-	// Err is the underlying cause, or nil when the stream simply ended.
+	// Err is the underlying cause, or nil when the stream simply ended or
+	// the server ended it with an error or timeout event.
 	Err error
 }
 

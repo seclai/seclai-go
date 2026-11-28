@@ -63,7 +63,7 @@ func main() {
 | `BaseURL` | `SECLAI_API_URL` | `https://seclai.com` |
 | `APIKeyHeader` | — | `x-api-key` |
 | `DefaultHeaders` | — | `nil` |
-| `HTTPClient` | — | `&http.Client{Timeout: 30s}` |
+| `HTTPClient` | — | `&http.Client{Timeout: 30s}`; for streams, see [Streaming](#streaming) |
 
 > At least one credential must be provided via the options above, the
 > `SECLAI_API_KEY` environment variable, or an SSO profile
@@ -415,9 +415,9 @@ _ = client.DeleteAgentRun(ctx, "run_id")
 
 The SDK provides two streaming patterns over the SSE `/runs/stream` endpoint.
 
-**Block until done** — returns the final `done` payload. It reads only the run payloads, so it does not send `IncludeReasoning` or `IncludeCommentary`; use `RunStreamingAgent` to receive reasoning or commentary events. By default, if the stream ends before `done`, it returns the latest run it saw with a nil error: the `result` event's run if one arrived (`ResultReportedAt` is set and `Output` is the answer), else the `init` one. That run may not have finished, for example after a cut stream, so check its `Status` and `ResultReportedAt`. A timeout or a broken stream returns the error, with that latest run beside it.
+**Block until done** — returns the final `done` payload. It reads only the run payloads, so it does not send `IncludeReasoning` or `IncludeCommentary`; use `RunStreamingAgent` to receive reasoning or commentary events. By default, if the stream ends before `done`, it returns the latest run it saw with a nil error: the `result` event's run if one arrived (`ResultReportedAt` is set and `Output` is the answer), else the `init` one. That run may not have finished, for example after a cut stream, so check its `Status` and `ResultReportedAt`. A timeout or a broken stream returns the error, with that latest run beside it. When the server ends the stream with an `error` event (the run's stream failed on the server) or a `timeout` event, it returns that latest run with a `*StreamingError` whose `Run` is the same run, in both modes; for `error`, its `Message` includes the server's error text.
 
-Whichever bound passes first ends the wait: `ctx`'s deadline (60s by default when `ctx` has none), or the HTTP client's `Timeout` (30s with the default client; see `Options.HTTPClient`):
+The wait is bounded by `ctx`'s deadline (60s by default when `ctx` has none) and by the `Timeout` of an `Options.HTTPClient` you supply. The default client's 30s `Timeout` does not apply to either streaming method; with it, waiting for the response headers is bounded at 30s and the rest of the stream by `ctx`:
 
 ```go
 // If ctx has no deadline, the SDK applies a default timeout.
@@ -426,6 +426,14 @@ run, err := client.RunStreamingAgentAndWait(ctx, "agent_id", seclai.AgentRunStre
 	Metadata: map[string]any{"app": "My App"},
 })
 ```
+
+To tell what ended a streaming method with a timeout, test in this order:
+
+1. `errors.Is(err, seclai.ErrDefaultStreamTimeout)`: the wait helpers' 60s default, applied when `ctx` has no deadline, passed. `RunStreamingAgent` adds no default, so its errors never match it.
+2. `ctx.Err() != nil` on the `ctx` you passed: your `ctx` ended, by its deadline or by being cancelled.
+3. Otherwise, `errors.As` finds a `net.Error` whose `Timeout()` is true: any other timeout, such as the HTTP client's `Timeout`, the default client's 30s wait for the response headers, or a transport timeout.
+
+`errors.Is(err, context.DeadlineExceeded)` does not tell them apart: it holds for the first, and for the second when your `ctx`'s deadline passed, and for the HTTP client's `Timeout` it depends on the Go version.
 
 We recommend `RunStreamingAgentAndWaitWithOptions` with `ErrorOnIncomplete`, which becomes the default in the next major version. It never returns an unfinished run as if it were final. Once the stream has opened, a timeout or a stream that ends or breaks before `done` returns a `*StreamingError` whose `Run` holds the latest snapshot (the same run is returned beside it), and cancelling `ctx` returns the latest snapshot with `ctx.Err()` instead.
 
@@ -449,7 +457,7 @@ default:
 }
 ```
 
-**Channel-based** — yields every SSE event as `AgentRunEvent`. Take the run's answer from the `result` event; the `done` event's `Status` says whether the whole run succeeded, which can still fail after its result. When the server answers with plain JSON instead of an SSE stream, the channel yields only a `done` event, so read the answer from its `Run`. Set `IncludeReasoning` or `IncludeCommentary` to also receive `stream_reasoning` or `stream_commentary` events, sent for a `prompt_call` whose `run_result` enables `show_reasoning` or `show_commentary`; their `Data` is the event's JSON:
+**Channel-based** — yields every SSE event as `AgentRunEvent`. Take the run's answer from the `result` event; the `done` event's `Status` says whether the whole run succeeded, which can still fail after its result. When the server answers with plain JSON instead of an SSE stream, the channel yields only a `done` event, so read the answer from its `Run`. `Run` is set only for the run snapshot and status events `init`, `status`, `update`, `result` and `done`. A stream that fails or times out on the server ends with an `error` or `timeout` event in place of `done`; the channel yields it like any other event. `RunStreamingAgent` adds no default deadline to `ctx`. Set `IncludeReasoning` or `IncludeCommentary` to also receive `stream_reasoning` or `stream_commentary` events, sent for a `prompt_call` whose `run_result` enables `show_reasoning` or `show_commentary`; their `Data` is the event's JSON:
 
 ```go
 events, errCh := client.RunStreamingAgent(ctx, "agent_id", seclai.AgentRunStreamRequest{
@@ -1406,7 +1414,7 @@ if err != nil {
 | `*ConfigurationError` | Missing API key, invalid base URL |
 | `*APIStatusError` | Non-2xx HTTP response |
 | `*APIValidationError` | HTTP 422 (embeds `APIStatusError`), except from the `Download*` methods, which return `*APIStatusError` for every non-2xx |
-| `*StreamingError` | SSE stream ended with no run; with `ErrorOnIncomplete`, it timed out, ended or broke before `done`, and `Run` holds the latest snapshot |
+| `*StreamingError` | SSE stream ended with no run, or the server ended it with an `error` or `timeout` event; with `ErrorOnIncomplete`, it timed out, ended or broke before `done`. `Run` holds the latest snapshot |
 | `*UnexpectedResponseError` | A 2xx response that is not the list its method reads |
 
 ## Low-level access

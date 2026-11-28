@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.12.0] - 2026-11-27
+
+### Changed
+
+- **Breaking:** Return an error that matches `ErrDefaultStreamTimeout` with `errors.Is` from `RunStreamingAgentAndWait` and `RunStreamingAgentAndWaitWithOptions` when the 60s default they apply to a `ctx` without a deadline passes, in place of the bare error: `context.DeadlineExceeded` once the stream has opened, or a `*url.Error` before it. With `ErrorOnIncomplete`, once the stream has opened, the `*StreamingError`'s `Err` matches it the same way. `errors.Is(err, context.DeadlineExceeded)`, `errors.As` for a `*url.Error`, and a `net.Error` whose `Timeout()` is true still hold, but a comparison with `==`, such as `err == context.DeadlineExceeded`, no longer does
+
+### Added
+
+- Add `ErrDefaultStreamTimeout`, which `errors.Is` finds when the wait helpers' 60s default deadline ends the wait, before or after the response headers. Its documentation, and the README, give one test that tells it apart from your own `ctx` ending (`ctx.Err() != nil`) and from other timeouts, such as the HTTP client's `Timeout` (a `net.Error` whose `Timeout()` is true), on every supported Go version
+
+### Fixed
+
+- Return a `*StreamingError` from `RunStreamingAgentAndWait` and `RunStreamingAgentAndWaitWithOptions` when the server ends the stream with an `error` event, sent when the run's stream fails on the server, or a `timeout` event, in both modes. Its `Message` includes the server's error text, and its `Run`, also returned beside it, is the latest snapshot: the `result` event's run, else the `init` one. By default these helpers returned the unfinished run with a nil error, and with `ErrorOnIncomplete` a `*StreamingError` without the server's message, after waiting for the connection to close
+- Stop cutting `RunStreamingAgent`, `RunStreamingAgentAndWait` and `RunStreamingAgentAndWaitWithOptions` streams after 30s with the default client, whose `Timeout` also covered reading the body. With the default client a stream is now bounded by `ctx` (the wait helpers' 60s default when `ctx` has none), and waiting for its response headers by 30s; when that passes, the error is a `*url.Error` whose `Timeout()` is true and which matches `context.DeadlineExceeded` with `errors.Is`. The default client's requests and streams still go through `http.DefaultTransport`, also when a program has replaced it. An `Options.HTTPClient` you supply is used as it is, so its `Timeout` still cuts a stream
+- Set `AgentRunEvent.Run` only for the run snapshot and status events `init`, `status`, `update`, `result` and `done`. `RunStreamingAgent` set it for any event whose data was a JSON object, so other events, such as `stream_token`, `stream_reasoning`, `stream_commentary`, `error` and `timeout`, carried a `Run` whose `Status` was empty
+- Parse a stream's final line when it has no trailing newline, in `RunStreamingAgent` and the wait helpers; a `done` event ending that way was dropped
+- Return the run from `RunStreamingAgentAndWait` and `RunStreamingAgentAndWaitWithOptions` when the server answers with plain JSON instead of an SSE stream, as `RunStreamingAgent` yields it as a `done` event. A JSON reply cut off mid-body now returns the read error from all three, where `RunStreamingAgent` yielded a `done` event with a nil `Run` and no error
+- Return the error that cuts off reading a 2xx response body, wrapped, from every `Client` method that returns the response's JSON, decoded or as a `json.RawMessage`, and from the upload methods. A method that returns only an error, such as `CompactMemoryBank`, the `Delete` methods, or `Do` with a nil `out`, still succeeds on a 2xx, as before. The partial body used to be decoded or returned, so a deadline passing before any body byte arrived made `GetAgentRun` return a zero run with a nil error, which `RunAgentAndPoll` then adopted
+
 ## [1.11.0] - 2026-11-27
 
 ### Changed
@@ -295,6 +314,7 @@ _Stable release. No functional changes since 0.0.2._
 
 _Initial release._
 
+[1.12.0]: https://github.com/seclai/seclai-go/releases/tag/v1.12.0
 [1.11.0]: https://github.com/seclai/seclai-go/releases/tag/v1.11.0
 [1.10.0]: https://github.com/seclai/seclai-go/releases/tag/v1.10.0
 [1.9.0]: https://github.com/seclai/seclai-go/releases/tag/v1.9.0
