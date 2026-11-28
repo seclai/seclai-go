@@ -53,6 +53,7 @@ forward.
 - A group heading is followed by an unordered list and nothing else.
 - Entry form: `- Change ([ref](url))`. Imperative present tense, self-describing — it must read correctly without its group heading. "Support CentOS", never "Support of CentOS" or "Added support".
 - Breaking changes take a `**Breaking:**` prefix and sort first within their group. Otherwise sort by importance.
+- A change is breaking only when something that worked stops working. Fixing or changing something that never worked is not breaking, even when code that leaned on the broken behaviour has to change: refusing input that already gave a wrong answer, an error that now names what really happened, a value that was ignored and is now honoured.
 - A release may open with a one-sentence italic notice instead of, or before, its groups — used for first releases (`_Initial release._`) and no-op version bumps.
 - Version links are reference-style at the bottom:
   `[1.4.0]: https://github.com/seclai/<repo>/releases/tag/1.4.0`. **Check the tag
