@@ -1806,7 +1806,8 @@ type AgentRunEvent struct {
 	// Run is the parsed AgentRunResponse of a run snapshot or status change
 	// ("init", "status", "update", "result" or "done") when its data could
 	// be decoded, and for "error" and "timeout" when their data could be
-	// decoded, whose Run has RunId from their run_id and Status empty. It is nil for other events, such as "stream_token".
+	// decoded, whose Run has RunId from their run_id and Status empty. It is
+	// nil for other events, such as "stream_token".
 	Run *AgentRunResponse
 }
 
@@ -1963,9 +1964,9 @@ func (c *Client) doStream(ctx context.Context, cancel context.CancelCauseFunc, r
 	if c.streamHeaderTimeout <= 0 {
 		return hc.Do(req)
 	}
-	timer := time.AfterFunc(c.streamHeaderTimeout, func() { cancel(errStreamHeaderTimeout) })
+	timer := time.AfterFunc(c.streamHeaderTimeout, func() { cancel(errStreamResponseTimeout) })
 	resp, err := hc.Do(req)
-	if timer.Stop() || !errors.Is(context.Cause(ctx), errStreamHeaderTimeout) {
+	if timer.Stop() || !errors.Is(context.Cause(ctx), errStreamResponseTimeout) {
 		return resp, err
 	}
 	if resp != nil {
@@ -1981,16 +1982,18 @@ func (c *Client) doStream(ctx context.Context, cancel context.CancelCauseFunc, r
 // (their wait is bounded separately); a body cut off is kept as read.
 func (c *Client) readErrorBody(body io.Reader, cancel context.CancelCauseFunc) []byte {
 	if c.streamHeaderTimeout > 0 {
-		timer := time.AfterFunc(c.streamHeaderTimeout, func() { cancel(errStreamHeaderTimeout) })
+		timer := time.AfterFunc(c.streamHeaderTimeout, func() { cancel(errStreamResponseTimeout) })
 		defer timer.Stop()
 	}
 	raw, _ := io.ReadAll(body)
 	return raw
 }
 
-// errStreamHeaderTimeout is the cause doStream cancels a request with when
-// its response headers do not arrive in time.
-var errStreamHeaderTimeout = errors.New("seclai: stream response headers timed out")
+// errStreamResponseTimeout is the cause a stream or download request is
+// cancelled with when its response headers do not arrive in time (doStream),
+// or when reading a non-2xx response's body runs past its bound
+// (readErrorBody).
+var errStreamResponseTimeout = errors.New("seclai: stream response timed out")
 
 // streamHeaderTimeoutError is the error, inside a *url.Error, of a stream
 // or download request whose response headers did not arrive within the default client's
