@@ -102,11 +102,13 @@ type Options struct {
 
 	// HTTPClient is used for requests. Defaults to a client with a 30s timeout.
 	//
-	// The default client's Timeout does not apply to [Client.RunStreamingAgent]
-	// and [Client.RunStreamingAgentAndWaitWithOptions]: a stream is bounded by
-	// ctx instead, and waiting for its response headers by 30s. A client you
-	// supply is used as it is for streams too, so its Timeout, if set, also
-	// cuts a stream when it passes.
+	// The default client's Timeout does not apply to [Client.RunStreamingAgent],
+	// [Client.RunStreamingAgentAndWaitWithOptions] or the file downloads
+	// ([Client.DownloadAgentRunAttachment] and its WithOptions form,
+	// [Client.DownloadSourceExport], [Client.DownloadContentAttachment]): they
+	// are bounded by ctx instead, and waiting for their response headers by
+	// 30s. A client you supply is used as it is for them too, so its Timeout,
+	// if set, also cuts a stream or download when it passes.
 	HTTPClient *http.Client
 }
 
@@ -116,7 +118,7 @@ type Client struct {
 	baseURL        *url.URL
 	defaultHeaders map[string]string
 	httpClient     *http.Client
-	// streamClient sends the stream requests, and streamHeaderTimeout, when
+	// streamClient sends the stream and download requests, and streamHeaderTimeout, when
 	// positive, bounds waiting for their response headers. With the default
 	// client they are that client without its Timeout and that Timeout;
 	// otherwise httpClient and 0.
@@ -1064,8 +1066,13 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 	if err != nil {
 		return nil, err
 	}
+	// The download goes through the stream client, as a large file can take
+	// longer than the default client's Timeout to read. cancel is released
+	// when the caller closes the body.
+	ctx, cancel := context.WithCancelCause(ctx)
 	req, err := http.NewRequestWithContext(ctx, method, reqURL.String(), nil)
 	if err != nil {
+		cancel(nil)
 		return nil, err
 	}
 	for k, v := range c.defaultHeaders {
@@ -1075,18 +1082,34 @@ func (c *Client) doRaw(ctx context.Context, method, apiPath string, query map[st
 		req.Header[k] = append([]string(nil), vs...)
 	}
 	if err := c.applyAuth(ctx, req); err != nil {
+		cancel(nil)
 		return nil, err
 	}
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doStream(ctx, cancel, req)
 	if err != nil {
+		cancel(nil)
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		cancel(nil)
 		return nil, &APIStatusError{StatusCode: resp.StatusCode, Method: method, URL: reqURL.String(), ResponseText: strings.TrimSpace(string(raw)), header: headerRef(resp.Header)}
 	}
+	resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
 	return resp, nil
+}
+
+// cancelOnClose releases a request's context when its body is closed.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel context.CancelCauseFunc
+}
+
+func (b *cancelOnClose) Close() error {
+	err := b.ReadCloser.Close()
+	b.cancel(nil)
+	return err
 }
 
 // ── Agent AI Assistant ──────────────────────────────────────────────────────
@@ -1538,7 +1561,10 @@ func (c *Client) RunStreamingAgentAndWait(ctx context.Context, agentID string, b
 // `event: done` message whose `data:` field contains the final run payload,
 // or, with opts.ReturnOnResult, the `event: result` one (see
 // [RunStreamingAgentAndWaitOptions]). When the server answers with plain JSON
-// instead of an SSE stream, that run is returned as the done one.
+// instead of an SSE stream, that run is returned as the done one; with
+// opts.ErrorOnIncomplete, a run that has not finished (its Status is not
+// terminal, and it has not reported its result with opts.ReturnOnResult) is
+// returned together with a [*StreamingError] whose Run is that run.
 //
 // The latest snapshot read is the `event: result` run if one arrived
 // (ResultReportedAt is set and Output is the answer), else the `event: init`
@@ -1593,10 +1619,12 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 		defer cancel()
 		usedDefault = true
 	}
-	// markDefault puts ErrDefaultStreamTimeout in the chain of an error the
-	// wait ends with once the default deadline has passed.
+	// markDefault puts ErrDefaultStreamTimeout in the chain of a timeout
+	// error the wait ends with once the default deadline has passed. Any
+	// other error, such as an *APIStatusError, is returned as it is.
 	markDefault := func(err error) error {
-		if err == nil || !usedDefault || !errors.Is(context.Cause(ctx), ErrDefaultStreamTimeout) || errors.Is(err, ErrDefaultStreamTimeout) {
+		if err == nil || !usedDefault || !errors.Is(context.Cause(ctx), ErrDefaultStreamTimeout) ||
+			errors.Is(err, ErrDefaultStreamTimeout) || !errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 		return fmt.Errorf("%w: %w", ErrDefaultStreamTimeout, err)
@@ -1605,7 +1633,8 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 	var lastSeen, final *AgentRunResponse
 	var sawResult bool
 	var serverErr *StreamingError
-	opened, err := c.streamRunEvents(ctx, agentID, body, func(evt AgentRunEvent) bool {
+	var jsonReply bool
+	opened, err := c.streamRunEvents(ctx, agentID, body, &jsonReply, func(evt AgentRunEvent) bool {
 		switch evt.Event {
 		case "init":
 			if evt.Run != nil && !sawResult {
@@ -1631,6 +1660,13 @@ func (c *Client) RunStreamingAgentAndWaitWithOptions(ctx context.Context, agentI
 		return true
 	})
 	switch {
+	case final != nil && jsonReply && errorOnIncomplete &&
+		!isTerminalRunStatus(final.Status) && !(returnOnResult && final.ResultReportedAt != nil):
+		// A plain JSON reply is the run as it stands, which may not have
+		// finished: by default it is returned, as a done run is.
+		streamErr := &StreamingError{Run: final, RunID: final.RunId,
+			Message: "the server answered with JSON for a run that has not finished" + resultReportedSuffix(final.ResultReportedAt != nil)}
+		return final, streamErr
 	case final != nil:
 		return final, nil
 	case serverErr != nil:
@@ -1685,7 +1721,8 @@ const defaultStreamWait = 60 * time.Second
 // error is a [*StreamingError] whose Err holds it. [Client.RunStreamingAgent]
 // adds no default deadline, so its errors never match it.
 //
-// To tell what ended a stream method with a timeout, test in this order:
+// To tell which client-side timeout ended a stream method, test in this
+// order:
 //
 //  1. errors.Is(err, ErrDefaultStreamTimeout): the SDK's 60s default passed.
 //  2. ctx.Err() != nil, on the ctx you passed: your ctx ended, by its
@@ -1696,7 +1733,9 @@ const defaultStreamWait = 60 * time.Second
 //
 // errors.Is(err, context.DeadlineExceeded) does not tell them apart: it holds
 // for the first, and for the second when your ctx's deadline passed, and for
-// the HTTP client's Timeout it depends on the Go version.
+// the HTTP client's Timeout it depends on the Go version. A timeout event
+// from the server is none of these: the wait helpers return it as a
+// [*StreamingError] whose Err is nil.
 //
 // ErrDefaultStreamTimeout itself matches context.DeadlineExceeded and is a
 // net.Error whose Timeout() is true, as the error for this deadline was
@@ -1765,7 +1804,8 @@ type AgentRunEvent struct {
 	Data string
 	// Run is the parsed AgentRunResponse of a run snapshot or status change
 	// ("init", "status", "update", "result" or "done") when its data could
-	// be decoded, and nil for every other event.
+	// be decoded, and for "error" and "timeout", whose Run has RunId set and
+	// Status empty. It is nil for other events, such as "stream_token".
 	Run *AgentRunResponse
 }
 
@@ -1808,7 +1848,7 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		_, err := c.streamRunEvents(ctx, agentID, body, func(evt AgentRunEvent) bool {
+		_, err := c.streamRunEvents(ctx, agentID, body, nil, func(evt AgentRunEvent) bool {
 			select {
 			case events <- evt:
 			case <-ctx.Done():
@@ -1828,13 +1868,15 @@ func (c *Client) RunStreamingAgent(ctx context.Context, agentID string, body Age
 // one parser behind [Client.RunStreamingAgent] and
 // [Client.RunStreamingAgentAndWaitWithOptions].
 //
-// opened reports whether a 2xx response arrived. err is nil when the stream
+// When the server answers with plain JSON, *jsonReply (when not nil) is set
+// before its done event is passed to emit. opened reports whether a 2xx
+// response arrived. err is nil when the stream
 // ended cleanly or emit stopped it, and otherwise the request's error, the
 // API error of a non-2xx response, or the error that broke the body. An event
 // whose lines were read before the body broke or ended, but not its closing
 // blank line, is passed to emit first, and at a clean end so is a final line
 // without its newline.
-func (c *Client) streamRunEvents(ctx context.Context, agentID string, body AgentRunStreamRequest, emit func(AgentRunEvent) bool) (opened bool, err error) {
+func (c *Client) streamRunEvents(ctx context.Context, agentID string, body AgentRunStreamRequest, jsonReply *bool, emit func(AgentRunEvent) bool) (opened bool, err error) {
 	reqURL, err := c.buildURL(fmt.Sprintf("/agents/%s/runs/stream", pathSegment(agentID)), nil)
 	if err != nil {
 		return false, err
@@ -1876,6 +1918,9 @@ func (c *Client) streamRunEvents(ctx context.Context, agentID string, body Agent
 		if err != nil {
 			return true, err
 		}
+		if jsonReply != nil {
+			*jsonReply = true
+		}
 		emit(newAgentRunEvent("done", string(raw)))
 		return true, nil
 	}
@@ -1904,7 +1949,7 @@ func (c *Client) streamRunEvents(ctx context.Context, agentID string, body Agent
 	}
 }
 
-// doStream sends a stream request. With the SDK's default client, whose
+// doStream sends a stream or download request. With the SDK's default client, whose
 // Timeout would also cut the body, the request goes through a copy of it
 // without that Timeout, and waiting for the response headers is bounded by
 // streamHeaderTimeout instead: cancel, the request context's cancel, ends the
@@ -1925,7 +1970,8 @@ func (c *Client) doStream(ctx context.Context, cancel context.CancelCauseFunc, r
 	if resp != nil {
 		resp.Body.Close()
 	}
-	return nil, &url.Error{Op: "Post", URL: req.URL.String(), Err: streamHeaderTimeoutError{c.streamHeaderTimeout}}
+	op := req.Method[:1] + strings.ToLower(req.Method[1:]) // as net/http writes it
+	return nil, &url.Error{Op: op, URL: req.URL.String(), Err: streamHeaderTimeoutError{c.streamHeaderTimeout}}
 }
 
 // errStreamHeaderTimeout is the cause doStream cancels a request with when
@@ -1933,7 +1979,7 @@ func (c *Client) doStream(ctx context.Context, cancel context.CancelCauseFunc, r
 var errStreamHeaderTimeout = errors.New("seclai: stream response headers timed out")
 
 // streamHeaderTimeoutError is the error, inside a *url.Error, of a stream
-// request whose response headers did not arrive within the default client's
+// or download request whose response headers did not arrive within the default client's
 // 30s. It is a net.Error whose Timeout() is true.
 type streamHeaderTimeoutError struct{ after time.Duration }
 
@@ -1988,12 +2034,12 @@ func (p *sseParser) flush() (AgentRunEvent, bool) {
 	return newAgentRunEvent(name, data), true
 }
 
-// newAgentRunEvent builds an event, decoding Run only for the run snapshot
-// and status events.
+// newAgentRunEvent builds an event, decoding Run only for the run snapshot,
+// status, error and timeout events.
 func newAgentRunEvent(name, data string) AgentRunEvent {
 	evt := AgentRunEvent{Event: name, Data: data}
 	switch name {
-	case "init", "update", "result", "done", "status":
+	case "init", "update", "result", "done", "status", "error", "timeout":
 		var parsed AgentRunResponse
 		if json.Unmarshal([]byte(data), &parsed) == nil {
 			evt.Run = &parsed

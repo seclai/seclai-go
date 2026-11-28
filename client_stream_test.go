@@ -49,9 +49,10 @@ func collectEvents(t *testing.T, c *Client, ctx context.Context) ([]AgentRunEven
 	return got, <-errCh
 }
 
-// Run is set only for the run events, not for stream_token, reasoning,
-// commentary, error or timeout events, whose data is also a JSON object.
-func TestClient_RunStreamingAgent_RunOnlyOnRunEvents(t *testing.T) {
+// Run is set for the run snapshot and status events, and for error and
+// timeout events (RunId only, as released), not for stream_token, reasoning
+// or commentary events, whose data is also a JSON object.
+func TestClient_RunStreamingAgent_RunOnlyOnEventsThatCarryARun(t *testing.T) {
 	stream := streamInitEv +
 		"event: status\ndata: {\"run_id\":\"run_1\",\"status\":\"processing\"}\n\n" +
 		"event: stream_token\ndata: {\"token\":\"a\"}\n\n" +
@@ -71,8 +72,12 @@ func TestClient_RunStreamingAgent_RunOnlyOnRunEvents(t *testing.T) {
 	for _, evt := range got {
 		names = append(names, evt.Event)
 		isRunEvent := evt.Event == "init" || evt.Event == "status" || evt.Event == "update" || evt.Event == "result" || evt.Event == "done"
-		if (evt.Run != nil) != isRunEvent {
+		isEnd := evt.Event == "error" || evt.Event == "timeout"
+		if (evt.Run != nil) != (isRunEvent || isEnd) {
 			t.Errorf("%s: Run %+v", evt.Event, evt.Run)
+		}
+		if isEnd && evt.Run != nil && (evt.Run.RunId != "run_1" || evt.Run.Status != "") {
+			t.Errorf("%s: RunId %q Status %q, want run_1 and empty", evt.Event, evt.Run.RunId, evt.Run.Status)
 		}
 		if isRunEvent && evt.Run != nil && (evt.Run.RunId != "run_1" || evt.Run.Status == "") {
 			t.Errorf("%s: RunId %q Status %q", evt.Event, evt.Run.RunId, evt.Run.Status)
@@ -171,6 +176,41 @@ func TestClient_RunStreaming_JSONReply(t *testing.T) {
 		if err != nil || res == nil || res.Output == nil || *res.Output != "final" {
 			t.Fatalf("ErrorOnIncomplete=%v: got %+v %v, want the run", errorOnIncomplete, res, err)
 		}
+	}
+}
+
+// A plain JSON reply whose run has not finished is the latest snapshot: by
+// default it is returned, and with ErrorOnIncomplete it comes with a
+// *StreamingError, unless ReturnOnResult is set and it reported its result.
+func TestClient_RunStreamingAgentAndWait_JSONReplyNotFinished(t *testing.T) {
+	for _, tc := range []struct {
+		name, run         string
+		returnOnResult    bool
+		wantErrStrictMode bool
+	}{
+		{"processing", `{"attempts":[],"error_count":0,"priority":true,"run_id":"run_1","status":"processing"}`, false, true},
+		{"result reported, waiting for done", `{"attempts":[],"error_count":0,"priority":true,"run_id":"run_1","status":"processing","output":"answer","result_reported_at":"2026-11-05T00:00:00Z"}`, false, true},
+		{"result reported, ReturnOnResult", `{"attempts":[],"error_count":0,"priority":true,"run_id":"run_1","status":"processing","output":"answer","result_reported_at":"2026-11-05T00:00:00Z"}`, true, false},
+		{"failed", `{"attempts":[],"error_count":1,"priority":true,"run_id":"run_1","status":"failed"}`, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := streamServer(t, "application/json", tc.run, false)
+			c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+			for _, errorOnIncomplete := range []bool{false, true} {
+				res, err := c.RunStreamingAgentAndWaitWithOptions(context.Background(), "agent_1", AgentRunStreamRequest{}, &RunStreamingAgentAndWaitOptions{ErrorOnIncomplete: errorOnIncomplete, ReturnOnResult: tc.returnOnResult})
+				if res == nil || res.RunId != "run_1" {
+					t.Fatalf("ErrorOnIncomplete=%v: got run %+v, want the JSON run", errorOnIncomplete, res)
+				}
+				var streamErr *StreamingError
+				wantErr := errorOnIncomplete && tc.wantErrStrictMode
+				if errors.As(err, &streamErr) != wantErr || (!wantErr && err != nil) {
+					t.Fatalf("ErrorOnIncomplete=%v: got %T %v, want a *StreamingError %v", errorOnIncomplete, err, err, wantErr)
+				}
+				if wantErr && (streamErr.Run != res || streamErr.RunID != "run_1") {
+					t.Fatalf("Run %p RunID %q, want the returned run", streamErr.Run, streamErr.RunID)
+				}
+			}
+		})
 	}
 }
 
@@ -574,4 +614,94 @@ func TestClient_RunStreaming_TellingTimeoutsApart(t *testing.T) {
 			})
 		}
 	}
+}
+
+// When the default deadline cuts the reading of a non-2xx response's body,
+// the error is still the *APIStatusError, not marked as the SDK's default.
+func TestClient_RunStreamingAgentAndWait_DefaultDeadlineLeavesAPIErrorsAlone(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", "200")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"detail":`)
+		w.(http.Flusher).Flush()
+		<-release
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+	c.streamWaitDefault = 100 * time.Millisecond
+
+	for _, errorOnIncomplete := range []bool{false, true} {
+		_, err := c.RunStreamingAgentAndWaitWithOptions(context.Background(), "agent_1", AgentRunStreamRequest{}, &RunStreamingAgentAndWaitOptions{ErrorOnIncomplete: errorOnIncomplete})
+		if errors.Is(err, ErrDefaultStreamTimeout) {
+			t.Fatalf("ErrorOnIncomplete=%v: %v matches ErrDefaultStreamTimeout", errorOnIncomplete, err)
+		}
+		if apiErr, ok := err.(*APIStatusError); !ok || apiErr.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("ErrorOnIncomplete=%v: got %T %v, want the *APIStatusError", errorOnIncomplete, err, err)
+		}
+	}
+}
+
+// Downloads are not cut by the default client's Timeout, waiting for their
+// headers stays bounded, and a supplied client's Timeout still cuts them.
+func TestClient_Download_Timeouts(t *testing.T) {
+	const short = 100 * time.Millisecond
+	slow := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = io.WriteString(w, "part1-")
+		w.(http.Flusher).Flush()
+		time.Sleep(3 * short)
+		_, _ = io.WriteString(w, "part2")
+	}
+	read := func(c *Client) (string, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*short)
+		defer cancel()
+		resp, err := c.DownloadSourceExport(ctx, "src_1", "exp_1")
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+		b, err := io.ReadAll(resp.Body)
+		return string(b), err
+	}
+
+	t.Run("default client reads past its Timeout", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(slow))
+		t.Cleanup(srv.Close)
+		c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+		scaleDefaultClientTimeouts(t, c, short)
+		if got, err := read(c); err != nil || got != "part1-part2" {
+			t.Fatalf("got %q %v, want the whole file", got, err)
+		}
+	})
+	t.Run("default client bounds the header wait", func(t *testing.T) {
+		release := make(chan struct{})
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-release }))
+		t.Cleanup(srv.Close)
+		t.Cleanup(func() { close(release) })
+		c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
+		scaleDefaultClientTimeouts(t, c, short)
+		start := time.Now()
+		_, err := read(c)
+		if time.Since(start) > 10*short {
+			t.Fatalf("waited %v for the headers", time.Since(start))
+		}
+		var urlErr *url.Error
+		var netErr net.Error
+		if !errors.As(err, &urlErr) || urlErr.Op != "Get" || !errors.As(err, &netErr) || !netErr.Timeout() {
+			t.Fatalf("got %T %v, want a GET *url.Error that is a timeout", err, err)
+		}
+	})
+	t.Run("supplied client keeps its Timeout", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(slow))
+		t.Cleanup(srv.Close)
+		c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL, HTTPClient: &http.Client{Timeout: short}})
+		got, err := read(c)
+		var netErr net.Error
+		if !errors.As(err, &netErr) || !netErr.Timeout() || got == "part1-part2" {
+			t.Fatalf("got %q %T %v, want the client's timeout", got, err, err)
+		}
+	})
 }
